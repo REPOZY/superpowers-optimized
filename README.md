@@ -317,9 +317,10 @@ Fetch and follow the update instructions from https://raw.githubusercontent.com/
 
 Or manually: `git pull` in your local clone of the repository.
 
-**Auto-Update**
 
-You will be automatically notified when a new version is available.
+### Auto-Update
+
+You will be **automatically notified** when a new version is available.
 
 ![](media/UpdatedAvailable.png)
 
