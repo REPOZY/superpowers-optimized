@@ -27,7 +27,8 @@ This repository delivers everything the original Superpowers plugin does, plus a
 | Cross-session memory     | None                          | Persistent state.md + known-issues.md          | Continuous learning across sessions|
 
 **Token example** (measured on a typical feature-implementation task):
-Original → 4820 tokens
+
+Original → 4820 tokens / 
 Optimized → 1290 tokens (73 % reduction)
 
 
