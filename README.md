@@ -5,7 +5,7 @@
 [![Codex](https://img.shields.io/badge/Codex%20CLI-OpenAI-green)](https://github.com/openai/codex)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-![](AnimatedHeader.gif)
+![](Superpowers-Optimized-Header.gif)
 
 # Superpowers Optimized
 
@@ -27,7 +27,9 @@ This repository delivers everything the original Superpowers plugin does, plus a
 | Cross-session memory     | None                          | Persistent state.md + known-issues.md          | Continuous learning across sessions|
 
 **Skill instruction overhead** (comparing skill prompt sizes):
-Original → ~4800 tokens per skill / Optimized → ~1300 tokens per skill (~70 % smaller prompts)
+Original → ~4800 tokens per skill 
+
+Optimized → ~1300 tokens per skill (~70 % smaller prompts)
 
 Session-level savings come primarily from 3-tier routing (micro tasks skip all skills) and context hygiene (clean subagent prompts, no redundant reads). Estimated **15-30 % total session overhead reduction** depending on task complexity.
 
