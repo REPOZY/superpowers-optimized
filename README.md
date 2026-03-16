@@ -53,6 +53,19 @@ See [Installation](#installation) for install, update, and uninstall commands on
 
 ---
 
+Upon initiating a session with your coding agent, the plugin immediately pauses to establish a precise understanding of your objective rather than proceeding directly to code. It collaborates with you through a structured dialogue to refine a clear, complete specification, presenting each element in concise, easily digestible segments for your review and approval.
+
+Once the design is approved, the agent constructs a detailed implementation plan that enforces genuine red/green TDD cycles, strict adherence to YAGNI and DRY principles, and token-efficient instructions that eliminate unnecessary verbosity.
+
+When you confirm to proceed, the plugin automatically routes the task to the appropriate workflow—either *subagent-driven-development* or *executing-plans*—and executes it through mandatory staged reviews: first verifying full specification compliance, then assessing code quality, and integrating security analysis (per OWASP guidelines) on any sensitive changes. For complex logic, the *red-team* agent conducts adversarial testing to surface concrete failure scenarios. Each critical finding is automatically converted by the auto-fix pipeline into a failing test, followed by a targeted fix and regression verification.
+
+**The agent evaluates relevant skills before every task.** These workflows are enforced as mandatory processes, never optional suggestions. Overhead remains strictly proportional to complexity:
+- **Micro-tasks** bypass all gates entirely
+- **Lightweight tasks** receive a single verification checkpoint
+- **Full-complexity tasks** engage the complete pipeline
+
+---
+
 ## How It Works
 
 ```
@@ -112,21 +125,8 @@ User sends a prompt
 │    "Session: 45min, 8 skill invocations [debugging 3x]"   │
 └───────────────────────────────────────────────────────────┘
 
+
 ```
-
-Upon initiating a session with your coding agent, the plugin immediately pauses to establish a precise understanding of your objective rather than proceeding directly to code. It collaborates with you through a structured dialogue to refine a clear, complete specification, presenting each element in concise, easily digestible segments for your review and approval.
-
-Once the design is approved, the agent constructs a detailed implementation plan that enforces genuine red/green TDD cycles, strict adherence to YAGNI and DRY principles, and token-efficient instructions that eliminate unnecessary verbosity.
-
-When you confirm to proceed, the plugin automatically routes the task to the appropriate workflow—either *subagent-driven-development* or *executing-plans*—and executes it through mandatory staged reviews: first verifying full specification compliance, then assessing code quality, and integrating security analysis (per OWASP guidelines) on any sensitive changes. For complex logic, the *red-team* agent conducts adversarial testing to surface concrete failure scenarios. Each critical finding is automatically converted by the auto-fix pipeline into a failing test, followed by a targeted fix and regression verification.
-
-**The agent evaluates relevant skills before every task.** These workflows are enforced as mandatory processes, never optional suggestions. Overhead remains strictly proportional to complexity:
-- **Micro-tasks** bypass all gates entirely
-- **Lightweight tasks** receive a single verification checkpoint
-- **Full-complexity tasks** engage the complete pipeline
-
----
-
 
 ## Research-Driven Optimizations
 
