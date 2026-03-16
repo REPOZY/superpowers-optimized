@@ -318,12 +318,6 @@ Fetch and follow the update instructions from https://raw.githubusercontent.com/
 Or manually: `git pull` in your local clone of the repository.
 
 
-**Auto-Update**
-
-The AI model will automatically notify you when a new version is available.
-
-![](media/UpdatedAvailable.png)
-
 ---
 
 
