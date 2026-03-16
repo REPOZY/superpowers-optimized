@@ -318,7 +318,9 @@ Fetch and follow the update instructions from https://raw.githubusercontent.com/
 Or manually: `git pull` in your local clone of the repository.
 
 
-The AI model will automatically prompt you when a new version of this plugin is live.
+**Auto-Update**
+
+The AI model will automatically notify you when a new version is available.
 
 ![](media/UpdatedAvailable.png)
 
