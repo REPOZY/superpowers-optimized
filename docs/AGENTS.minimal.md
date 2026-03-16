@@ -6,6 +6,7 @@ Rules:
 - Follow TDD (`test-driven-development`) and root-cause debugging (`systematic-debugging`).
 - Verify with evidence before completion claims (`verification-before-completion`).
 - Consult `known-issues.md` (if present) before debugging to avoid rediscovering known problems.
+- Use `premise-check` before designing or planning non-trivial work — validates whether the proposed work should exist.
 
 Additional specialized skills are available and orchestrated through this workflow:
 - `requesting-code-review` for code review with integrated security analysis.

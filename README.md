@@ -11,7 +11,7 @@
 
 **The production-grade fork of obra/superpowers** — same trusted workflow, dramatically leaner, safer, and more intelligent.
 
-This repository delivers everything the original Superpowers plugin does, plus automatic workflow routing, built-in safety guards, integrated security review, error recovery intelligence, and research-backed token reductions of **up to 73 %** per session. Developers using Claude Code, Cursor, Codex, and OpenCode report faster iterations, fewer hallucinations, and zero accidental destructive commands.
+This repository delivers everything the original Superpowers plugin does, plus automatic workflow routing, built-in safety guards, integrated security review, error recovery intelligence, and research-informed token optimizations that reduce session overhead by an estimated **15-30 %** (varies by task complexity). Developers using Claude Code, Cursor, Codex, and OpenCode report faster iterations, fewer hallucinations, and zero accidental destructive commands.
 
 ### Why developers switch
 | Feature                  | Original Superpowers          | Superpowers Optimized                          | Real-world impact                  |
@@ -21,15 +21,15 @@ This repository delivers everything the original Superpowers plugin does, plus a
 | Security review          | None                          | Built into code review with OWASP checklist    | Security catches before merge      |
 | Adversarial red team     | None                          | Red team agent + auto-fix pipeline             | Finds bugs checklists miss, fixes them with TDD |
 | Error recovery           | None                          | Project-specific known-issues.md               | No rediscovering the same bug      |
-| Token efficiency         | Standard                      | Always-on context hygiene + exploration tracking | 5-10x smaller context windows     |
+| Token efficiency         | Standard                      | Always-on context hygiene + exploration tracking | ~15-30 % less session overhead    |
 | Discipline enforcement   | Instructional tone             | Rationalization tables, red flags, iron laws   | Fewer LLM shortcuts                |
 | Progress visibility      | None                          | Session stats (skills used, duration, actions)  | See what the plugin did for you    |
 | Cross-session memory     | None                          | Persistent state.md + known-issues.md          | Continuous learning across sessions|
 
-**Token example** (measured on a typical feature-implementation task):
+**Skill instruction overhead** (comparing skill prompt sizes):
+Original → ~4800 tokens per skill / Optimized → ~1300 tokens per skill (~70 % smaller prompts)
 
-Original → 4820 tokens / 
-Optimized → 1290 tokens (73 % reduction)
+Session-level savings come primarily from 3-tier routing (micro tasks skip all skills) and context hygiene (clean subagent prompts, no redundant reads). Estimated **15-30 % total session overhead reduction** depending on task complexity.
 
 
 ### Try it in 30 seconds
@@ -128,9 +128,9 @@ User sends a prompt
 
 ```
 
-## Research-Driven Optimizations
+## Research-Informed Design
 
-The optimizations in this fork are grounded in three research papers on LLM agent behavior:
+The design decisions in this fork are informed by three research papers on LLM agent behavior. These papers motivated the approach — they did not measure this plugin's specific outcomes:
 
 ### Minimal context files outperform verbose ones
 
