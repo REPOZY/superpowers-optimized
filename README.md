@@ -317,6 +317,11 @@ Fetch and follow the update instructions from https://raw.githubusercontent.com/
 
 Or manually: `git pull` in your local clone of the repository.
 
+
+The AI model will automatically prompt you when a new version of this plugin is live.
+
+![](media/UpdatedAvailable.png)
+
 ---
 
 
