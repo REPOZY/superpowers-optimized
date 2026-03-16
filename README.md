@@ -44,7 +44,7 @@ See [Installation](#installation) for install, update, and uninstall commands on
 ---
 
 > [!IMPORTANT]
-> **Compatibility note:** This plugin includes a comprehensive workflow router and 20 specialized skills that cover debugging, planning, code review, TDD, execution, and more. Other plugins, or custom skills/agents in your `.claude/skills/` and `.claude/agents/` folders, may interfere if they cover overlapping domains. Duplicate or competing skills can cause trigger conflicts, contradictory instructions, and unnecessary context bloat. For best results, disable or remove skills from other sources that overlap with this plugin's skill set.
+> **Compatibility note:** This plugin includes a comprehensive workflow router and 20 specialized skills that cover debugging, planning, code review, TDD, execution, and more. Other plugins, or custom skills/agents in your `.claude/skills/` and `.claude/agents/` folders, may interfere if they cover overlapping domains. Duplicate or competing skills can cause trigger conflicts, contradictory instructions, and unnecessary context bloat. For best results, disable or remove skills from other sources that overlap with this plugin's skill set. I suggest to only have this plugin enabled, and remove any other SKILL.md and AGENTS.md files for the best experience. No conflicts, no instruction contradictions and no "context rot" where the model's performance degrades due to a cluttered system prompt and excessive token consumption.
 
 ---
 
