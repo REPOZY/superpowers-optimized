@@ -124,7 +124,7 @@ User sends a prompt
 
 ## Research-Informed Design
 
-The design decisions in this fork are informed by three research papers on LLM agent behavior. These papers motivated the approach — they did not measure this plugin's specific outcomes:
+The design decisions in this fork are informed by three research papers on LLM agent behavior. These papers motivated the approach:
 
 ### Minimal context files outperform verbose ones
 
