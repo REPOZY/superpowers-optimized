@@ -1,5 +1,27 @@
 # Superpowers Release Notes
 
+## v5.3.0 (2026-03-17)
+
+Frontend design intelligence and documentation improvements. The frontend skill was completely rewritten from a 62-line checklist into a comprehensive design reasoning system, and several docs were updated to reflect the current state of the plugin.
+
+### New Features
+
+**frontend-design skill (complete rewrite)** — The former `frontend-craftsmanship` skill has been renamed to `frontend-design` and rewritten from scratch. It now includes a 4-step design system generation framework that forces deliberate style, color, typography, and effects decisions before writing code. Adds a 25-style reference catalog (Minimalism through Cyberpunk), a 30-category industry design reference table mapping product types to recommended design directions, 8 common page structure patterns (dashboard, landing page, admin panel, etc.), 5-state UI state management (loading, error, empty, success, partial), frontend-backend integration patterns (API loading, optimistic updates, error boundaries, auth flows), dark mode implementation guidance, micro-copy and UX writing standards, and 10 priority quality standard categories covering accessibility, touch targets, performance, animation, forms, navigation, and charts. 353 lines, single file, zero dependencies.
+
+**Red team pipeline documentation** — New `docs/red-team-pipeline.md` explains the end-to-end flow from code review through red team dispatch to auto-fix pipeline, including when each component fires, what the red team produces, how auto-fix processes findings, and merge blocking rules.
+
+**Frontend design documentation** — New `docs/frontend-design.md` explains the skill's 7 capabilities with examples, what users can expect when prompting for frontend work, and how activation integrates with other Superpowers skills.
+
+### Changes
+
+**Token efficiency claims corrected** — The README previously claimed "up to 73% token reduction per session" and "5-10x smaller context windows." These have been replaced with honest, defensible numbers: "estimated 15-30% session overhead reduction" based on the actual impact of 3-tier routing and context hygiene. The research section header was changed from "Research-Driven Optimizations" to "Research-Informed Design" with a clarification that the papers motivated the design but did not measure this plugin's specific outcomes.
+
+**Testing documentation updated** — `docs/testing.md` (now `docs/testing-structure.md`) was rewritten to reflect the actual 5-directory test structure: claude-code, skill-triggering, explicit-skill-requests, subagent-driven-dev, and opencode. Added the subagent hook scope test, fixed stale plugin name references, and added a quick reference section with copy-paste commands for every test suite.
+
+**AGENTS.minimal.md updated** — Added missing `premise-check` skill reference.
+
+**frontend-craftsmanship → frontend-design rename** — All references across 9 files updated: SKILL.md frontmatter, skill-rules.json, subagent-guard.js, README.md, AGENTS.minimal.md, using-superpowers routing, executing-plans, subagent-driven-development, and RELEASE-NOTES.md.
+
 ## v5.2.0 (2026-03-15)
 
 Adversarial red team analysis and auto-fix pipeline. Code review now goes beyond checklists — it actively tries to break your code, then fixes what it finds.
