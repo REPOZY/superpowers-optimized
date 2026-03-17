@@ -37,7 +37,7 @@ const VIOLATION_PATTERNS = [
   /receiving-code-review skill/i,
   /finishing-a-development-branch skill/i,
   /error-recovery skill/i,
-  /frontend-craftsmanship skill/i,
+  /frontend-design skill/i,
   /claude-md-creator skill/i,
   /self-consistency-reasoner skill/i,
   /using-git-worktrees skill/i,

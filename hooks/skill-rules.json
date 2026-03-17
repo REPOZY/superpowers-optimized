@@ -64,7 +64,7 @@
       "intentPatterns": ["review\\s+(my|the|this)\\s+code", "check\\s+(this|these)\\s+(before|for)", "look\\s+(over|at)\\s+(my|the|this)", "(is|are)\\s+(this|these)\\s+secure", "security\\s+review", "check\\s+(for\\s+)?vulnerabilit"]
     },
     {
-      "skill": "frontend-craftsmanship",
+      "skill": "frontend-design",
       "type": "domain",
       "priority": "high",
       "keywords": ["frontend", "ui", "ux", "website", "landing page", "dashboard", "component", "react", "vue", "svelte", "html", "css", "responsive", "accessibility"],

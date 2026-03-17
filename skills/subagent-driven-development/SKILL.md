@@ -29,7 +29,7 @@ Announce: `I'm using subagent-driven-development to execute this plan.`
 - If quality fails, return to implementer and re-review.
 - Mark task complete.
    - For complex or high-risk tasks, validate the approach against requirements and consider simpler alternatives before or after the implementer’s work.
-   - For tasks centered on frontend/UI, apply `frontend-craftsmanship` standards to guide structure, styling, and accessibility.
+   - For tasks centered on frontend/UI, apply `frontend-design` standards to guide structure, styling, and accessibility.
 4. Run final whole-branch review.
 5. Invoke `finishing-a-development-branch`.
 
