@@ -25,7 +25,7 @@ Announce: `I'm using the executing-plans skill to implement this plan.`
 6. Run required verification commands for each task.
 7. Report completed work and evidence.
 8. Wait for feedback, then continue with next batch.
-9. For tasks involving UI/UX or frontend implementation, apply guidance from `frontend-craftsmanship` to ensure production-grade, accessible interfaces.
+9. For tasks involving UI/UX or frontend implementation, apply guidance from `frontend-design` to ensure production-grade, accessible interfaces.
 
 ## Engineering Rigor for Complex Tasks
 

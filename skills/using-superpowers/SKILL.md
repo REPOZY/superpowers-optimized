@@ -78,7 +78,7 @@ Anything that doesn't qualify as micro or lightweight.
 - Code review (includes security): `requesting-code-review` / `receiving-code-review`
 - Independent parallel tasks: `dispatching-parallel-agents`
 - Cross-session state persistence: `context-management`
-- UI/frontend implementation: apply `frontend-craftsmanship` standards
+- UI/frontend implementation: apply `frontend-design` standards
 
 ## Context Hygiene
 
