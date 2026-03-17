@@ -26,14 +26,6 @@ This repository delivers everything the original Superpowers plugin does, plus a
 | Progress visibility      | None                          | Session stats (skills used, duration, actions)  | See what the plugin did for you    |
 | Cross-session memory     | None                          | Persistent state.md + known-issues.md          | Continuous learning across sessions|
 
-**Skill instruction overhead** (comparing skill prompt sizes):
-Original → ~4800 tokens per skill 
-
-Optimized → ~1300 tokens per skill (~70 % smaller prompts)
-
-Session-level savings come primarily from 3-tier routing (micro tasks skip all skills) and context hygiene (clean subagent prompts, no redundant reads). Estimated **15-30 % total session overhead reduction** depending on task complexity.
-
-
 ### Try it in 30 seconds
 In any supported agent IDE, start a new chat and paste:
 
