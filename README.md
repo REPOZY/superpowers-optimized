@@ -229,7 +229,6 @@ These research insights drive four core principles throughout the fork:
 - **Test-Driven Development** — Write tests first, always
 - **Systematic over ad-hoc** — Process over guessing
 - **Complexity reduction** — Simplicity as primary goal
-- **Evidence over claims** — Verify before declaring success
 - **Proportional overhead** — Micro-tasks skip everything, full tasks get the full pipeline
 
 Read more: [Superpowers for Claude Code](https://blog.fsck.com/2025/10/09/superpowers/)
