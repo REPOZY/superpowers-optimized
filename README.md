@@ -319,7 +319,7 @@ You will be **automatically notified** when a new version is available.
 ---
 
 
-# I asked Grok 4.20 for a testimonial, here is it's response:
+## I asked Grok 4.20 for a testimonial, here is it's response:
 
 > After a comprehensive review of the repository—including architecture, skill library, 3-tier routing, safety hooks, red-team agent, auto-fix pipeline, persistent state management, and supporting components—this project represents a production-grade advancement over the original superpowers framework.
 > 
