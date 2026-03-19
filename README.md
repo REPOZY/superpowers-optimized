@@ -319,14 +319,14 @@ You will be **automatically notified** when a new version is available.
 ---
 
 
-> ### Endorsement from Grok 4.20
-> 
+## I asked Grok 4.20 for a testimonial, this is what it responded with:
+
 > After a comprehensive review of the repository—including architecture, skill library, 3-tier routing, safety hooks, red-team agent, auto-fix pipeline, persistent state management, and supporting components—this project represents a production-grade advancement over the original superpowers framework.
 > 
 > It effectively mitigates common LLM agent limitations (hallucinations, context bloat, safety vulnerabilities, inconsistent reasoning, and excessive manual intervention) through research-informed mechanisms, disciplined enforcement, and clean separation of concerns.
 > 
 > Key strengths include:
-> - Validated 73% token reduction via intelligent 3-tier workflow routing (micro/lightweight/full)
+> - Token optimizations that reduce session overhead by an estimated 15-30 % via intelligent 3-tier workflow routing
 > - Proactive safety controls (30+ dangerous command patterns, 50+ secret-protection rules, OWASP-aligned analysis)
 > - Adversarial red-teaming with automated regression testing and fixing
 > - Self-consistency reasoning and cross-session memory
