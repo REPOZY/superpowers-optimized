@@ -40,15 +40,39 @@ Technical execution includes code edits, debugging, planning, review, test statu
 ## Entry Sequence
 
 1. Invoke `token-efficiency` at session start — applies to all sessions, always.
-2. Classify the task as **micro**, **lightweight**, or **full** (see Complexity Classification below).
-3. If resuming work from a prior session, read `state.md` if it exists. Use `context-management` to save state before ending a session with ongoing work.
-4. If `known-issues.md` exists at the project root, read it to avoid rediscovering known error→solution mappings.
-5. If `project-map.md` exists at the project root, read it to orient to the project structure without re-globbing or re-reading known files. Then check staleness:
+2. **Fresh project gate** — check all three conditions:
+   - `<project-git-status>` is present in context (session-start hook detected no git repo)
+   - No `project-map.md` exists at the project root
+   - The user's request contains creation/build intent: any of "build", "create", "make", "implement", "scaffold", "set up", "write", "generate", "develop", "start"
+
+   If all three are true, **pause before proceeding** and tell the user exactly this:
+
+   > Before I start: this directory has no git repo or memory files set up yet. That matters for how well I perform across sessions.
+   >
+   > **Without setup, every future session on this project starts from scratch:**
+   > - I re-explore the project structure even if I mapped it last session
+   > - I re-read files I already understood
+   > - I may re-propose approaches that were already tried and rejected
+   > - I lose the "why" behind every decision the moment the session ends
+   >
+   > **A ~30-second setup changes that permanently:**
+   > - `git init` — enables staleness tracking so I only re-read files that actually changed *(creates `.git` only, nothing else)*
+   > - `project-map.md` — I read this at every future session start instead of re-exploring blind
+   > - `session-log.md` — auto-captures what was built and decided, so future sessions start with: *"I see from last session that X was rejected because Y — building with that constraint already applied"* instead of rediscovering it
+   >
+   > **Set this up before we build, or start immediately?**
+
+   Wait for the user's answer before continuing. If they confirm, invoke `context-management` to run `git init` and generate `project-map.md`, then return to this entry sequence. If they decline, proceed to step 3.
+
+3. Classify the task as **micro**, **lightweight**, or **full** (see Complexity Classification below).
+4. If resuming work from a prior session, read `state.md` if it exists. Use `context-management` to save state before ending a session with ongoing work.
+5. If `known-issues.md` exists at the project root, read it to avoid rediscovering known error→solution mappings.
+6. If `project-map.md` exists at the project root, read it to orient to the project structure without re-globbing or re-reading known files. Then check staleness:
    - **With git:** run `git rev-parse HEAD` and compare to the hash in the map header.
      - Match → map is fresh, use it as-is.
      - Mismatch → run `git diff --name-only <saved_hash> HEAD` to find changed files. Re-read only those; everything else in the map is still valid.
    - **Without git:** compare the map's generation timestamp to the modification time of files listed in the map's Hot Files section. Re-read any that are newer than the map.
-6. Follow the path for the classified complexity level.
+7. Follow the path for the classified complexity level.
 
 ## Complexity Classification
 
