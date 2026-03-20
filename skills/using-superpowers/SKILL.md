@@ -79,6 +79,17 @@ Technical execution includes code edits, debugging, planning, review, test statu
 
 Classify every task into one of three levels. Do not invoke a separate skill for this — decide inline.
 
+### Hard overrides — check these first, before anything else
+
+If any of the following are true, classify as **full** immediately — do not evaluate the lightweight criteria:
+
+- The change adds, modifies, or removes a condition, gate, or trigger that determines when behavior fires
+- The change affects what the user sees or experiences
+- The change modifies a file that other components depend on (routing rules, entry sequences, config registries, shared hooks)
+- The change introduces a path or outcome that didn't exist before
+
+**When in doubt, classify as full.** An unnecessary brainstorming session costs one extra round. Skipping brainstorming on a task that needed it ships a gap. The asymmetry is not equal — always err toward full.
+
 ### Micro (skip everything)
 - Typo fix, single variable rename, 1-line config change
 - **Action:** Just do it. No skills needed.
@@ -89,6 +100,8 @@ All of these must be true:
 - No new behavior or architecture change
 - No cross-module dependency risk
 - No migration or data-shape change
+
+**Before classifying as lightweight:** explicitly state in one sentence why each of the four criteria above is satisfied. Do not assume. If you cannot articulate any one of them clearly, classify as full.
 
 **Action:** Go directly to implementation. Only gate: invoke `verification-before-completion` when done. Skip brainstorming, planning, worktrees, and parallel dispatch.
 
