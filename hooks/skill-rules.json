@@ -67,8 +67,8 @@
       "skill": "requesting-code-review",
       "type": "workflow",
       "priority": "medium",
-      "keywords": ["review", "code review", "check this", "look over", "review my code", "security review", "is this secure", "security", "vulnerability"],
-      "intentPatterns": ["review\\s+(my|the|this)\\s+code", "check\\s+(this|these)\\s+(before|for)", "look\\s+(over|at)\\s+(my|the|this)", "(is|are)\\s+(this|these)\\s+secure", "security\\s+review", "check\\s+(for\\s+)?vulnerabilit"]
+      "keywords": ["code review", "look over", "review my code", "security review", "is this secure", "security", "vulnerability"],
+      "intentPatterns": ["review\\s+(my|the|this)\\s+code", "check\\s+(this|these)\\s+(before|for)", "look\\s+(over|at)\\s+(my|the|this)\\s+(code|implementation|changes|diff|tests?|pr|pull.?request|files?|codebase|repo)", "(is|are)\\s+(this|these)\\s+secure", "security\\s+review", "check\\s+(for\\s+)?vulnerabilit"]
     },
     {
       "skill": "frontend-design",
