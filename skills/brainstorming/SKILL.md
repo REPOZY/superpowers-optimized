@@ -26,8 +26,12 @@ Do not write code, edit files, or invoke implementation skills until design appr
 5. Present design in short sections; confirm each section.
 6. For existing codebases: study existing patterns before proposing new ones. Match the project's conventions unless there's a compelling reason to diverge. Design for isolation — prefer changes that minimize blast radius and don't require coordinating across many files.
 7. If the repo lacks `CLAUDE.md` / `AGENTS.md` and long-term collaboration is expected, consider using `claude-md-creator` to create a minimal, high-signal context file.
-8. Save approved design to `docs/plans/YYYY-MM-DD-<topic>-design.md`.
-9. Invoke `writing-plans`.
+8. **Before approving the design — failure-mode check:** State the top 2-3 ways the chosen approach could fail or not cover all cases. This is adversarial reasoning, not a list of known assumptions — actively try to break the design. For each failure mode found, assess severity:
+   - **Critical** (design fails for a significant user scenario): revise the design before proceeding.
+   - **Minor** (edge case, acceptable limitation): document as a non-goal in the design.
+   Do not skip this step. An approach that survives adversarial questioning is an approach worth approving.
+9. Save approved design to `docs/plans/YYYY-MM-DD-<topic>-design.md`.
+10. Invoke `writing-plans`.
 
 ## Design Contents
 
@@ -57,5 +61,6 @@ Apply senior engineering judgment during design:
 ## Exit Criteria
 
 - User approved the design.
+- Failure-mode check completed — critical failure modes resolved, minor ones documented as non-goals.
 - Design document exists at the required path.
 - `writing-plans` is invoked as the next skill.

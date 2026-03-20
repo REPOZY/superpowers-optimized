@@ -25,6 +25,7 @@ Save to `docs/plans/YYYY-MM-DD-<feature-name>.md`.
 **Goal:** <single sentence>
 **Architecture:** <2-4 sentences>
 **Tech Stack:** <languages/libraries/tools>
+**Assumptions:** <list the key assumptions this plan rests on. For each, state what it excludes: "Assumes X — will NOT work if Y."> *(skip only if the plan contains zero conditional logic)*
 
 ---
 ```
@@ -47,6 +48,8 @@ Save to `docs/plans/YYYY-MM-DD-<feature-name>.md`.
 - Create: `<path>`
 - Modify: `<path>`
 - Test: `<path>`
+
+**Does NOT cover:** *(required when this task adds a condition, gate, trigger, or any "when X do Y" logic — state the scenarios the condition excludes. If an excluded scenario should be covered, revise this task before implementing.)*
 
 **Step 1: Add failing test**
 Run: `<command>`
