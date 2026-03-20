@@ -1,5 +1,25 @@
 # Superpowers Release Notes
 
+## v5.5.0 (2026-03-20)
+
+Reasoning gap prevention and fresh project memory setup. The AI now catches its own design and implementation gaps earlier, classifies tasks more accurately, and proactively offers to set up the memory stack before building anything in a new directory.
+
+### New Features
+
+**Fresh project gate** — When you type "build", "create", "implement", or any creation-intent prompt in a directory with no `project-map.md`, the AI now pauses before starting and explains exactly what it will lose without the memory stack (re-exploring structure, re-reading known files, re-proposing rejected approaches, losing the "why" behind decisions). It offers to run `git init` and generate `project-map.md` in ~30 seconds before proceeding, or start immediately if you prefer. Previously this offer only appeared if git was absent — now it fires whenever no `project-map.md` exists, regardless of git status, so users who already have git initialized are no longer silently skipped.
+
+**Failure-mode check in brainstorming** — Before any design can be approved, the AI must now state the top 2–3 ways the chosen approach could fail or not cover all cases. This is adversarial reasoning — actively trying to break the design — not a list of known assumptions. Critical failure modes (the design fails for a significant user scenario) must be fixed before proceeding; minor ones are documented as non-goals. This catches unknown assumptions at the design stage, where fixing them costs nothing, rather than discovering them after implementation.
+
+**Assumption externalization in writing-plans** — The plan header now requires an `Assumptions` field listing what the plan rests on and what each assumption excludes ("Assumes X — will NOT work if Y"). Every task involving conditional logic now requires a `Does NOT cover` field stating which scenarios the condition excludes. If an excluded scenario should be covered, the task is revised before implementation begins. This catches known assumptions at the planning stage, complementing the adversarial failure-mode check in brainstorming.
+
+**Condition coverage check in verification** — `verification-before-completion` now requires, as step 5 of its gate, that any change involving a condition or gate explicitly state what it does NOT cover before the task is marked done. If the answer reveals a gap that should be covered, it must be fixed before proceeding. This is the final catch in a three-stage adversarial pipeline: design → planning → completion.
+
+### Changes
+
+**Classification hard overrides** — The complexity classification in `using-superpowers` now has a hard override section that is evaluated before the lightweight criteria. If any of four conditions are true (adds/modifies/removes a condition or trigger, affects user experience, modifies a shared dependency, introduces a new outcome), the task is immediately classified as full regardless of file count. This prevents lightweight anchoring on file count for tasks that have significant behavioral impact.
+
+**Lightweight articulation requirement** — Before classifying any task as lightweight, the AI must now explicitly state in one sentence why each of the four lightweight criteria is satisfied. If any criterion cannot be clearly articulated, the task is classified as full. Combined with the hard overrides, this closes the gap where tasks with new conditional logic were being mis-classified as lightweight, skipping brainstorming and the design-stage failure-mode check.
+
 ## v5.4.0 (2026-03-20)
 
 Session memory, deliberation skill, social accountability, and ASI-guided auto-fix. The AI no longer starts every session amnesiac, makes better architectural decisions before committing to a direction, and its review agents now prioritize and fix findings more accurately.

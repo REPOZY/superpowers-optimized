@@ -256,7 +256,9 @@ hooks/stop-reminders.js, hooks/skill-activator.js, skills/using-superpowers/SKIL
 
 **Staleness is automatic.** The AI checks the git hash (or file timestamps on non-git projects) at every session start and re-reads only files that actually changed since the map was made. No manual invalidation needed.
 
-Works on any project — git or non-git. If no git is detected, the AI offers to run `git init` when you generate your first map (creates a `.git` folder, touches none of your files). If you decline, it falls back to timestamp comparison instead.
+Works on any project — git or non-git. If no git is detected during map generation, the AI offers to run `git init` (creates a `.git` folder, touches none of your files). If you decline, it falls back to timestamp comparison instead.
+
+**First-build prompt.** You don't need to remember to generate a map. When you type any creation-intent request ("build me X", "create X", "implement X") in a directory with no `project-map.md`, the AI pauses before starting and explains exactly what it will lose without the memory stack. It offers to set everything up in ~30 seconds. Say yes once — every future session on that project starts with full context.
 
 ### The combined impact
 
