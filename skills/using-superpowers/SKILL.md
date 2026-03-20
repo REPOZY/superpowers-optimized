@@ -74,7 +74,8 @@ Anything that doesn't qualify as micro or lightweight.
 
 ## Routing Guide
 
-- New behavior or architecture: `brainstorming` → `writing-plans`
+- Complex decision with unclear options or possible mis-framing: `deliberation` → `brainstorming` → `writing-plans`
+- New behavior or architecture (problem is well-framed): `brainstorming` → `writing-plans`
 - Plan execution (same session): `subagent-driven-development`
 - Plan execution (separate session): `executing-plans`
 - Bug/test failure: `systematic-debugging` → `test-driven-development`

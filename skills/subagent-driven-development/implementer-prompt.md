@@ -18,6 +18,8 @@ Task tool (general-purpose):
     You are a focused subagent. Do NOT invoke any skills from the superpowers-optimized plugin. Do NOT use the Skill tool. Your only job is the task described below.
 
     ## Required behavior
+    The spec-compliance and code-quality review gates depend on the accuracy of your implementation and self-review. A task that passes review the first time keeps the whole pipeline moving — a task that fails review cycles back to you and blocks everything downstream. Take your time, do it right the first time.
+
     1. Ask questions immediately if requirements are unclear.
     2. Implement only requested scope.
     3. Run task verification commands.

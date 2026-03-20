@@ -72,17 +72,20 @@ The red team agent finds concrete failure scenarios (specific inputs, race condi
 
 ## Auto-Fix Pipeline
 
-When the red team report contains Critical or High findings, run the auto-fix pipeline before proceeding. Do NOT skip findings or batch them — process each one individually in severity order (Critical first).
+When the red team report contains Critical or High findings, run the auto-fix pipeline. The pipeline is **ASI-guided and iterative** — fix one finding at a time, starting from the red team's designated ASI, then re-assess before proceeding. This prevents fixes from conflicting with each other when findings touch shared code.
 
-**For each Critical/High finding:**
+**Iteration loop:**
 
-1. **Write the failing test.** Take the test case skeleton from the red team report, flesh it out into a real test, and run it. It MUST fail — this proves the scenario is real. If the test passes, the finding was a false positive; skip it and note that in the triage.
-2. **Fix the code.** Make the minimum change to pass the test. Do not refactor or improve surrounding code.
-3. **Run the full test suite.** Confirm no regressions. If a regression appears, fix it before moving to the next finding.
+1. **Identify the entry point.** Start with the finding marked **ASI** in the red team summary. If no ASI is marked, start with the highest-severity finding.
+2. **Write the failing test.** Flesh out the test skeleton from the red team report into a real test and run it. It MUST fail — this proves the scenario is real. If the test passes, the finding was a false positive; skip it and note it in the triage, then re-identify the next ASI.
+3. **Fix the code.** Make the minimum change to pass the test. Do not refactor or improve surrounding code.
+4. **Run a targeted re-check.** Re-read only the files touched by the fix and check whether: (a) the fix introduced any new issues, and (b) any previously reported findings are now resolved as a side effect.
+5. **Re-assess the remaining findings.** Update your list — remove resolved findings, re-prioritize if the fix changed the risk landscape. Identify the new ASI.
+6. **Repeat** from step 2 until no Critical or High findings remain.
 
-**After all Critical/High findings are processed:**
-- Re-run the full test suite one final time.
-- Report: how many findings were real (test failed), how many were false positives (test passed), what was fixed.
+**After the loop completes:**
+- Run the full test suite one final time to confirm no regressions across all fixes.
+- Report: findings fixed, false positives skipped, any regressions introduced and resolved.
 
 **Skip conditions:**
 - If the red team report has zero Critical/High findings, skip the pipeline entirely.

@@ -38,7 +38,7 @@ See [Installation](#installation) for install, update, and uninstall commands on
 ---
 
 > [!IMPORTANT]
-> **Compatibility Note:** This plugin includes a comprehensive workflow router and 20 specialized skills covering debugging, planning, code review, TDD, execution, and more.
+> **Compatibility Note:** This plugin includes a comprehensive workflow router and 21 specialized skills covering debugging, planning, code review, TDD, execution, and more.
 >
 > Other plugins or custom skills/agents in your `.claude/skills/` and `.claude/agents/` folders may interfere if they cover overlapping domains. Duplicate or competing skills can cause trigger conflicts, contradictory instructions, and unnecessary **context bloat/rot**, which will degrade the model's performance.
 >
@@ -88,6 +88,7 @@ User sends a prompt
 │  MICRO → just do it                                       │
 │  LIGHTWEIGHT → implement → verification-before-completion │
 │  FULL → route to appropriate pipeline:                    │
+│    Unclear decision → deliberation → brainstorm → plan    │
 │    New feature → brainstorming → writing-plans → execute  │
 │    Bug/error  → systematic-debugging → TDD → verify       │
 │    Review     → requesting-code-review (w/ security)      │
@@ -174,13 +175,25 @@ Key findings that shaped this fork:
 
 **What we changed:** The `systematic-debugging` skill now applies self-consistency during root cause diagnosis (Phase 3): before committing to a hypothesis, the agent generates 3-5 independent root cause hypotheses via different reasoning approaches, takes a majority vote, and reports confidence. Low-confidence diagnoses (<= 50% agreement) trigger a hard stop — gather more evidence before touching code. The `verification-before-completion` skill applies the same technique when evaluating whether evidence actually proves the completion claim, catching the failure mode where evidence is interpreted through a single (potentially wrong) lens. The underlying technique lives in `self-consistency-reasoner` and fires only during these high-stakes reasoning moments, keeping the token cost targeted.
 
+### Social accountability and iterative fixing improve agent accuracy
+
+**Research:** [2389.ai research on multi-agent collaboration](https://2389.ai/products/simmer/) and their [claude-plugins repository](https://github.com/2389-research/claude-plugins)
+
+Key findings that shaped this fork:
+- **Social accountability language in agent prompts significantly improves accuracy.** In their internal experiments, agents told that downstream work depends on their output (e.g. "the fix pipeline acts on your findings — a false positive wastes a full cycle, a missed bug ships") performed measurably better than agents given identical tasks without this framing. Win rate: 24 vs 9 in controlled trials.
+- **Sequential batch fixing is fragile when findings share code.** Fixing all Critical/High findings in one pass without re-assessing between fixes can cause conflicts when multiple findings touch the same functions. An ASI (Actionable Side Information) approach — fix one finding, re-check affected files only, re-prioritize, repeat — prevents fix collisions and converges faster.
+- **Deliberation before brainstorming improves architectural decisions.** When the problem itself may be mis-framed or the options aren't well-defined yet, convening named stakeholder perspectives (each speaks once, without debate) surfaces convergence and live tension without forcing a premature choice. This prevents committing to solutions before the right question has been asked.
+
+**What we changed:** Social accountability framing was added to the `code-reviewer`, `red-team`, and `implementer` prompts. The auto-fix pipeline in `requesting-code-review` was rewritten as an ASI-guided iterative loop (fix one finding → targeted re-check of affected files only → re-assess remaining, identify new ASI → repeat). A new `deliberation` skill was added for complex architectural decisions where the problem needs reframing before brainstorming begins.
+
 ### Combined impact
 
-These research insights drive four core principles throughout the fork:
+These research insights drive five core principles throughout the fork:
 1. **Less is more** — concise skills, minimal always-on instructions, and explicit context hygiene
 2. **Fresh context beats accumulated context** — subagents get clean, task-scoped prompts instead of inheriting polluted history
 3. **Compliance != competence** — agents follow instructions reliably, so the instructions themselves must be carefully engineered (rationalization tables, red flags, forbidden phrases) rather than simply comprehensive
 4. **Verify your own reasoning** — multi-path self-consistency at critical decision points (diagnosis, verification) catches confident-but-wrong single-chain failures before they become expensive mistakes
+5. **Accountability and iteration** — agents told that their output has real downstream consequences are more accurate; fixing findings one at a time with re-assessment between fixes prevents collisions and converges faster than batch processing
 
 
 ---
@@ -231,7 +244,7 @@ hooks/ — 8 hooks (JS) + hooks.json registry + skill-rules.json
 ## Key Files
 hooks/skill-activator.js — UserPromptSubmit: scores prompts against skill-rules.json,
   injects skill hints. Micro-task detection (≤8 words + patterns = skip routing).
-hooks/skill-rules.json — 13 rules: skill name, keywords, intentPatterns, priority.
+hooks/skill-rules.json — 15 rules: skill name, keywords, intentPatterns, priority.
 
 ## Critical Constraints
 - hooks.json uses \" not ' around ${CLAUDE_PLUGIN_ROOT} (single quotes break Linux)
@@ -283,7 +296,7 @@ For cross-project semantic recall ("how did we solve this in another codebase?")
 ---
 
 
-## Skills Library (20 skills)
+## Skills Library (21 skills)
 
 ### Core Workflow
 - **using-superpowers** — Mandatory workflow router with 3-tier complexity classification (micro/lightweight/full) and instruction priority hierarchy
@@ -293,6 +306,7 @@ For cross-project semantic recall ("how did we solve this in another codebase?")
 - **premise-check** — Validates whether proposed work should exist before investing in it; triggers reassessment when new evidence changes the original motivation
 
 ### Design & Planning
+- **deliberation** — Structured decision analysis for complex architectural choices: assembles 3–5 named stakeholder perspectives, each speaks once without debate, then surfaces convergence points and live tensions without forcing a premature conclusion. Use before brainstorming when the problem itself may need reframing
 - **brainstorming** — Socratic design refinement with engineering rigor, project-level scope decomposition, and architecture guidance for existing codebases
 - **writing-plans** — Executable implementation plans with exact paths, verification commands, TDD ordering, and pre-execution plan review gate
 - **claude-md-creator** — Create lean, high-signal CLAUDE/AGENTS context files for repositories
@@ -310,7 +324,7 @@ For cross-project semantic recall ("how did we solve this in another codebase?")
 - **self-consistency-reasoner** — Internal multi-path reasoning technique (Wang et al., ICLR 2023) embedded in debugging and verification
 
 ### Review & Integration
-- **requesting-code-review** — Structured code review with integrated security analysis (OWASP, auth flows, secrets handling, dependency vulnerabilities), adversarial red team dispatch, and auto-fix pipeline for critical findings
+- **requesting-code-review** — Structured code review with integrated security analysis (OWASP, auth flows, secrets handling, dependency vulnerabilities), adversarial red team dispatch, and ASI-guided iterative auto-fix pipeline for critical findings (fix one → re-check affected files only → re-prioritize → repeat)
 - **receiving-code-review** — Technical feedback handling with pushback rules and no-sycophancy enforcement
 - **finishing-a-development-branch** — 4-option branch completion (merge/PR/keep/discard) with safety gates
 
@@ -329,8 +343,8 @@ For cross-project semantic recall ("how did we solve this in another codebase?")
 - **session-start** (SessionStart) — Injects using-superpowers routing into every session
 
 ### Agents
-- **code-reviewer** — Senior code review agent with persistent cross-session memory
-- **red-team** — Adversarial analysis agent that constructs concrete failure scenarios (logic bugs, race conditions, state corruption, resource exhaustion, assumption violations) — complements checklist-based security review
+- **code-reviewer** — Senior code review agent with social accountability framing (merge decision and downstream fixes depend on review accuracy) and ASI-guided fix prioritization (single most impactful finding surfaced first)
+- **red-team** — Adversarial analysis agent with social accountability framing: constructs concrete failure scenarios (logic bugs, race conditions, state corruption, resource exhaustion, assumption violations) — complements checklist-based security review; marks the single most critical finding as the ASI (auto-fix pipeline entry point)
 
 
 ### Philosophy
