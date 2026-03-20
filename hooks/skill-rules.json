@@ -22,6 +22,13 @@
       "intentPatterns": ["(i('m|\\s+am)|we('re|\\s+are))\\s+(done|finished)\\s*(with|here|now|$)", "ready\\s+(to|for)\\s+(merge|ship|deploy|pr)", "this\\s+is\\s+(done|complete|ready)\\s+(to|for)", "let('s|\\s+us)\\s+(merge|ship|commit)"]
     },
     {
+      "skill": "deliberation",
+      "type": "workflow",
+      "priority": "high",
+      "keywords": ["trade-off", "tradeoff", "trade off", "evaluate options", "compare approaches", "architecture decision", "technology choice", "not sure which", "which approach", "should we use", "help me decide", "weigh the options"],
+      "intentPatterns": ["should\\s+we\\s+(use|go\\s+with|choose|pick|switch|migrate)", "not\\s+sure\\s+(which|what|whether|if\\s+we)", "(evaluate|compare|weigh)\\s+(these|the|our)\\s+(options|approaches|alternatives)", "what\\s+are\\s+the\\s+trade.?offs", "help\\s+me\\s+(think|decide|choose)\\s+(through|between|among)"]
+    },
+    {
       "skill": "brainstorming",
       "type": "workflow",
       "priority": "high",
