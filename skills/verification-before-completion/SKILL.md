@@ -18,6 +18,7 @@ Before any completion claim:
 2. Run the full command now.
 3. Inspect exit code and output.
 4. State results exactly as observed.
+5. **If the change includes a condition or gate that determines when something applies: explicitly state what it does NOT cover. If the answer reveals a gap that should be covered, fix it before proceeding.**
 
 ## Applies To
 
