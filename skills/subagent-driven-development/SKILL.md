@@ -109,6 +109,18 @@ Subagents can discover superpowers-optimized skills via filesystem access and in
 
 > You are a focused subagent. Do NOT invoke any skills from the superpowers-optimized plugin. Do NOT use the Skill tool. Your only job is the task described below.
 
+## Model Selection for Agent Tool Calls
+
+Choose model based on task type when dispatching subagents via the Agent tool:
+
+| Model | Use for |
+|---|---|
+| `haiku` | File reads, summarization, log scanning, patch verification — output is data, not decisions |
+| `sonnet` | Default for all implementation tasks |
+| `opus` | Architecture analysis, complex spec review, multi-system debugging, any task requiring reasoning across many constraints at once |
+
+Apply via the `model` parameter in Agent tool calls. Default to `sonnet` when uncertain. Only upgrade to `opus` when the task is genuinely reasoning-heavy — not just large.
+
 ## Prompt Templates
 
 Use:

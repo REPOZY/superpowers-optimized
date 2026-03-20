@@ -192,20 +192,80 @@ function generateReminders(edits) {
   return reminders;
 }
 
+/**
+ * Append a minimal auto-entry to session-log.md at the project root.
+ * Fires on every session end with meaningful activity — zero LLM cost,
+ * pure file I/O using data already collected by edit/stats trackers.
+ *
+ * This builds accumulated episodic memory per-project without any
+ * external dependencies (no SQLite, no embeddings, no API calls).
+ */
+function appendAutoSessionEntry(cwd, stats, edits) {
+  if (!cwd) return;
+
+  const hasSkills = stats && stats.totalSkillCalls > 0;
+  const hasEdits = edits && edits.length > 0;
+  if (!hasSkills && !hasEdits) return; // Skip empty/trivial sessions
+
+  try {
+    const sessionLogPath = path.join(cwd, 'session-log.md');
+    const now = new Date();
+    // Format: YYYY-MM-DD HH:MM
+    const dateStr = now.toISOString().slice(0, 16).replace('T', ' ');
+
+    const lines = [`## ${dateStr} [auto]`];
+
+    // Skills invoked — ordered by frequency
+    if (hasSkills) {
+      const skillList = Object.entries(stats.skillInvocations)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => count > 1 ? `${name} (${count}x)` : name)
+        .join(', ');
+      lines.push(`Skills: ${skillList}`);
+    }
+
+    // Files modified — relative paths, capped at 10 for readability
+    if (hasEdits) {
+      const editedPaths = [...new Set(edits.map(e => {
+        try {
+          const rel = path.relative(cwd, e.filePath);
+          // If path escapes cwd (e.g. '../something'), use basename only
+          return rel.startsWith('..') ? path.basename(e.filePath) : rel;
+        } catch {
+          return path.basename(e.filePath);
+        }
+      }))].slice(0, 10);
+      lines.push(`Files: ${editedPaths.join(', ')}`);
+    }
+
+    lines.push(''); // Blank line separator between entries
+
+    fs.appendFileSync(sessionLogPath, lines.join('\n') + '\n');
+  } catch {
+    // Silently ignore — never let logging block session end
+  }
+}
+
 async function main() {
   let input = '';
   for await (const chunk of process.stdin) input += chunk;
 
   try {
-    JSON.parse(input); // Validate JSON, discard — we only read the edit log
+    const data = JSON.parse(input);
+    const cwd = data.cwd || '';
 
-    // File-based guard prevents infinite loop
+    // Always append session log — runs before the guard because this is
+    // pure file I/O, not context injection, so it cannot cause re-entry.
+    const edits = getRecentEdits();
+    const stats = getSessionStats();
+    appendAutoSessionEntry(cwd, stats, edits);
+
+    // File-based guard prevents infinite loop for reminder injection
     if (!shouldFire()) {
       process.stdout.write('{}');
       return;
     }
 
-    const edits = getRecentEdits();
     const reminders = generateReminders(edits);
 
     if (reminders.length === 0) {
@@ -237,5 +297,5 @@ async function main() {
 if (require.main === module) {
   main();
 } else {
-  module.exports = { generateReminders, getRecentEdits, isTestFile, isSourceFile, shouldFire, setGuard };
+  module.exports = { generateReminders, getRecentEdits, isTestFile, isSourceFile, shouldFire, setGuard, appendAutoSessionEntry };
 }

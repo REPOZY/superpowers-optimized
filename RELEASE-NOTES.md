@@ -1,5 +1,29 @@
 # Superpowers Release Notes
 
+## v5.4.0 (2026-03-20)
+
+Session memory system, project map, and intelligence improvements. The AI no longer starts every session amnesiac — it now accumulates project knowledge automatically across sessions and orients itself from a persistent structure cache without re-exploring files it already knows.
+
+### New Features
+
+**Session memory stack** — The plugin now builds a four-file memory stack at your project root that eliminates re-discovery overhead across sessions. `session-log.md` accumulates a history of decisions, rejected approaches, and key facts. The stop hook auto-appends a minimal `[auto]` entry at every session end (skills used, files modified) at zero cost — no setup, no action required. When you explicitly invoke `context-management`, it writes a richer `[saved]` entry capturing goals, rationale, and what was tried and abandoned. At session start, the AI greps this log for keywords from the current task and surfaces relevant history before doing any work.
+
+**Project map** — New `project-map.md` is the semantic memory layer: a persistent, AI-written map of the project's directory structure, key file purposes, and critical non-obvious constraints (e.g. "single quotes break Linux CI in hooks.json"). Generate it once with "map this project". After that, the AI reads it at every session start instead of re-globbing and re-reading files it already understands. Staleness is automatic: the AI checks the git hash in the map header against the current commit, then uses `git diff --name-only` to identify exactly which files changed and re-reads only those. Works on non-git projects too via file timestamp comparison. If no git repository is detected, the AI offers to run `git init` during map generation (creates a `.git` folder, touches no user files) with a clear explanation of what happens if you decline.
+
+**Skill quality gate** — The `skill-creator` skill now includes a five-dimension quality check (Safety, Completeness, Executability, Maintainability, Cost-awareness) that must pass before moving to test cases. A skill that fails Executability or Completeness is redesigned, not just tested. This catches gaps and ambiguities at the design stage rather than discovering them during evaluation.
+
+**Model selection guidance for subagents** — `subagent-driven-development` now specifies which model to use for each Agent tool call: Haiku for file reads, log scanning, and patch verification (output is data, not decisions); Sonnet for all implementation tasks (default); Opus for architecture analysis, complex spec review, and multi-system debugging. Reduces cost on lightweight review work and improves accuracy on reasoning-heavy tasks.
+
+### Changes
+
+**Proactive compaction breakpoints** — `token-efficiency` now includes explicit guidance to break context at logical seams before implementation begins (after research/exploration, after abandoning a failed approach) rather than waiting for auto-compaction at 95% context fill. Auto-compaction at 95% destroys the most recently gathered context — exactly the variable names, file paths, and evidence that implementation depends on. A proactive break at 50% preserves all of it.
+
+**context-management expanded** — Now manages all four memory files (`project-map.md`, `session-log.md`, `state.md`, `known-issues.md`) as a unified stack with documented procedures for each. Session-start procedure updated to grep `session-log.md` for task keywords before diving in. Explicit cross-reference to `episodic-memory@superpowers-marketplace` for semantic cross-project recall that falls outside the scope of per-project grep-based memory.
+
+**Entry sequence updated** — `using-superpowers` entry sequence now includes `project-map.md` as step 5: read the map if it exists, check staleness, re-read only changed files. This makes orientation at session start deterministic and zero-waste.
+
+**Session-start hook** — Now detects when no git repository is present and injects a quiet background note into session context. The AI acts on this only when `project-map.md` is relevant — it does not announce it verbally on every session start.
+
 ## v5.3.0 (2026-03-17)
 
 Frontend design intelligence and documentation improvements. The frontend skill was completely rewritten from a 62-line checklist into a comprehensive design reasoning system, and several docs were updated to reflect the current state of the plugin.
@@ -13,8 +37,6 @@ Frontend design intelligence and documentation improvements. The frontend skill 
 **Frontend design documentation** — New `docs/frontend-design.md` explains the skill's 7 capabilities with examples, what users can expect when prompting for frontend work, and how activation integrates with other Superpowers skills.
 
 ### Changes
-
-**Token efficiency claims corrected** — The README previously claimed "up to 73% token reduction per session" and "5-10x smaller context windows." These have been replaced with honest, defensible numbers: "estimated 15-30% session overhead reduction" based on the actual impact of 3-tier routing and context hygiene. The research section header was changed from "Research-Driven Optimizations" to "Research-Informed Design" with a clarification that the papers motivated the design but did not measure this plugin's specific outcomes.
 
 **Testing documentation updated** — `docs/testing.md` (now `docs/testing-structure.md`) was rewritten to reflect the actual 5-directory test structure: claude-code, skill-triggering, explicit-skill-requests, subagent-driven-dev, and opencode. Added the subagent hook scope test, fixed stale plugin name references, and added a quick reference section with copy-paste commands for every test suite.
 

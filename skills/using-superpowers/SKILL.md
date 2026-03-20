@@ -43,7 +43,12 @@ Technical execution includes code edits, debugging, planning, review, test statu
 2. Classify the task as **micro**, **lightweight**, or **full** (see Complexity Classification below).
 3. If resuming work from a prior session, read `state.md` if it exists. Use `context-management` to save state before ending a session with ongoing work.
 4. If `known-issues.md` exists at the project root, read it to avoid rediscovering known error→solution mappings.
-5. Follow the path for the classified complexity level.
+5. If `project-map.md` exists at the project root, read it to orient to the project structure without re-globbing or re-reading known files. Then check staleness:
+   - **With git:** run `git rev-parse HEAD` and compare to the hash in the map header.
+     - Match → map is fresh, use it as-is.
+     - Mismatch → run `git diff --name-only <saved_hash> HEAD` to find changed files. Re-read only those; everything else in the map is still valid.
+   - **Without git:** compare the map's generation timestamp to the modification time of files listed in the map's Hot Files section. Re-read any that are newer than the map.
+6. Follow the path for the classified complexity level.
 
 ## Complexity Classification
 

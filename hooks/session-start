@@ -71,6 +71,15 @@ check_for_updates() {
 # Run silently — a failure here must never break the session
 check_for_updates 2>/dev/null || true
 
+# ── Git repository check ──────────────────────────────────────────────────────
+# Detects when the working directory has no git repo and injects a quiet note.
+# This lets the AI offer git init during project-map.md generation without
+# announcing it verbally on every session start (no <important-reminder> tag).
+git_notice=""
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    git_notice="\n\n<project-git-status>No git repository detected in the current working directory. When the user generates or updates project-map.md, offer to run 'git init' (creates a .git folder, touches no user files). If they decline, use file timestamps for staleness detection instead. Do not announce this proactively — only act on it when project-map.md is relevant.</project-git-status>"
+fi
+
 # ── Legacy skills warning ──────────────────────────────────────────────────────
 warning_message=""
 legacy_skills_dir="${HOME}/.config/superpowers/skills"
@@ -99,8 +108,9 @@ escape_for_json() {
 using_superpowers_escaped=$(escape_for_json "$using_superpowers_content")
 warning_escaped=$(escape_for_json "$warning_message")
 update_escaped=$(escape_for_json "$update_notice")
+git_escaped=$(escape_for_json "$git_notice")
 
-session_context="<EXTREMELY_IMPORTANT>\nYou have superpowers-optimized.\n\n**The \`superpowers-optimized:using-superpowers\` guidance is loaded below. For all other skills, use the \`Skill\` tool.**\n\n${using_superpowers_escaped}\n\n${warning_escaped}${update_escaped}\n</EXTREMELY_IMPORTANT>"
+session_context="<EXTREMELY_IMPORTANT>\nYou have superpowers-optimized.\n\n**The \`superpowers-optimized:using-superpowers\` guidance is loaded below. For all other skills, use the \`Skill\` tool.**\n\n${using_superpowers_escaped}\n\n${warning_escaped}${update_escaped}${git_escaped}\n</EXTREMELY_IMPORTANT>"
 
 # ── Output ─────────────────────────────────────────────────────────────────────
 cat <<EOF

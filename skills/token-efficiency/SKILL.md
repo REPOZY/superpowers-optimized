@@ -49,6 +49,19 @@ Maintain a mental index of repository exploration performed in this session. Bef
 
 When Claude Code compresses earlier messages, you lose the raw tool output but retain your own reasoning and summaries. This does NOT mean you need to re-read everything — you still know what you learned. Only re-read when you need specific content (exact line numbers, precise syntax) that you can no longer recall.
 
+## Proactive Compaction Breakpoints
+
+Do not wait for context to auto-compress mid-task. Break proactively at logical seams — before compaction forces it in the middle of implementation where you need variable names, file paths, and discovered facts intact.
+
+**Break context here:**
+- After research/exploration phase, before writing any code
+- After a failed approach is abandoned, before starting a new direction
+- After a large read-heavy investigation, before implementation begins
+
+**Break context by:** invoking `context-management` to write `state.md` with discovered facts, then starting fresh with only `state.md` as input.
+
+**Why this matters:** Auto-compaction at 95% context fill destroys the most recent content — exactly the variable names, discovered paths, and evidence gathered just before implementation. A proactive break at 50% preserves all of it.
+
 ## Context Rules
 
 Use `context-management` when cross-session persistence is needed:
