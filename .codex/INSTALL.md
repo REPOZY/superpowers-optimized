@@ -44,24 +44,42 @@ If you installed superpowers before native skill discovery, you need to:
 
 ## Verify
 
+**Unix/macOS:**
 ```bash
 ls -la ~/.agents/skills/superpowers
+```
+
+**Windows (PowerShell):**
+```powershell
+Get-Item "$env:USERPROFILE\.agents\skills\superpowers"
 ```
 
 You should see a symlink (or junction on Windows) pointing to your superpowers skills directory.
 
 ## Updating
 
+**Unix/macOS:**
 ```bash
 cd ~/.codex/superpowers && git pull
+```
+
+**Windows (PowerShell):**
+```powershell
+Set-Location "$env:USERPROFILE\.codex\superpowers"; git pull
 ```
 
 Skills update instantly through the symlink.
 
 ## Uninstalling
 
+**Unix/macOS:**
 ```bash
 rm ~/.agents/skills/superpowers
+rm -rf ~/.codex/superpowers   # optional: delete the clone
 ```
 
-Optionally delete the clone: `rm -rf ~/.codex/superpowers`.
+**Windows (PowerShell):**
+```powershell
+cmd /c rmdir "$env:USERPROFILE\.agents\skills\superpowers"
+Remove-Item -Recurse -Force "$env:USERPROFILE\.codex\superpowers"   # optional: delete the clone
+```

@@ -357,9 +357,13 @@ Read more: [Superpowers for Claude Code](https://blog.fsck.com/2025/10/09/superp
 ```
 
 **Update**
-```
-/plugin update superpowers-optimized
-```
+
+`/plugin update superpowers-optimized` opens the plugin manager UI. From there:
+
+1. **Marketplaces** tab → select `REPOZY/superpowers-optimized` → **Update marketplace** (refreshes the version catalog)
+2. **Installed** tab → select `superpowers-optimized` → **Update now**
+
+> **Tip:** To skip manual steps in future, enable **Auto-update** for the marketplace in step 1.
 
 **Uninstall**
 ```
