@@ -40,14 +40,13 @@ Technical execution includes code edits, debugging, planning, review, test statu
 ## Entry Sequence
 
 1. Invoke `token-efficiency` at session start — applies to all sessions, always.
-2. **Fresh project gate** — check all three conditions:
-   - `<project-git-status>` is present in context (session-start hook detected no git repo)
-   - No `project-map.md` exists at the project root
+2. **Fresh project gate** — evaluate both conditions in order:
    - The user's request contains creation/build intent: any of "build", "create", "make", "implement", "scaffold", "set up", "write", "generate", "develop", "start"
+   - Run a filesystem check: `ls project-map.md 2>/dev/null` — gate only fires if the file does **not** exist
 
-   If all three are true, **pause before proceeding** and tell the user exactly this:
+   If both are true, **pause before proceeding** and tell the user exactly this:
 
-   > Before I start: this directory has no git repo or memory files set up yet. That matters for how well I perform across sessions.
+   > Before I start: this directory has no memory files set up yet. That matters for how well I perform across sessions.
    >
    > **Without setup, every future session on this project starts from scratch:**
    > - I re-explore the project structure even if I mapped it last session
@@ -62,7 +61,9 @@ Technical execution includes code edits, debugging, planning, review, test statu
    >
    > **Set this up before we build, or start immediately?**
 
-   Wait for the user's answer before continuing. If they confirm, invoke `context-management` to run `git init` and generate `project-map.md`, then return to this entry sequence. If they decline, proceed to step 3.
+   Wait for the user's answer before continuing.
+   - **If they confirm:** run `git init --quiet` directly (do not ask again — the user just confirmed), then invoke `context-management` for map generation only. Return to step 3 when done.
+   - **If they decline:** proceed to step 3.
 
 3. Classify the task as **micro**, **lightweight**, or **full** (see Complexity Classification below).
 4. If resuming work from a prior session, read `state.md` if it exists. Use `context-management` to save state before ending a session with ongoing work.
