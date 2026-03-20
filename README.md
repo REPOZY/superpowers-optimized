@@ -24,7 +24,7 @@ This repository delivers everything the original Superpowers plugin does, plus a
 | Token efficiency         | Standard                      | Always-on context hygiene + exploration tracking | ~15-30 % less session overhead    |
 | Discipline enforcement   | Instructional tone             | Rationalization tables, red flags, iron laws   | Fewer LLM shortcuts                |
 | Progress visibility      | None                          | Session stats (skills used, duration, actions)  | See what the plugin did for you    |
-| Cross-session memory     | None                          | Persistent state.md + known-issues.md          | Continuous learning across sessions|
+| Cross-session memory     | None                          | Four-file memory stack: `project-map.md` (structure cache) + `session-log.md` (decision history) + `state.md` (task snapshot) + `known-issues.md` (error map) | The AI starts every session with full project context — no re-exploring, no re-explaining, no re-debugging |
 
 ### Try it in 30 seconds
 In any supported agent IDE, start a new chat and paste:
@@ -76,6 +76,13 @@ User sends a prompt
         │
         ▼
 ┌─ using-superpowers (always loaded at SessionStart) ───────┐
+│  Entry sequence:                                          │
+│    1. token-efficiency (always)                           │
+│    2. Read state.md if resuming prior work                │
+│    3. Read known-issues.md if exists                      │
+│    4. Read project-map.md if exists → check git staleness │
+│       (only re-read files that changed since last map)    │
+│                                                           │
 │  Classify: micro / lightweight / full                     │
 │                                                           │
 │  MICRO → just do it                                       │
@@ -114,6 +121,11 @@ User sends a prompt
         ▼  (when Claude stops responding)
 ┌─ Stop Hook ───────────────────────────────────────────────┐
 │  stop-reminders.js →                                      │
+│    Appends auto-entry to session-log.md (always):         │
+│      "## 2026-03-20 14:32 [auto]"                         │
+│      "Skills: systematic-debugging (3x), verification"    │
+│      "Files: hooks/stop-reminders.js, skills/..."         │
+│    Then (if activity warrants):                           │
 │    "5 source files modified without tests"                │
 │    "12 files changed, consider committing"                │
 │    "Session: 45min, 8 skill invocations [debugging 3x]"   │
@@ -174,12 +186,109 @@ These research insights drive four core principles throughout the fork:
 ---
 
 
+## Session Memory: The AI That Remembers
+
+The plugin builds a four-file memory stack at your project root. Together they eliminate the most expensive form of session overhead: re-discovering things the AI already knew.
+
+```
+known-issues.md   ← error→solution map (never re-debug the same thing)
+project-map.md    ← structure + key files + critical constraints (never re-explore)
+session-log.md    ← decision history + approach rejections (never re-explain)
+state.md          ← current task snapshot (never lose mid-work progress)
+```
+
+### session-log.md — What happened
+
+Every time a session ends, the plugin automatically writes a breadcrumb — no setup, no action required.
+
+```markdown
+## 2026-03-20 14:32 [auto]
+Skills: systematic-debugging (3x), verification-before-completion (1x)
+Files: hooks/stop-reminders.js, skills/context-management/SKILL.md
+
+## 2026-03-15 10:04 [saved]
+Goal: Fix session-start hook not running on Linux CI
+Decisions:
+- Changed single quotes to escaped double quotes around ${CLAUDE_PLUGIN_ROOT}
+Approaches rejected: Single-quote wrapping (works on Windows, breaks Linux)
+Key facts: hooks.json requires \" not ' around path variables
+```
+
+Two entry types: **[auto]** (written by stop hook every session — zero effort) and **[saved]** (written when you explicitly invoke `context-management` — full decision record). Grep-searchable. The AI surfaces relevant history in the same turn it receives your request.
+
+### project-map.md — What exists and what it does
+
+Generate once with "map this project". After that, the AI reads it at every session start instead of re-globbing and re-reading files it already knows.
+
+```markdown
+# Project Map
+_Generated: 2026-03-20 14:32 | Git: a4b9c2d_
+
+## Directory Structure
+skills/ — 20 skills, each in skills/<name>/SKILL.md
+hooks/ — 8 hooks (JS) + hooks.json registry + skill-rules.json
+
+## Key Files
+hooks/skill-activator.js — UserPromptSubmit: scores prompts against skill-rules.json,
+  injects skill hints. Micro-task detection (≤8 words + patterns = skip routing).
+hooks/skill-rules.json — 13 rules: skill name, keywords, intentPatterns, priority.
+
+## Critical Constraints
+- hooks.json uses \" not ' around ${CLAUDE_PLUGIN_ROOT} (single quotes break Linux)
+- plugin.json + marketplace.json must always have identical version strings
+
+## Hot Files
+hooks/stop-reminders.js, hooks/skill-activator.js, skills/using-superpowers/SKILL.md
+```
+
+**Staleness is automatic.** The AI checks the git hash (or file timestamps on non-git projects) at every session start and re-reads only files that actually changed since the map was made. No manual invalidation needed.
+
+Works on any project — git or non-git. If no git is detected, the AI offers to run `git init` when you generate your first map (creates a `.git` folder, touches none of your files). If you decline, it falls back to timestamp comparison instead.
+
+### The combined impact
+
+Without this stack, every new session starts with amnesia:
+- The AI re-globs the project to understand its structure
+- Re-reads files it already understood last session
+- Proposes approaches that were already rejected
+- Re-debugs errors that were already solved
+- Loses the "why" behind every architectural decision
+
+With this stack, sessions start with full context and zero re-discovery overhead. The AI greets your task with: *"I see the last session on this topic (2026-03-15) established that single quotes break Linux CI — already writing the new hook with escaped double quotes."*
+
+### Two types of entries (session-log.md)
+
+| Type | Written by | Contains | Cost |
+|---|---|---|---|
+| `[auto]` | Stop hook, every session | Date, skills used, files modified | Zero — automatic |
+| `[saved]` | You, via `context-management` | Goal, decisions, rejected approaches, key facts | One explicit save |
+
+### How it compares to full episodic memory
+
+This is a deliberate, dependency-free implementation. No SQLite, no embedding model, no MCP server required.
+
+| Capability | Built-in memory stack | episodic-memory plugin (optional) |
+|---|---|---|
+| Per-project decision history | ✓ grep-searchable | ✓ semantic search |
+| Project structure cache | ✓ project-map.md | — |
+| Approach rejection memory | ✓ (when saved) | ✓ automatic |
+| Automatic session indexing | ✓ auto-entries | ✓ full conversation index |
+| Cross-project recall | ✗ | ✓ |
+| Zero dependencies | ✓ | ✗ requires install |
+| Plug-and-play | ✓ | Separate install |
+
+For cross-project semantic recall ("how did we solve this in another codebase?"), install `episodic-memory@superpowers-marketplace` — it complements rather than duplicates this system.
+
+
+---
+
+
 ## Skills Library (20 skills)
 
 ### Core Workflow
 - **using-superpowers** — Mandatory workflow router with 3-tier complexity classification (micro/lightweight/full) and instruction priority hierarchy
 - **token-efficiency** — Always-on: concise responses, parallel tool batching, exploration tracking, no redundant work
-- **context-management** — Persist durable state to `state.md` for cross-session continuity
+- **context-management** — Four-file memory stack: `project-map.md` (structure + key files + critical constraints, git-hash staleness detection), `session-log.md` (accumulated decision history, auto-appended every session), `state.md` (ephemeral current-task snapshot), `known-issues.md` (error→solution map)
 
 - **premise-check** — Validates whether proposed work should exist before investing in it; triggers reassessment when new evidence changes the original motivation
 
@@ -213,7 +322,7 @@ These research insights drive four core principles throughout the fork:
 - **skill-activator** (UserPromptSubmit) — Micro-task detection + confidence-threshold skill matching
 - **track-edits** (PostToolUse: Edit/Write) — Logs file changes for TDD reminders
 - **track-session-stats** (PostToolUse: Skill) — Tracks skill invocations for progress visibility
-- **stop-reminders** (Stop) — TDD reminders, commit nudges, and session summary
+- **stop-reminders** (Stop) — Auto-appends session entry to `session-log.md` (skills used, files modified), then surfaces TDD reminders, commit nudges, and session summary
 - **block-dangerous-commands** (PreToolUse: Bash) — 30+ patterns blocking destructive commands with 3-tier severity
 - **protect-secrets** (PreToolUse: Read/Edit/Write/Bash) — 50+ file patterns protecting sensitive files + 14 content patterns detecting hardcoded secrets (API keys, tokens, PEM blocks, connection strings) in source code with actionable env var guidance
 - **subagent-guard** (SubagentStop) — Detects and blocks subagent skill leakage with automatic recovery
