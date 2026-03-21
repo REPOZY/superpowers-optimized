@@ -231,7 +231,7 @@ Two entry types: **[auto]** (written by stop hook every session — zero effort)
 
 ### project-map.md — What exists and what it does
 
-Generate once with "map this project". After that, the AI reads it at every session start instead of re-globbing and re-reading files it already knows.
+Generate once with "map this project". After that, the session-start hook injects its content directly into every session — no instruction-following required. The AI has the map before your first message arrives.
 
 ```markdown
 # Project Map
@@ -336,13 +336,13 @@ For cross-project semantic recall ("how did we solve this in another codebase?")
 
 ### Hooks (8 total)
 - **skill-activator** (UserPromptSubmit) — Micro-task detection + confidence-threshold skill matching
-- **track-edits** (PostToolUse: Edit/Write) — Logs file changes for TDD reminders
+- **track-edits** (PostToolUse: Edit/Write) — Logs file changes for TDD reminders; auto-adds AI workspace artifacts (`project-map.md`, `session-log.md`, `state.md`) to `.gitignore` on first write
 - **track-session-stats** (PostToolUse: Skill) — Tracks skill invocations for progress visibility
-- **stop-reminders** (Stop) — Auto-appends session entry to `session-log.md` (skills used, files modified), then surfaces TDD reminders, commit nudges, and session summary
+- **stop-reminders** (Stop) — Auto-appends session entry to `session-log.md` (skills used, files modified), auto-adds `session-log.md` to `.gitignore`, then surfaces TDD reminders, commit nudges, and session summary
 - **block-dangerous-commands** (PreToolUse: Bash) — 30+ patterns blocking destructive commands with 3-tier severity
 - **protect-secrets** (PreToolUse: Read/Edit/Write/Bash) — 50+ file patterns protecting sensitive files + 14 content patterns detecting hardcoded secrets (API keys, tokens, PEM blocks, connection strings) in source code with actionable env var guidance
 - **subagent-guard** (SubagentStop) — Detects and blocks subagent skill leakage with automatic recovery
-- **session-start** (SessionStart) — Injects using-superpowers routing into every session
+- **session-start** (SessionStart) — Injects using-superpowers routing into every session; injects `project-map.md` content directly if it exists (full content ≤200 lines, Critical Constraints + Hot Files only above that)
 
 ### Agents
 - **code-reviewer** — Senior code review agent with social accountability framing (merge decision and downstream fixes depend on review accuracy) and ASI-guided fix prioritization (single most impactful finding surfaced first)
