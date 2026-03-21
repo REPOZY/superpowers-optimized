@@ -105,6 +105,8 @@ All of these must be true:
 
 **Action:** Go directly to implementation. Only gate: invoke `verification-before-completion` when done. Skip brainstorming, planning, worktrees, and parallel dispatch.
 
+**Exception:** If a dedicated implementation skill exists for this specific task (check the Routing Guide), invoke it — lightweight skips workflow overhead, not implementation skills.
+
 ### Full (complete pipeline)
 Anything that doesn't qualify as micro or lightweight.
 
