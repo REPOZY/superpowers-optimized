@@ -114,10 +114,12 @@ Anything that doesn't qualify as micro or lightweight.
 
 ## Routing Guide
 
+- Uncertain whether work should exist at all: `premise-check` (run before brainstorming or planning)
 - Complex decision with unclear options or possible mis-framing: `deliberation` → `brainstorming` → `writing-plans`
 - New behavior or architecture (problem is well-framed): `brainstorming` → `writing-plans`
 - Plan execution (same session): `subagent-driven-development`
 - Plan execution (separate session): `executing-plans`
+- Experimental or risky work needing branch isolation: `using-git-worktrees` (run before implementation)
 - Bug/test failure: `systematic-debugging` → `test-driven-development`
 - Completion claim: `verification-before-completion`
 - Branch integration: `finishing-a-development-branch`
