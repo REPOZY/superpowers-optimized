@@ -3,7 +3,7 @@
 [![Install](https://img.shields.io/badge/install-REPOZY%2Fsuperpowers--optimized-5B3FFF?logo=claude)](https://github.com/REPOZY/superpowers-optimized#installation)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Anthropic-orange)](https://docs.anthropic.com/en/docs/claude-code)
 [![Codex](https://img.shields.io/badge/Codex-OpenAI-white)](https://github.com/openai/codex)
-[![OpenCode](https://img.shields.io/badge/OpenCode-AI%20Terminal-violet)](https://opencode.ai/)
+[![OpenCode](https://img.shields.io/badge/OpenCode-AI%20Terminal-grey)](https://opencode.ai/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ![](media/Superpowers-Optimized-Header.gif)
