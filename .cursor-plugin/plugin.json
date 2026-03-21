@@ -2,7 +2,7 @@
   "name": "superpowers-optimized",
   "displayName": "Superpowers Optimized",
   "description": "Agentic development framework — disciplined workflow routing, TDD enforcement, safety hooks, systematic debugging, and code review",
-  "version": "5.5.0",
+  "version": "5.6.0",
   "author": {
     "name": "Jesse Vincent, forked by REPOZY"
   },
