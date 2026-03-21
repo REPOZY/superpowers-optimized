@@ -212,22 +212,20 @@ state.md          ← current task snapshot (never lose mid-work progress)
 
 ### session-log.md — What happened
 
-Every time a session ends, the plugin automatically writes a breadcrumb — no setup, no action required.
+An optional, manually-maintained record of decisions, rejected approaches, and key facts. Write an entry when something is worth preserving — an architectural choice, a constraint discovered the hard way, an approach that was tried and failed. Skip it when there's nothing durable to record.
 
 ```markdown
-## 2026-03-20 14:32 [auto]
-Skills: systematic-debugging (3x), verification-before-completion (1x)
-Files: hooks/stop-reminders.js, skills/context-management/SKILL.md
-
 ## 2026-03-15 10:04 [saved]
-Goal: Fix session-start hook not running on Linux CI
+Goal: Add cross-session memory to the plugin
 Decisions:
-- Changed single quotes to escaped double quotes around ${CLAUDE_PLUGIN_ROOT}
-Approaches rejected: Single-quote wrapping (works on Windows, breaks Linux)
-Key facts: hooks.json requires \" not ' around path variables
+- project-map.md injected by the session-start hook directly — makes it unconditional, not dependent on Claude following instructions
+- session-log.md is manual-only; auto-entries were low-signal noise, all derivable from git log
+Approaches rejected: Auto-appending a [auto] entry on every Stop event — produced 30 near-identical entries per session with no decisions or reasoning, just file lists
+Key facts: hooks.json requires \" not ' around ${CLAUDE_PLUGIN_ROOT} — single quotes break variable expansion on Linux
+Open: Monitor whether [saved] entries get used in practice; if not, consider folding key facts into project-map.md Critical Constraints instead
 ```
 
-Two entry types: **[auto]** (written by stop hook every session — zero effort) and **[saved]** (written when you explicitly invoke `context-management` — full decision record). Grep-searchable. The AI surfaces relevant history in the same turn it receives your request.
+Write an entry by invoking `context-management`. Grep-searchable. The AI surfaces relevant history at the start of any task that touches the same area.
 
 ### project-map.md — What exists and what it does
 
@@ -271,12 +269,11 @@ Without this stack, every new session starts with amnesia:
 
 With this stack, sessions start with full context and zero re-discovery overhead. The AI greets your task with: *"I see the last session on this topic (2026-03-15) established that single quotes break Linux CI — already writing the new hook with escaped double quotes."*
 
-### Two types of entries (session-log.md)
+### session-log.md entries
 
-| Type | Written by | Contains | Cost |
-|---|---|---|---|
-| `[auto]` | Stop hook, every session | Date, skills used, files modified | Zero — automatic |
-| `[saved]` | You, via `context-management` | Goal, decisions, rejected approaches, key facts | One explicit save |
+| Type | Written by | Contains |
+|---|---|---|
+| `[saved]` | You, via `context-management` | Goal, decisions, rejected approaches, key facts |
 
 ### How it compares to full episodic memory
 
@@ -338,7 +335,7 @@ For cross-project semantic recall ("how did we solve this in another codebase?")
 - **skill-activator** (UserPromptSubmit) — Micro-task detection + confidence-threshold skill matching
 - **track-edits** (PostToolUse: Edit/Write) — Logs file changes for TDD reminders; auto-adds AI workspace artifacts (`project-map.md`, `session-log.md`, `state.md`) to `.gitignore` on first write
 - **track-session-stats** (PostToolUse: Skill) — Tracks skill invocations for progress visibility
-- **stop-reminders** (Stop) — Auto-appends session entry to `session-log.md` (skills used, files modified), auto-adds `session-log.md` to `.gitignore`, then surfaces TDD reminders, commit nudges, and session summary
+- **stop-reminders** (Stop) — Surfaces TDD reminders, commit nudges, and session summary after each response turn
 - **block-dangerous-commands** (PreToolUse: Bash) — 30+ patterns blocking destructive commands with 3-tier severity
 - **protect-secrets** (PreToolUse: Read/Edit/Write/Bash) — 50+ file patterns protecting sensitive files + 14 content patterns detecting hardcoded secrets (API keys, tokens, PEM blocks, connection strings) in source code with actionable env var guidance
 - **subagent-guard** (SubagentStop) — Detects and blocks subagent skill leakage with automatic recovery

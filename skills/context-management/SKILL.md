@@ -16,9 +16,7 @@ Persist durable decisions and progress to `state.md` for cross-session continuit
 Claude Code automatically compresses context within a session. This skill has two complementary responsibilities:
 
 1. **Cross-session persistence** — `state.md` preserves decisions and progress for the *current task* when a session ends mid-work.
-2. **Accumulated project memory** — `session-log.md` builds a searchable history of *what happened across all sessions* on this project, so past decisions, rejected approaches, and hard-won facts are never lost.
-
-The stop hook auto-appends a minimal entry to `session-log.md` at the end of every session (no action required). This skill writes the richer entries and reads the log to surface relevant history at task start.
+2. **Accumulated project memory** — `session-log.md` builds a searchable history of decisions, rejected approaches, and hard-won facts across sessions. Written manually via this skill — only when there is something worth preserving.
 
 ## When to Use
 
@@ -72,9 +70,8 @@ Open: <unresolved questions for next session>
 
 ## session-log.md Format and Maintenance
 
-The log accumulates two types of entries:
+The log contains a single entry type:
 
-- **[auto]** — written by the stop hook at every session end: date, skills invoked, files modified. Zero effort, always present.
 - **[saved]** — written by this skill when explicitly invoked: full decision record including goals, rationale, rejected approaches, and key facts.
 
 **File management:**
