@@ -204,7 +204,7 @@ These research insights drive five core principles throughout the fork:
 The plugin builds a four-file memory stack at your project root. Together they eliminate the most expensive form of session overhead: re-discovering things the AI already knew.
 
 ```
-known-issues.md   ← error→solution map (never re-debug the same thing)
+known-issues.md   ← error→ solution map (never re-debug the same thing)
 project-map.md    ← structure + key files + critical constraints (never re-explore)
 session-log.md    ← decision history + approach rejections (never re-explain)
 state.md          ← current task snapshot (never lose mid-work progress)
