@@ -1,3 +1,5 @@
+<div align="center">
+
 [![GitHub stars](https://img.shields.io/github/stars/REPOZY/superpowers-optimized?style=flat&color=white)](https://github.com/REPOZY/superpowers-optimized/stargazers)
 [![Version](https://img.shields.io/github/v/release/REPOZY/superpowers-optimized?style=flat&color=white)](https://github.com/REPOZY/superpowers-optimized/releases)
 [![Install](https://img.shields.io/badge/install-now-FFFFFF?logo=claude)](https://github.com/REPOZY/superpowers-optimized#installation)
@@ -5,6 +7,8 @@
 [![Codex](https://img.shields.io/badge/Codex-OpenAI-white)](https://github.com/openai/codex)
 [![OpenCode](https://img.shields.io/badge/OpenCode-AI%20Terminal-white)](https://opencode.ai/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-white.svg)](LICENSE)
+
+</div>
 
 ![](media/Superpowers-Optimized-Header.gif)
 
