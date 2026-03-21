@@ -435,7 +435,7 @@ Fetch and follow the update instructions from https://raw.githubusercontent.com/
 Or manually: `git pull` in your local clone of the repository.
 
 
-### Update Notification
+### Available Update Notification
 
 You will be **automatically notified** when a new version is available.
 
