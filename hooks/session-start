@@ -87,6 +87,33 @@ if [ -d "$legacy_skills_dir" ]; then
     warning_message="\n\n<important-reminder>IN YOUR FIRST REPLY AFTER SEEING THIS MESSAGE YOU MUST TELL THE USER:⚠️ **WARNING:** Superpowers now uses Claude Code's skills system. Custom skills in ~/.config/superpowers/skills will not be read. Move custom skills to ~/.claude/skills instead. To make this message go away, remove ~/.config/superpowers/skills</important-reminder>"
 fi
 
+# ── Project map injection ─────────────────────────────────────────────────────
+# If project-map.md exists in the current working directory, inject its content
+# directly into session context so Claude has it from turn 1 — unconditionally,
+# without relying on Claude following the entry sequence instruction to read it.
+# ≤200 lines: inject full content. >200 lines: inject Critical Constraints and
+# Hot Files only (highest-value sections), with a note pointing to the full file.
+project_map_content=""
+if [ -f "project-map.md" ]; then
+    line_count=$(wc -l < "project-map.md" 2>/dev/null || echo "0")
+    if [ "$line_count" -le 200 ]; then
+        project_map_raw=$(cat "project-map.md" 2>/dev/null || echo "")
+    else
+        project_map_raw=$(awk '
+            /^## / { in_section = (/^## Critical Constraints/ || /^## Hot Files/) ? 1 : 0 }
+            in_section { print }
+        ' "project-map.md" 2>/dev/null || echo "")
+        if [ -n "$project_map_raw" ]; then
+            project_map_raw="*(project-map.md is large — showing Critical Constraints and Hot Files only. Full map at project-map.md)*
+
+${project_map_raw}"
+        fi
+    fi
+    if [ -n "$project_map_raw" ]; then
+        project_map_content="\n\n<project-map>\n${project_map_raw}\n</project-map>"
+    fi
+fi
+
 # ── Load using-superpowers skill body ─────────────────────────────────────────
 using_superpowers_content=$(awk '
 NR == 1 && $0 == "---" { in_frontmatter = 1; next }
