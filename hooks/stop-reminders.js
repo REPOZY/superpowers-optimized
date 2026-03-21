@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { ensureGitignored } = require('./track-edits');
 
 const LOG_DIR = path.join(
   process.env.HOME || process.env.USERPROFILE || '.',
@@ -241,6 +242,9 @@ function appendAutoSessionEntry(cwd, stats, edits) {
     lines.push(''); // Blank line separator between entries
 
     fs.appendFileSync(sessionLogPath, lines.join('\n') + '\n');
+
+    // Ensure session-log.md is listed in .gitignore — it's a workspace artifact, not project code
+    ensureGitignored(sessionLogPath, cwd);
   } catch {
     // Silently ignore — never let logging block session end
   }

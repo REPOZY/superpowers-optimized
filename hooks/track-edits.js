@@ -19,6 +19,44 @@ const LOG_DIR = path.join(
   'hooks-logs'
 );
 
+// AI-generated workspace artifacts that should never be committed
+const AI_ARTIFACTS = ['project-map.md', 'session-log.md', 'state.md'];
+
+/**
+ * Ensure an AI artifact file is listed in the nearest .gitignore.
+ * Called whenever Claude writes one of these files — adds the entry
+ * immediately so `git status` never shows it as an untracked file.
+ */
+function ensureGitignored(filePath, cwd) {
+  try {
+    const basename = path.basename(filePath);
+    if (!AI_ARTIFACTS.includes(basename)) return;
+
+    const dir = filePath && path.isAbsolute(filePath) ? path.dirname(filePath) : (cwd || '.');
+    const gitignorePath = path.join(dir, '.gitignore');
+
+    let content = '';
+    if (fs.existsSync(gitignorePath)) {
+      content = fs.readFileSync(gitignorePath, 'utf8');
+    }
+
+    // Already ignored — nothing to do
+    const lines = content.split('\n').map(l => l.trim());
+    if (lines.includes(basename)) return;
+
+    const hasSection = content.includes('# AI assistant artifacts');
+    const prefix = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
+
+    if (!hasSection) {
+      fs.appendFileSync(gitignorePath, `${prefix}\n# AI assistant artifacts\n${basename}\n`);
+    } else {
+      fs.appendFileSync(gitignorePath, `${basename}\n`);
+    }
+  } catch {
+    // Silently ignore — never block tool execution
+  }
+}
+
 const EDIT_LOG = path.join(LOG_DIR, 'edit-log.txt');
 const MAX_LINES = 500;
 
@@ -40,6 +78,9 @@ function logEdit(tool, filePath, cwd) {
 
     const entry = `${new Date().toISOString()} | ${tool} | ${resolved}\n`;
     fs.appendFileSync(EDIT_LOG, entry);
+
+    // Auto-add AI workspace artifacts to .gitignore on first write
+    ensureGitignored(resolved, cwd);
 
     // Auto-rotate: check file size first (cheaper than reading content)
     // Only rotate if file exceeds ~50KB (roughly 500 lines at 100 chars each)
@@ -122,5 +163,5 @@ async function main() {
 if (require.main === module) {
   main();
 } else {
-  module.exports = { logEdit, getRecentEdits, rotateIfNeeded, EDIT_LOG, LOG_DIR };
+  module.exports = { logEdit, getRecentEdits, rotateIfNeeded, ensureGitignored, EDIT_LOG, LOG_DIR };
 }
