@@ -1,8 +1,6 @@
 [![GitHub stars](https://img.shields.io/github/stars/REPOZY/superpowers-optimized?style=flat&color=yellow)](https://github.com/REPOZY/superpowers-optimized/stargazers)
 [![Version](https://img.shields.io/github/v/release/REPOZY/superpowers-optimized)](https://github.com/REPOZY/superpowers-optimized/releases)
 [![Install](https://img.shields.io/badge/install-REPOZY%2Fsuperpowers--optimized-5B3FFF?logo=claude)](https://github.com/REPOZY/superpowers-optimized#installation)
-[![Cursor](https://img.shields.io/badge/Cursor-AI%20IDE-teal)](https://www.cursor.com/)
-[![VS Code](https://img.shields.io/badge/VS%20Code-Editor-007ACC)](https://code.visualstudio.com/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Anthropic-orange)](https://docs.anthropic.com/en/docs/claude-code)
 [![Codex](https://img.shields.io/badge/Codex%20CLI-OpenAI-green)](https://github.com/openai/codex)
 [![OpenCode](https://img.shields.io/badge/OpenCode-AI%20Terminal-violet)](https://opencode.ai/)
