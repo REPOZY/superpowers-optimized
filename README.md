@@ -1,12 +1,12 @@
 <div align="center">
 
-[![GitHub stars](https://img.shields.io/github/stars/REPOZY/superpowers-optimized?style=for-the-badge&color=#5e08c7)](https://github.com/REPOZY/superpowers-optimized/stargazers)
-[![Version](https://img.shields.io/github/v/release/REPOZY/superpowers-optimized?style=for-the-badge&color=#5e08c7)](https://github.com/REPOZY/superpowers-optimized/releases)
-[![Install](https://img.shields.io/badge/install-now-#5e08c7?style=for-the-badge&logo=claude)](https://github.com/REPOZY/superpowers-optimized#installation)
-[![Claude](https://img.shields.io/badge/Claude-Anthropic-#5e08c7?style=for-the-badge)](https://claude.ai/)
-[![Codex](https://img.shields.io/badge/Codex-OpenAI-#5e08c7?style=for-the-badge)](https://github.com/openai/codex)
-[![OpenCode](https://img.shields.io/badge/OpenCode-AI%20Terminal-#5e08c7?style=for-the-badge)](https://opencode.ai/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-#5e08c7?style=for-the-badge)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/REPOZY/superpowers-optimized?style=for-the-badge&color=white)](https://github.com/REPOZY/superpowers-optimized/stargazers)
+[![Version](https://img.shields.io/github/v/release/REPOZY/superpowers-optimized?style=for-the-badge&color=white)](https://github.com/REPOZY/superpowers-optimized/releases)
+[![Install](https://img.shields.io/badge/install-now-white?style=for-the-badge&logo=claude)](https://github.com/REPOZY/superpowers-optimized#installation)
+[![Claude](https://img.shields.io/badge/Claude-Anthropic-white?style=for-the-badge)](https://claude.ai/)
+[![Codex](https://img.shields.io/badge/Codex-OpenAI-white?style=for-the-badge)](https://github.com/openai/codex)
+[![OpenCode](https://img.shields.io/badge/OpenCode-AI%20Terminal-white?style=for-the-badge)](https://opencode.ai/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-white?style=for-the-badge)](LICENSE)
 
 </div>
 
