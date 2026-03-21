@@ -275,23 +275,6 @@ With this stack, sessions start with full context and zero re-discovery overhead
 |---|---|---|
 | `[saved]` | You, via `context-management` | Goal, decisions, rejected approaches, key facts |
 
-### How it compares to full episodic memory
-
-This is a deliberate, dependency-free implementation. No SQLite, no embedding model, no MCP server required.
-
-| Capability | Built-in memory stack | episodic-memory plugin (optional) |
-|---|---|---|
-| Per-project decision history | ✓ grep-searchable | ✓ semantic search |
-| Project structure cache | ✓ project-map.md | — |
-| Approach rejection memory | ✓ (when saved) | ✓ automatic |
-| Automatic session indexing | ✓ auto-entries | ✓ full conversation index |
-| Cross-project recall | ✗ | ✓ |
-| Zero dependencies | ✓ | ✗ requires install |
-| Plug-and-play | ✓ | Separate install |
-
-For cross-project semantic recall ("how did we solve this in another codebase?"), install `episodic-memory@superpowers-marketplace` — it complements rather than duplicates this system.
-
-
 ---
 
 
