@@ -80,7 +80,7 @@ The log contains a single entry type:
 - When a decision is permanently superseded (e.g., the approach was replaced), mark it rather than deleting: append `[superseded by YYYY-MM-DD]`
 - Do NOT log trivial sessions (the stop hook already filters these out)
 
-**For cross-project recall** (finding how a similar problem was solved in a different codebase): `session-log.md` is per-project and keyword-searchable only. For semantic cross-project search, install `episodic-memory@superpowers-marketplace`.
+**For cross-project recall** (finding how a similar problem was solved in a different codebase): `session-log.md` is per-project and keyword-searchable only. Cross-project recall is outside the scope of this system.
 
 ## Project Map
 
