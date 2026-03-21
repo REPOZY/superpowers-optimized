@@ -204,28 +204,11 @@ These research insights drive five core principles throughout the fork:
 The plugin builds a four-file memory stack at your project root. Together they eliminate the most expensive form of session overhead: re-discovering things the AI already knew.
 
 ```
-known-issues.md   ← error→ solution map (never re-debug the same thing)
 project-map.md    ← structure + key files + critical constraints (never re-explore)
 session-log.md    ← decision history + approach rejections (never re-explain)
+known-issues.md   ← error→solution map (never re-debug the same thing)
 state.md          ← current task snapshot (never lose mid-work progress)
 ```
-
-### session-log.md — What happened
-
-An optional, manually-maintained record of decisions, rejected approaches, and key facts. Write an entry when something is worth preserving — an architectural choice, a constraint discovered the hard way, an approach that was tried and failed. Skip it when there's nothing durable to record.
-
-```markdown
-## 2026-03-15 10:04 [saved]
-Goal: Add cross-session memory to the plugin
-Decisions:
-- project-map.md injected by the session-start hook directly — makes it unconditional, not dependent on Claude following instructions
-- session-log.md is manual-only; auto-entries were low-signal noise, all derivable from git log
-Approaches rejected: Auto-appending a [auto] entry on every Stop event — produced 30 near-identical entries per session with no decisions or reasoning, just file lists
-Key facts: hooks.json requires \" not ' around ${CLAUDE_PLUGIN_ROOT} — single quotes break variable expansion on Linux
-Open: Monitor whether [saved] entries get used in practice; if not, consider folding key facts into project-map.md Critical Constraints instead
-```
-
-Write an entry by invoking `context-management`. Grep-searchable. The AI surfaces relevant history at the start of any task that touches the same area.
 
 ### project-map.md — What exists and what it does
 
@@ -258,6 +241,60 @@ Works on any project — git or non-git. If no git is detected during map genera
 
 **First-build prompt.** You don't need to remember to generate a map. When you type any creation-intent request ("build me X", "create X", "implement X") in a directory with no `project-map.md`, the AI pauses before starting and explains exactly what it will lose without the memory stack. It offers to set everything up in ~30 seconds. Say yes once — every future session on that project starts with full context.
 
+### session-log.md — What happened
+
+An optional, manually-maintained record of decisions, rejected approaches, and key facts. Write an entry when something is worth preserving — an architectural choice, a constraint discovered the hard way, an approach that was tried and failed. Skip it when there's nothing durable to record.
+
+| Written by | Contains |
+|---|---|
+| You, via `context-management` | Goal, decisions, rejected approaches, key facts |
+
+```markdown
+## 2026-03-15 10:04 [saved]
+Goal: Add cross-session memory to the plugin
+Decisions:
+- project-map.md injected by the session-start hook directly — makes it unconditional, not dependent on Claude following instructions
+- session-log.md is manual-only; auto-entries were low-signal noise, all derivable from git log
+Approaches rejected: Auto-appending a [auto] entry on every Stop event — produced 30 near-identical entries per session with no decisions or reasoning, just file lists
+Key facts: hooks.json requires \" not ' around ${CLAUDE_PLUGIN_ROOT} — single quotes break variable expansion on Linux
+Open: Monitor whether [saved] entries get used in practice; if not, consider folding key facts into project-map.md Critical Constraints instead
+```
+
+Write an entry by invoking `context-management`. Grep-searchable. The AI surfaces relevant history at the start of any task that touches the same area.
+
+### known-issues.md — Error memory
+
+Maintained by the `error-recovery` skill. When a bug is solved, invoke `error-recovery` to record the error signature and fix. Before any debugging session, the AI checks `known-issues.md` first — if the error is already mapped, it applies the solution without re-investigating.
+
+```markdown
+## Cannot read properties of undefined (reading 'name')
+**Error:** TypeError at hooks/skill-activator.js:47
+**Root cause:** hooks.json loaded before plugin root env var was set
+**Fix:** Ensure ${CLAUDE_PLUGIN_ROOT} is resolved before hook execution; use run-hook.cmd wrapper
+**Context:** Windows-only; Linux resolves the var earlier in the process
+```
+
+The file grows over time into a project-specific lookup table. The more errors it captures, the less time gets spent re-diagnosing problems that were already solved.
+
+### state.md — Mid-work snapshot
+
+Written by `context-management` when ending a session mid-task. Read at the start of the next session before any work begins. Captures the current goal, active decisions, plan status, evidence, and open questions — so "pick up where we left off" actually works.
+
+```markdown
+# State
+Current Goal: Add state.md support to context-management skill
+Decisions:
+- Write at project root alongside project-map.md
+- Keep under 100 lines — if longer, not compressed enough
+Plan Status:
+- [x] Design approved
+- [ ] SKILL.md updated
+- [ ] README updated
+Open: Whether to auto-clear state.md on session start or leave for manual cleanup
+```
+
+Unlike `session-log.md`, `state.md` is ephemeral — it represents the current task only and gets overwritten each time you save state. Once a task is complete, it can be discarded.
+
 ### The combined impact
 
 Without this stack, every new session starts with amnesia:
@@ -268,12 +305,6 @@ Without this stack, every new session starts with amnesia:
 - Loses the "why" behind every architectural decision
 
 With this stack, sessions start with full context and zero re-discovery overhead. The AI greets your task with: *"I see the last session on this topic (2026-03-15) established that single quotes break Linux CI — already writing the new hook with escaped double quotes."*
-
-### session-log.md entries
-
-| Type | Written by | Contains |
-|---|---|---|
-| `[saved]` | You, via `context-management` | Goal, decisions, rejected approaches, key facts |
 
 ---
 
