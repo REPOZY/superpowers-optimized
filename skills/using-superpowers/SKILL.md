@@ -125,6 +125,7 @@ Anything that doesn't qualify as micro or lightweight.
 - Independent parallel tasks: `dispatching-parallel-agents`
 - Cross-session state persistence: `context-management`
 - UI/frontend implementation: apply `frontend-design` standards
+- CLAUDE.md / AGENTS.md creation or update: `claude-md-creator` (applies at any complexity level — never implement directly)
 
 ## Context Hygiene
 
