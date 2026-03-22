@@ -16,7 +16,11 @@
 
 **The production-grade fork of obra/superpowers** — same trusted workflow, dramatically leaner, safer, and more intelligent.
 
-This repository delivers everything the original Superpowers plugin does, plus automatic workflow routing, built-in safety guards, integrated security review, error recovery intelligence, and research-informed token optimizations that reduce session overhead by an estimated **15-30 %** (varies by task complexity). Developers using Claude Code, Cursor, Codex, and OpenCode report faster iterations, fewer hallucinations, and zero accidental destructive commands.
+Built on the trusted obra/superpowers workflow and refined through research into LLM agent behavior, it adds automatic 3-tier workflow routing, proactive safety hooks, self-consistency verification at critical decision points, cross-session memory, and adversarial red-teaming — everything the original does, plus the discipline layer it was missing.
+
+Cross-session memory changes the experience fundamentally. Without it, every session starts blind: the AI re-explores structure it already mapped, re-proposes approaches that were already rejected, re-debugs errors that were already solved. With the four-file memory stack, it arrives knowing what was tried, what was decided, and why — and builds forward instead of sideways.
+
+Five research-backed principles run throughout: *less is more* (minimal always-on instructions), *fresh context beats accumulated context* (subagents get clean scoped prompts, not polluted history), *compliance ≠ competence* (instructions must be carefully engineered, not just comprehensive), *verify your own reasoning* (multi-path self-consistency catches confident-but-wrong failures before they become expensive), and *accountability drives accuracy* (agents that know their output has real downstream consequences perform better).
 
 ### Why developers switch
 | Feature                  | Original Superpowers          | Superpowers Optimized                          | Real-world impact                  |
@@ -26,7 +30,7 @@ This repository delivers everything the original Superpowers plugin does, plus a
 | Security review          | None                          | Built into code review with OWASP checklist    | Security catches before merge      |
 | Adversarial red team     | None                          | Red team agent + auto-fix pipeline             | Finds bugs checklists miss, fixes them with TDD |
 | Error recovery           | None                          | Project-specific known-issues.md               | No rediscovering the same bug      |
-| Token efficiency         | Standard                      | Always-on context hygiene + exploration tracking | ~15-30 % less session overhead    |
+| Token efficiency         | Standard                      | Always-on context hygiene + exploration tracking | Less re-discovery, fewer wasted iterations    |
 | Discipline enforcement   | Instructional tone             | Rationalization tables, red flags, iron laws   | Fewer LLM shortcuts                |
 | Progress visibility      | None                          | Session stats (skills used, duration, actions)  | See what the plugin did for you    |
 | Cross-session memory     | None                          | Four-file memory stack: `project-map.md` (structure cache) + `session-log.md` (decision history) + `state.md` (task snapshot) + `known-issues.md` (error map) | The AI starts every session with full project context — no re-exploring, no re-explaining, no re-debugging |
