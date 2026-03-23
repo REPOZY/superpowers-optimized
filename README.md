@@ -229,7 +229,7 @@ _Generated: 2026-03-20 14:32 | Git: a4b9c2d_
 
 ## Directory Structure
 skills/ — 20 skills, each in skills/<name>/SKILL.md
-hooks/ — 8 hooks (JS) + hooks.json registry + skill-rules.json
+hooks/ — 9 hooks (JS) + hooks.json registry + skill-rules.json
 
 ## Key Files
 hooks/skill-activator.js — UserPromptSubmit: scores prompts against skill-rules.json,

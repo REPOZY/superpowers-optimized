@@ -69,7 +69,7 @@ The ratio of overhead to value stays proportional regardless of what you're work
 The numbers:
 
 - 20 skills covering the full dev lifecycle
-- 8 hooks running automatically on every session
+- 9 hooks running automatically on every session
 - 2 specialized agents (code reviewer + adversarial red team)
 - ~15–30% estimated reduction in session token overhead
 - Supports Claude Code, Cursor, Codex, OpenCode, and Gemini CLI

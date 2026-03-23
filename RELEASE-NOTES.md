@@ -1,5 +1,21 @@
 # Superpowers Release Notes
 
+## v5.7.0 (2026-03-23)
+
+Context engine, pre-verified blast radius for code review and debugging, and a fix for false-positive update notices.
+
+### New Features
+
+**Context engine** — A new `context-engine.js` SessionStart hook runs automatically on every session start and writes `context-snapshot.json` to the project root. It captures the files changed in the last commit, a change summary, the last 5 commits, and blast radius (which other tracked files reference each changed file, computed via `git grep`). Zero dependencies — uses Node.js built-ins and git. Fails silently if git is unavailable. Automatically adds `context-snapshot.json` to `.gitignore` on first write.
+
+**Code review uses context snapshot** — `requesting-code-review` now checks `context-snapshot.json` before dispatching the agent. If the snapshot is fresh (git hash matches HEAD), the changed files and blast radius are used to scope the review immediately — no exploration needed. If stale, changed files are used as a starting point. If absent, the skill falls back to `git diff` directly.
+
+**Systematic debugging uses context snapshot** — Phase 1 of `systematic-debugging` now reads `context-snapshot.json` first when investigating what changed recently. The `changed_files` and `recent_commits` fields answer the question immediately, without running `git log` and `git diff` manually.
+
+### Fixes
+
+**Update check false positive** — The session-start hook was reading the installed version from its own directory, which could be an older cached copy after a Claude Code plugin update. The hook would then report a newer version as available even though the update was already applied. Fixed by reading the installed version from `~/.claude/plugins/installed_plugins.json` (the authoritative source) first, with a fallback to the hook's own `plugin.json`.
+
 ## v5.6.0 (2026-03-21)
 
 Session memory enhanced, auto-gitignore for AI artifacts, and routing guide completeness. `project-map.md` is now injected directly into every session start by the hook — no instruction-following required. AI workspace files are automatically added to `.gitignore` the moment they're created. The routing guide now covers every user-invocable skill in the plugin.
