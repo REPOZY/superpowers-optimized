@@ -5,5 +5,12 @@
 todo
 .CLAUDE.md
 CLAUDE.md
-session-log.md
+
+# AI assistant artifacts
+context-snapshot.json
 project-map.md
+session-log.md
+state.md
+
+*.txt
+docs/plans/2026-03-23-extension-ecosystem-design.md

@@ -10,6 +10,15 @@
             "async": false
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/context-engine.js\"",
+            "async": false
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
