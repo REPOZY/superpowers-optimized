@@ -18,7 +18,7 @@
 
 Built on the trusted obra/superpowers workflow and refined through research into LLM agent behavior, it adds automatic 3-tier workflow routing, proactive safety hooks, self-consistency verification at critical decision points, cross-session memory, and adversarial red-teaming — everything the original does, plus the discipline layer it was missing.
 
-Cross-session memory changes the experience fundamentally. Without it, every session starts blind: the AI re-explores structure it already mapped, re-proposes approaches that were already rejected, re-debugs errors that were already solved. With the four-file memory stack, it arrives knowing what was tried, what was decided, and why — and builds forward instead of sideways.
+Cross-session memory changes the experience fundamentally. Without it, every session starts blind: the AI re-explores structure it already mapped, re-proposes approaches that were already rejected, re-debugs errors that were already solved. With the memory stack, it arrives knowing what was tried, what was decided, and why — and with a pre-computed snapshot of exactly what changed since the last commit — and builds forward instead of sideways.
 
 Five research-backed principles run throughout: *less is more* (minimal always-on instructions), *fresh context beats accumulated context* (subagents get clean scoped prompts, not polluted history), *compliance ≠ competence* (instructions must be carefully engineered, not just comprehensive), *verify your own reasoning* (multi-path self-consistency catches confident-but-wrong failures before they become expensive), and *accountability drives accuracy* (agents that know their output has real downstream consequences perform better).
 
@@ -72,13 +72,31 @@ When you confirm to proceed, the plugin automatically routes the task to the app
 ## How It Works
 
 ```
+Session starts
+        │
+        ▼
+┌─ SessionStart Hooks (run before your first message) ──────┐
+│  context-engine.js →                                      │
+│    git diff HEAD~1..HEAD → changed files                  │
+│    git grep per changed file → blast radius               │
+│    git log --oneline -5 → recent commits                  │
+│    Writes context-snapshot.json to project root           │
+│    (silent no-op if not a git repo)                       │
+│                                                           │
+│  session-start →                                          │
+│    Injects using-superpowers routing instructions         │
+│    Injects project-map.md content (if exists)             │
+│    Checks for available plugin update                     │
+└───────────────────────────────────────────────────────────┘
+        │
+        ▼
 User sends a prompt
         │
         ▼
 ┌─ skill-activator.js (UserPromptSubmit hook) ──────────────┐
 │  Is this a micro-task? ("fix typo on line 42")            │
 │    YES → {} (no routing, zero overhead)                   │
-│    NO  → Score against 14 skill rules                     │
+│    NO  → Score against 15 skill rules                     │
 │          Score < 2? → {} (weak match, skip)               │
 │          Score ≥ 2? → Inject skill suggestions            │
 └───────────────────────────────────────────────────────────┘
@@ -131,10 +149,6 @@ User sends a prompt
         ▼  (when Claude stops responding)
 ┌─ Stop Hook ───────────────────────────────────────────────┐
 │  stop-reminders.js →                                      │
-│    Appends auto-entry to session-log.md (always):         │
-│      "## 2026-03-20 14:32 [auto]"                         │
-│      "Skills: systematic-debugging (3x), verification"    │
-│      "Files: hooks/stop-reminders.js, skills/..."         │
 │    Then (if activity warrants):                           │
 │    "5 source files modified without tests"                │
 │    "12 files changed, consider committing"                │
@@ -210,13 +224,14 @@ These research insights drive five core principles throughout the fork:
 
 ## Session Memory: The AI That Remembers
 
-The plugin builds a four-file memory stack at your project root. Together they eliminate the most expensive form of session overhead: re-discovering things the AI already knew.
+The plugin builds a memory stack at your project root. Together they eliminate the most expensive form of session overhead: re-discovering things the AI already knew.
 
 ```
-project-map.md    ← structure + key files + critical constraints (never re-explore)
-session-log.md    ← decision history + approach rejections (never re-explain)
-known-issues.md   ← error→solution map (never re-debug the same thing)
-state.md          ← current task snapshot (never lose mid-work progress)
+context-snapshot.json  ← git blast radius + changed files (written automatically every session)
+project-map.md         ← structure + key files + critical constraints (never re-explore)
+session-log.md         ← decision history + approach rejections (never re-explain)
+known-issues.md        ← error→solution map (never re-debug the same thing)
+state.md               ← current task snapshot (never lose mid-work progress)
 ```
 
 ### project-map.md — What exists and what it does
@@ -249,6 +264,26 @@ hooks/stop-reminders.js, hooks/skill-activator.js, skills/using-superpowers/SKIL
 Works on any project — git or non-git. If no git is detected during map generation, the AI offers to run `git init` (creates a `.git` folder, touches none of your files). If you decline, it falls back to timestamp comparison instead.
 
 **First-build prompt.** You don't need to remember to generate a map. When you type any creation-intent request ("build me X", "create X", "implement X") in a directory with no `project-map.md`, the AI pauses before starting and explains exactly what it will lose without the memory stack. It offers to set everything up in ~30 seconds. Say yes once — every future session on that project starts with full context.
+
+### context-snapshot.json — What changed right before this session
+
+Written automatically by the `context-engine` hook on every session start. No setup, no action required — it exists before your first message arrives.
+
+```json
+{
+  "git_hash": "9636c5c",
+  "changed_files": ["hooks/context-engine.js", "hooks/hooks.json"],
+  "change_stat": "2 files changed, 140 insertions(+)",
+  "recent_commits": ["9636c5c Check context-snapshot.json in Phase 1", "..."],
+  "blast_radius": {
+    "hooks/context-engine.js": ["hooks/hooks.json", "docs/plans/..."]
+  }
+}
+```
+
+Skills that need to know what changed — code review, systematic debugging — read this file first instead of running `git diff` and `git log` themselves. If the snapshot is fresh (git hash matches HEAD), the review scope is pre-verified before the agent starts. If it's stale or absent, skills fall back to git commands directly.
+
+Automatically added to `.gitignore` — it's a tooling artifact, not project code.
 
 ### session-log.md — What happened
 
@@ -312,8 +347,9 @@ Without this stack, every new session starts with amnesia:
 - Proposes approaches that were already rejected
 - Re-debugs errors that were already solved
 - Loses the "why" behind every architectural decision
+- Runs git commands to discover what changed — every time, from scratch
 
-With this stack, sessions start with full context and zero re-discovery overhead. The AI greets your task with: *"I see the last session on this topic (2026-03-15) established that single quotes break Linux CI — already writing the new hook with escaped double quotes."*
+With this stack, sessions start with full context and zero re-discovery overhead. The AI greets your task with: *"I see the last session on this topic (2026-03-15) established that single quotes break Linux CI — already writing the new hook with escaped double quotes. The context snapshot shows hooks/context-engine.js changed in the last commit, and hooks/hooks.json references it — scoping the review there first."*
 
 ---
 
@@ -341,7 +377,7 @@ With this stack, sessions start with full context and zero re-discovery overhead
 
 ### Quality & Testing
 - **test-driven-development** — RED-GREEN-REFACTOR cycle with rationalization tables, testing anti-patterns, and advanced test strategy (integration, E2E, property-based, performance)
-- **systematic-debugging** — 5-phase root cause process: known-issues check, investigation, pattern comparison, self-consistency hypothesis testing, fix-and-verify
+- **systematic-debugging** — 5-phase root cause process: known-issues check, investigation (reads `context-snapshot.json` first to answer "what changed recently?" without running git commands), pattern comparison, self-consistency hypothesis testing, fix-and-verify
 - **verification-before-completion** — Evidence gate for completion claims with multi-path verification reasoning and configuration change verification
 - **self-consistency-reasoner** — Internal multi-path reasoning technique (Wang et al., ICLR 2023) embedded in debugging and verification
 
@@ -354,7 +390,9 @@ With this stack, sessions start with full context and zero re-discovery overhead
 - **error-recovery** — Maintains project-specific `known-issues.md` mapping recurring errors to solutions, consulted before debugging
 - **frontend-design** — Design intelligence system with industry-aware style selection, 25 UI styles, 30 product-category mappings, page structure patterns, UI state management, and 10 priority quality standards (accessibility, touch, performance, animation, forms, navigation, charts)
 
-### Hooks (8 total)
+### Hooks (9 total)
+- **context-engine** (SessionStart) — Runs git commands on every session start and writes `context-snapshot.json`: changed files, blast radius (which other files reference each changed file), recent commits, and change stats. Zero dependencies. Silent no-op on non-git projects
+- **session-start** (SessionStart) — Injects using-superpowers routing into every session; injects `project-map.md` content directly if it exists (full content ≤200 lines, Critical Constraints + Hot Files only above that); checks for available plugin update
 - **skill-activator** (UserPromptSubmit) — Micro-task detection + confidence-threshold skill matching
 - **track-edits** (PostToolUse: Edit/Write) — Logs file changes for TDD reminders; auto-adds AI workspace artifacts (`project-map.md`, `session-log.md`, `state.md`) to `.gitignore` on first write
 - **track-session-stats** (PostToolUse: Skill) — Tracks skill invocations for progress visibility
@@ -362,7 +400,6 @@ With this stack, sessions start with full context and zero re-discovery overhead
 - **block-dangerous-commands** (PreToolUse: Bash) — 30+ patterns blocking destructive commands with 3-tier severity
 - **protect-secrets** (PreToolUse: Read/Edit/Write/Bash) — 50+ file patterns protecting sensitive files + 14 content patterns detecting hardcoded secrets (API keys, tokens, PEM blocks, connection strings) in source code with actionable env var guidance
 - **subagent-guard** (SubagentStop) — Detects and blocks subagent skill leakage with automatic recovery
-- **session-start** (SessionStart) — Injects using-superpowers routing into every session; injects `project-map.md` content directly if it exists (full content ≤200 lines, Critical Constraints + Hot Files only above that)
 
 ### Agents
 - **code-reviewer** — Senior code review agent with social accountability framing (merge decision and downstream fixes depend on review accuracy) and ASI-guided fix prioritization (single most impactful finding surfaced first)
