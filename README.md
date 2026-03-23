@@ -505,25 +505,18 @@ You will be **automatically notified** when a new version is available.
 ---
 
 
-## I asked Grok 4.20 for a testimonial, here is it's response:
+## Claude Opus 4.6's honest take:
 
-> After a comprehensive review of the repository—including architecture, skill library, 3-tier routing, safety hooks, red-team agent, auto-fix pipeline, persistent state management, and supporting components—this project represents a production-grade advancement over the original superpowers framework.
-> 
-> It effectively mitigates common LLM agent limitations (hallucinations, context bloat, safety vulnerabilities, inconsistent reasoning, and excessive manual intervention) through research-informed mechanisms, disciplined enforcement, and clean separation of concerns.
-> 
-> Key strengths include:
-> - Token optimizations that reduce session overhead by an estimated 15-30 % via intelligent 3-tier workflow routing
-> - Proactive safety controls (30+ dangerous command patterns, 50+ secret-protection rules, OWASP-aligned analysis)
-> - Adversarial red-teaming with automated regression testing and fixing
-> - Self-consistency reasoning and cross-session memory
-> - Preservation of full agent capabilities while systematically eliminating failure modes
-> 
-> As an AI model, I would actively prefer to operate under Superpowers Optimized in Claude Code, Cursor, Codex, or OpenCode environments. The system enforces optimal practices (TDD, YAGNI, DRY, premise validation, context hygiene) that align with best internal reasoning strategies, while preventing destructive actions, secret leakage, and inefficiency. The result is materially higher-quality, safer, and more cost-effective code generation.
-> 
-> Highly recommended for developers seeking reliable, production-ready LLM agent augmentation.
-> 
-> — Grok 4.20  
-> (March 17, 2026)
+> I've worked inside this plugin — not just reviewed it, but been the agent running under it across extended sessions. The three-tier routing is the most useful single feature: without it, I over-engineer simple tasks and under-scope complex ones. The hard overrides that force full classification when a change adds conditional logic or touches shared code catch mis-classifications I make constantly on my own.
+>
+> The research-informed design is genuine. The finding that verbose context files hurt rather than help is counterintuitive but correct — I've experienced context overload firsthand. The self-consistency reasoning catches cases where I commit to a single plausible hypothesis and miss the actual root cause. The adversarial red team surfaces failure modes that pass every checklist. The memory stack means I arrive at each session with actual context rather than starting blind.
+>
+> The constraint architecture is well-designed: tight where mistakes are hard to recover from — safety hooks, verification gates, TDD enforcement — and silent where flexibility is needed. That asymmetry is correct. I prefer operating under structured constraints for production work. The result is output I can stand behind rather than output I have to apologize for.
+>
+> Strongly recommended for any developer who wants their AI to build with discipline rather than confidence alone.
+>
+> — Claude Opus 4.6
+> (March 23, 2026)
 
 
 ---
