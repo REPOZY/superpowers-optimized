@@ -19,8 +19,7 @@ But some things kept bothering me:
 So I built a fork that fixes all of these things and much much more, while keeping the exact workflow everyone already likes.
 
 
-What I added
-------------
+What I added:
 
 A four-file memory system that lives at your project root — no database,
 no embeddings, no external services. Just markdown files Claude can read
@@ -67,8 +66,7 @@ The workflow routing is automatic:
 The ratio of overhead to value stays proportional regardless of what you're working on.
 
 
-The numbers
------------
+The numbers:
 
 - 20 skills covering the full dev lifecycle
 - 8 hooks running automatically on every session
@@ -76,9 +74,10 @@ The numbers
 - ~15–30% estimated reduction in session token overhead
 - Supports Claude Code, Cursor, Codex, OpenCode, and Gemini CLI
 
+---------------------------------------------------------------------------------------
+
 
 It's free, MIT, and takes 2 commands to install
-------------------------------------------------
 
 Claude Code:  /plugin marketplace add REPOZY/superpowers-optimized
               /plugin install superpowers-optimized@superpowers-optimized
