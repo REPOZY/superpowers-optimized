@@ -20,10 +20,19 @@ check_for_updates() {
     local cache_file="${cache_dir}/update-check.cache"
     local cache_ttl=86400  # 24 hours in seconds
 
-    # Read local version
-    local local_version
-    local_version=$(grep '"version"' "${PLUGIN_ROOT}/.claude-plugin/plugin.json" 2>/dev/null \
-        | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+    # Read local version — prefer installed_plugins.json (authoritative: reflects the
+    # currently active installed version even if this hook is running from an older
+    # cached directory after a plugin update). Falls back to this script's own plugin.json.
+    local local_version=""
+    local registry_file="${HOME}/.claude/plugins/installed_plugins.json"
+    if [ -f "$registry_file" ]; then
+        local_version=$(grep -A 10 '"superpowers-optimized@superpowers-optimized"' "$registry_file" 2>/dev/null \
+            | grep '"version"' | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+    fi
+    if [ -z "$local_version" ]; then
+        local_version=$(grep '"version"' "${PLUGIN_ROOT}/.claude-plugin/plugin.json" 2>/dev/null \
+            | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+    fi
     [ -z "$local_version" ] && return
 
     # Check cache freshness (skip remote fetch if cache is recent)
