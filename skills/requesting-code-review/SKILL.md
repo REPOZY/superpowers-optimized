@@ -21,12 +21,18 @@ Request review early to catch issues before they spread.
 ## How
 
 1. Determine review range (`BASE_SHA` -> `HEAD_SHA`).
-2. Dispatch `superpowers-optimized:code-reviewer` using `requesting-code-review/code-reviewer.md`.
-3. Provide:
-- What changed
-- Requirement or plan reference
-- SHA range
-- Short summary
+2. Check for `context-snapshot.json` at the project root:
+   - If present: run `git rev-parse HEAD` and compare to `git_hash` in the file.
+     - **Hashes match (fresh):** use `changed_files` and `blast_radius` as the review scope. Inject this summary into the code-reviewer prompt: *"Changed files: [list]. Also referenced by: [blast_radius callers]."*
+     - **Hashes differ (stale):** note the snapshot is from a previous commit; use `changed_files` as a starting point but do not rely on `blast_radius`.
+   - If absent: determine scope from `git diff --name-only BASE_SHA..HEAD_SHA` directly.
+3. Dispatch `superpowers-optimized:code-reviewer` using `requesting-code-review/code-reviewer.md`.
+4. Provide:
+   - What changed (from context snapshot or git diff)
+   - Scoped file list (changed files + blast radius callers if fresh snapshot available, or broad if not)
+   - Requirement or plan reference
+   - SHA range
+   - Short summary
 
 ## Security Review (Built-In)
 
