@@ -117,17 +117,19 @@ Anything that doesn't qualify as micro or lightweight.
 - Uncertain whether work should exist at all: `premise-check` (run before brainstorming or planning)
 - Complex decision with unclear options or possible mis-framing: `deliberation` → `brainstorming` → `writing-plans`
 - New behavior or architecture (problem is well-framed): `brainstorming` → `writing-plans`
-- Plan execution (same session): `subagent-driven-development`
+- Plan execution (same session, with optional parallel waves): `subagent-driven-development`
 - Plan execution (separate session): `executing-plans`
 - Experimental or risky work needing branch isolation: `using-git-worktrees` (run before implementation)
 - Bug/test failure: `systematic-debugging` → `test-driven-development`
 - Completion claim: `verification-before-completion`
 - Branch integration: `finishing-a-development-branch`
 - Code review (includes security): `requesting-code-review` / `receiving-code-review`
-- Independent parallel tasks: `dispatching-parallel-agents`
+- Independent parallel tasks outside of plan execution: `dispatching-parallel-agents`
 - Cross-session state persistence: `context-management`
+- Known issue tracking / save recurring fixes: `error-recovery`
 - UI/frontend implementation: apply `frontend-design` standards
 - CLAUDE.md / AGENTS.md creation or update: `claude-md-creator` (applies at any complexity level — never implement directly)
+- *(Internal skills — not directly routed):* `self-consistency-reasoner` is invoked internally by `systematic-debugging` and `verification-before-completion`; do not invoke it directly. `token-efficiency` is always-on and invoked at step 1 of the Entry Sequence.
 
 ## Context Hygiene
 

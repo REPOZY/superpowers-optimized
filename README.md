@@ -249,7 +249,7 @@ hooks/ — 9 hooks (JS) + hooks.json registry + skill-rules.json
 ## Key Files
 hooks/skill-activator.js — UserPromptSubmit: scores prompts against skill-rules.json,
   injects skill hints. Micro-task detection (≤8 words + patterns = skip routing).
-hooks/skill-rules.json — 15 rules: skill name, keywords, intentPatterns, priority.
+hooks/skill-rules.json — 18 rules: skill name, keywords, intentPatterns, priority.
 
 ## Critical Constraints
 - hooks.json uses \" not ' around ${CLAUDE_PLUGIN_ROOT} (single quotes break Linux)

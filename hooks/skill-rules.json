@@ -29,6 +29,13 @@
       "intentPatterns": ["should\\s+we\\s+(use|go\\s+with|choose|pick|switch|migrate)", "not\\s+sure\\s+(which|what|whether|if\\s+we)", "(evaluate|compare|weigh)\\s+(these|the|our)\\s+(options|approaches|alternatives)", "what\\s+are\\s+the\\s+trade.?offs", "help\\s+me\\s+(think|decide|choose)\\s+(through|between|among)"]
     },
     {
+      "skill": "premise-check",
+      "type": "workflow",
+      "priority": "high",
+      "keywords": ["design a system", "create a plan", "build out", "should we build", "worth building", "validate the premise", "question the premise"],
+      "intentPatterns": ["(design|create|build|implement)\\s+(a\\s+)?system", "should\\s+(we|i)\\s+(really\\s+)?build\\s+this", "(is\\s+(this|it)|are\\s+we)\\s+worth\\s+build", "validate\\s+(the\\s+)?premise", "(before|prior\\s+to)\\s+(design|plan|build)"]
+    },
+    {
       "skill": "brainstorming",
       "type": "workflow",
       "priority": "high",
@@ -69,6 +76,13 @@
       "priority": "medium",
       "keywords": ["code review", "look over", "review my code", "security review", "is this secure", "security", "vulnerability"],
       "intentPatterns": ["review\\s+(my|the|this)\\s+code", "check\\s+(this|these)\\s+(before|for)", "look\\s+(over|at)\\s+(my|the|this)\\s+(code|implementation|changes|diff|tests?|pr|pull.?request|files?|codebase|repo)", "(is|are)\\s+(this|these)\\s+secure", "security\\s+review", "check\\s+(for\\s+)?vulnerabilit"]
+    },
+    {
+      "skill": "receiving-code-review",
+      "type": "workflow",
+      "priority": "medium",
+      "keywords": ["address review", "review feedback", "review comments", "fix the review", "respond to review", "pr feedback", "pull request feedback"],
+      "intentPatterns": ["address\\s+(the\\s+)?(review|feedback|comments?)", "(fix|resolve|handle)\\s+(the\\s+)?review\\s+(comments?|feedback)", "respond\\s+to\\s+(the\\s+)?review"]
     },
     {
       "skill": "frontend-design",

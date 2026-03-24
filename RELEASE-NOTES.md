@@ -1,5 +1,37 @@
 # Superpowers Release Notes
 
+## v6.0.0 (2026-03-24)
+
+Comprehensive codebase audit and hardening. Twelve bugs, routing gaps, and safety issues found and fixed across hooks, skill routing, and the subagent guard.
+
+### Fixes
+
+**Gitignore corruption when section already exists** — When `track-edits.js` appended an AI artifact to an existing `# AI assistant artifacts` section in `.gitignore`, it omitted the newline prefix, causing the new entry to be concatenated onto the last line of the file if it lacked a trailing newline. The entry would be silently malformed and git would not recognize it. Fixed by applying the `prefix` variable in both branches.
+
+**Dead export `appendAutoSessionEntry` in stop-reminders** — `stop-reminders.js` exported `appendAutoSessionEntry` in its `module.exports`, but the function was never defined anywhere in the file. Any consumer calling it would get a `TypeError`. Removed from exports.
+
+**Cross-platform cache age check in session-start** — The update check used `date -r FILE +%s` to read a file's modification time, which behaves inconsistently on some Linux distributions. On failure the cache age defaulted to 0, causing a GitHub fetch on every session start. Replaced with `stat -c %Y` (GNU/Linux) falling back to `stat -f %m` (BSD/macOS) falling back to 0.
+
+**Awk stderr leaked into session context** — The `session-start` hook used `2>&1` when capturing the using-superpowers skill body via awk. Any awk error (permission denied, missing file) would be injected into the AI's session context as part of the skill text. Changed to `2>/dev/null`.
+
+**`premise-check` was unreachable via skill-activator hook** — Despite being the most important safety-net skill (validates whether work should exist before building it), `premise-check` had no entry in `skill-rules.json`. The skill-activator hook could never suggest it based on user input — it only fired if the model proactively read the Routing Guide text. Added a high-priority rule covering "design a system", "should we build this", "validate the premise", and related phrases.
+
+**`receiving-code-review` was unreachable via skill-activator hook** — Same gap: no `skill-rules.json` entry. Phrases like "address review feedback" and "respond to review" never triggered it. Added a medium-priority rule.
+
+**`error-recovery` missing from Routing Guide** — The skill existed and was in `skill-rules.json`, but was absent from the Routing Guide in `using-superpowers`. A model doing full-complexity routing would never find it as a destination. Added to the guide.
+
+**`deliberation` missing from subagent-guard** — The subagent guard's violation patterns covered 20 skills but omitted `deliberation`. A subagent invoking `deliberation` by plain name (without the `superpowers-optimized:` prefix) would slip through. Added to the patterns. The guard was also refactored to use a verb-prefix pattern (`invoking/using/running + skill name`) that eliminates false positives from prose mentions of skill names.
+
+**ReDoS vulnerability in block-dangerous-commands** — Six regex patterns used `(-.+\s+)*` which is a nested quantifier enabling catastrophic backtracking on adversarial input. Replaced with `(-\S+\s+)*` which eliminates the backtracking risk while preserving the same match semantics.
+
+### Changes
+
+**Routing Guide clarifies parallel execution paths** — The distinction between `dispatching-parallel-agents` (ad-hoc parallel work outside plan execution) and `subagent-driven-development` (plan execution with optional parallel waves) is now explicit in the Routing Guide. Previously the two entries looked equivalent, causing model confusion on which to pick.
+
+**Internal skills documented in Routing Guide** — `self-consistency-reasoner` (invoked internally by `systematic-debugging` and `verification-before-completion`) and `token-efficiency` (always-on, invoked at Entry Sequence step 1) are now noted as intentional non-entries in the Routing Guide. Previously their absence was undocumented, which could be misread as orphaned skills.
+
+**CMD arg limit documented in run-hook.cmd** — A comment now notes the 8-argument limit of the `%2-%9` forwarding pattern in the Windows batch wrapper, flagging it for future callers who need more.
+
 ## v5.8.0 (2026-03-24)
 
 "Map this project" now correctly triggers the context-management skill and writes `project-map.md` to the project root.

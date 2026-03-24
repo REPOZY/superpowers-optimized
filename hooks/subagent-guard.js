@@ -16,33 +16,41 @@
 const fs = require('fs');
 const path = require('path');
 
-// Patterns that indicate a subagent invoked skills or spawned sub-subagents
+// Patterns that indicate a subagent invoked skills or spawned sub-subagents.
+// Each pattern requires an action verb (invoke/invoking/using/use/run/running/called/calling)
+// immediately before the skill reference so that bare mentions in file content or
+// code comments do not trigger false positives.
+const SKILL_NAMES = [
+  'using-superpowers',
+  'brainstorming',
+  'deliberation',
+  'writing-plans',
+  'executing-plans',
+  'subagent-driven-development',
+  'systematic-debugging',
+  'test-driven-development',
+  'verification-before-completion',
+  'token-efficiency',
+  'context-management',
+  'dispatching-parallel-agents',
+  'requesting-code-review',
+  'receiving-code-review',
+  'finishing-a-development-branch',
+  'error-recovery',
+  'frontend-design',
+  'claude-md-creator',
+  'self-consistency-reasoner',
+  'using-git-worktrees',
+  'premise-check',
+  'red-team',
+];
+
+const ACTION_VERB = '(?:invoking?|using|use|running?|called?|calling)\\s+(?:the\\s+)?';
+
 const VIOLATION_PATTERNS = [
-  // Skill invocations
-  /superpowers-optimized:/,
   /Invoke the superpowers-optimized/i,
   /I'm using the .+ skill/i,
-  /using-superpowers/,
-  /brainstorming skill/i,
-  /writing-plans skill/i,
-  /executing-plans skill/i,
-  /subagent-driven-development skill/i,
-  /systematic-debugging skill/i,
-  /test-driven-development skill/i,
-  /verification-before-completion skill/i,
-  /token-efficiency skill/i,
-  /context-management skill/i,
-  /dispatching-parallel-agents skill/i,
-  /requesting-code-review skill/i,
-  /receiving-code-review skill/i,
-  /finishing-a-development-branch skill/i,
-  /error-recovery skill/i,
-  /frontend-design skill/i,
-  /claude-md-creator skill/i,
-  /self-consistency-reasoner skill/i,
-  /using-git-worktrees skill/i,
-  /premise-check skill/i,
-  /red-team skill/i,
+  ...SKILL_NAMES.map(name => new RegExp(ACTION_VERB + name, 'i')),
 ];
 
 function logViolation(agentId, agentType, matchedPattern) {
