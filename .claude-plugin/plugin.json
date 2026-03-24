@@ -1,7 +1,7 @@
 {
   "name": "superpowers-optimized",
   "description": "Agentic development framework for Claude Code — disciplined workflow routing, TDD enforcement, safety hooks, systematic debugging, and code review",
-  "version": "5.8.0",
+  "version": "6.0.0",
   "author": {
     "name": "Jesse Vincent, forked by REPOZY"
   },

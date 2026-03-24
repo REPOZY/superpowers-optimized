@@ -50,7 +50,7 @@ function ensureGitignored(filePath, cwd) {
     if (!hasSection) {
       fs.appendFileSync(gitignorePath, `${prefix}\n# AI assistant artifacts\n${basename}\n`);
     } else {
-      fs.appendFileSync(gitignorePath, `${basename}\n`);
+      fs.appendFileSync(gitignorePath, `${prefix}${basename}\n`);
     }
   } catch {
     // Silently ignore — never block tool execution

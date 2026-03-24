@@ -177,7 +177,7 @@ function generateReminders(edits) {
   if (untestedSources.length > 0 && testFiles.length === 0) {
     reminders.push(
       `TDD reminder: ${untestedSources.length} source file(s) modified without test changes. ` +
-      `Consider invoking superpowers-optimized:test-driven-development if behavior changed.`
+      `Consider running tests or invoking TDD workflow if behavior changed.`
     );
   }
 
@@ -239,5 +239,5 @@ async function main() {
 if (require.main === module) {
   main();
 } else {
-  module.exports = { generateReminders, getRecentEdits, isTestFile, isSourceFile, shouldFire, setGuard, appendAutoSessionEntry };
+  module.exports = { generateReminders, getRecentEdits, isTestFile, isSourceFile, shouldFire, setGuard };
 }
