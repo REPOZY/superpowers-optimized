@@ -1,5 +1,13 @@
 # Superpowers Release Notes
 
+## v5.8.0 (2026-03-24)
+
+"Map this project" now correctly triggers the context-management skill and writes `project-map.md` to the project root.
+
+### Fixes
+
+**"map this project" routing was broken** — Saying "map this project" produced a chat response instead of a `project-map.md` file. Two bugs caused this: (1) `skill-rules.json` had no rule mapping map intent to `context-management`, so the skill was never suggested; (2) even when invoked manually, `context-management` defaulted to writing `state.md` because the project map procedure was buried below the state-saving procedure with no routing gate. Fixed by adding a dedicated high-priority rule in `skill-rules.json` covering "map this project", "map the project", "generate/create/update project map", updating the `context-management` skill description to include these trigger phrases, and adding an explicit routing table at the top of the skill that branches to the correct procedure before any other content is read.
+
 ## v5.7.0 (2026-03-23)
 
 Context engine, pre-verified blast radius for code review and debugging, and a fix for false-positive update notices.
