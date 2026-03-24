@@ -2,14 +2,26 @@
 name: context-management
 description: >
   Use in long or noisy sessions to persist durable state across session
-  boundaries via state.md. Triggers on: user explicitly asks to "save state",
-  "compress context", cross-session handoff needed, or repeated failures
-  indicate context is getting stale.
+  boundaries via state.md. Also generates project-map.md when asked to map
+  the project. Triggers on: user explicitly asks to "save state", "compress
+  context", "map this project", "generate project map", "create project map",
+  cross-session handoff needed, or repeated failures indicate context is
+  getting stale.
 ---
 
 # Context Management
 
-Persist durable decisions and progress to `state.md` for cross-session continuity.
+## Route first — read this before anything else
+
+| User said | Go to |
+|---|---|
+| "map this project" / "generate project map" / "create project map" / "update project map" | [Project Map](#project-map) section |
+| "save state" / "compress context" / session ending with ongoing work | [Procedure](#procedure) section |
+| Starting a task on a project with existing history | Grep `session-log.md` first, then proceed |
+
+Do not default to `state.md` for a map request. Do not default to `project-map.md` for a save-state request.
+
+---
 
 ## Purpose
 
