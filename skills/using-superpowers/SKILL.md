@@ -84,7 +84,7 @@ Classify every task into one of three levels. Do not invoke a separate skill for
 If any of the following are true, classify as **full** immediately — do not evaluate the lightweight criteria:
 
 - The change adds, modifies, or removes a condition, gate, or trigger that determines when behavior fires
-- The change affects what the user sees or experiences
+- The change affects what the user sees or experiences (excluding cosmetic text changes to existing UI — e.g., updating a label, rewording a message, or changing static copy that doesn't alter flow or behavior)
 - The change modifies a file that other components depend on (routing rules, entry sequences, config registries, shared hooks)
 - The change introduces a path or outcome that didn't exist before
 
