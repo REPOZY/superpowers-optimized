@@ -1,12 +1,12 @@
 ---
 name: brainstorming
 description: >
-  MUST USE when the user wants new features, behavior changes, or
-  architecture decisions and no approved design exists yet. Produces an
-  approved design document before any code is written. Triggers on:
-  "build this", "add a feature", "I want to change", "how should we",
-  "design", "architect", "new project". Routed by using-superpowers,
-  or invoke directly via /brainstorming.
+  MUST USE when the user wants new features, behavior changes, refactoring
+  with new capabilities, or architecture decisions and no approved design
+  exists yet. Produces an approved design document before any code is written.
+  Triggers on: "build this", "add a feature", "I want to change", "how should we",
+  "design", "architect", "new project", "refactor", "we need to add/build/create",
+  "implement a new". Routed by using-superpowers, or invoke directly via /brainstorming.
 ---
 
 # Brainstorming

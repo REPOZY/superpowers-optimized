@@ -1,11 +1,12 @@
 ---
 name: systematic-debugging
 description: >
-  Invoke BEFORE attempting any fix when a bug, test failure, error, or
-  unexpected behavior appears. Enforces hypothesis-driven root cause
-  analysis — no fix without evidence. Triggers on: error messages, stack
-  traces, "it's broken", "not working", "bug", test failures. Also routed
-  by using-superpowers for debugging tasks.
+  Invoke BEFORE attempting any fix when a bug, test failure, error, warning,
+  unexpected behavior, or performance regression appears. Enforces hypothesis-driven
+  root cause analysis — no fix without evidence. Triggers on: error messages, stack
+  traces, "it's broken", "not working", "bug", test failures, blank/white screens,
+  "works locally but not in production", performance degradation, console warnings,
+  "can't figure out why". Also routed by using-superpowers for debugging tasks.
 ---
 
 # Systematic Debugging
