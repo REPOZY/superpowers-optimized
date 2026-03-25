@@ -70,7 +70,12 @@ check_for_updates() {
         local l="${local_parts[$i]:-0}"
         local r="${remote_parts[$i]:-0}"
         if [ "$r" -gt "$l" ]; then
-            update_notice="\n\n<important-reminder>IN YOUR FIRST REPLY AFTER SEEING THIS MESSAGE YOU MUST TELL THE USER: 🔄 **Superpowers Optimized v${remote_version} is available** (you have v${local_version}). Run \`/plugin update superpowers-optimized\` to update.</important-reminder>"
+            update_notice="\n\n<important-reminder>IN YOUR FIRST REPLY AFTER SEEING THIS MESSAGE YOU MUST TELL THE USER: 🔄 **Superpowers Optimized v${remote_version} is available** (you have v${local_version}). Run \`/plugin update superpowers-optimized\` which opens the plugin manager UI. From there:
+
+Marketplaces tab → select REPOZY/superpowers-optimized → Update marketplace (refreshes the version catalog)
+Installed tab → select superpowers-optimized → Update now
+
+Tip: To skip manual steps in future, enable Auto-update for the marketplace in step 1.</important-reminder>"
             return
         elif [ "$l" -gt "$r" ]; then
             return  # local is ahead of remote (dev build)
