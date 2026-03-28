@@ -1,5 +1,37 @@
 # Superpowers Release Notes
 
+## v6.1.0 (2026-03-28)
+
+Skill quality pass: two new automated review gates, richer subagent prompts, sharper stop conditions, and a fix to the project-map staleness loop.
+
+### New Features
+
+**Spec reviewer gate in brainstorming** — After a design is approved and saved, `brainstorming` now dispatches a spec-reviewer subagent using a calibrated prompt template (`spec-document-reviewer-prompt.md`) before handing off to `writing-plans`. The reviewer checks for placeholders, internal contradictions, ambiguous requirements, and scope creep. Critical issues block the handoff; minor issues become advisory recommendations. This catches design gaps before they propagate into the plan.
+
+**Plan reviewer gate in writing-plans** — `writing-plans` now dispatches a plan-reviewer subagent using `plan-document-reviewer-prompt.md` after the plan is saved. The reviewer cross-checks the plan against the original spec — not just the plan in isolation — catching scope drift, vague steps, missing file paths, and incorrect TDD ordering. Both reviewer prompts include skill leakage prevention to keep subagents focused.
+
+### Changes
+
+**`dispatching-parallel-agents` strengthened** — Added a "Do not use when" block covering exploratory debugging, related failures, and shared-state scenarios. Added an assembled example prompt showing all required fields (scope, goal, constraints, output format, leakage prevention) wired together. Added a ❌/✅ common mistakes section. Updated the description to "2+" (more precise than "multiple") and added "sequential dependencies" as an explicit disqualifier alongside file and state conflicts.
+
+**`executing-plans` stop conditions expanded** — The single "stop on repeated verification failures" bullet is replaced with a named list: missing dependency, plan gap preventing start, unclear/contradictory instruction, repeated verification failure. Added "never guess — ask for clarification" as an explicit directive. Added the main/master branch prohibition with a reference to the worktree step.
+
+**`claude-md-creator` self-assesses redundancy** — The skill no longer asks the user "anything you'd cut?" It now applies the redundancy filter itself before presenting the draft: every line must pass "would the agent produce incorrect output without this?" Lines that don't survive the filter are cut before the user sees them.
+
+**PR description required in `finishing-a-development-branch`** — Option 2 (push + open PR) now requires a structured description: what changed, why, how to verify, and notable decisions. Previously the skill just said "Create PR" with no guidance on content.
+
+**Worktree path persistence clarified** — `using-git-worktrees` now explicitly states that the `cd` in the creation step does not persist across separate shell calls, and that all subsequent commands must use the full worktree path or `cd <path> && <command>` inline.
+
+**`find-polluter.sh` surfaced for test pollution** — `systematic-debugging` Phase 1 now references the `find-polluter.sh` script for tests that fail only in certain orderings. Previously the script existed in the skill folder but was never mentioned in the skill itself.
+
+### Fixes
+
+**project-map.md staleness loop fixed** — The staleness check in `using-superpowers` entry sequence step 6 detected stale map entries and re-read changed files — but never wrote the updates back. Every session with a stale map would re-read the same files and leave the map unchanged for next time, repeating the cycle forever. The check now explicitly updates the changed Key Files entries and refreshes the git hash in the header after re-reading, breaking the loop.
+
+**project-map.md version sync constraint was incomplete** — The constraint listed three manifest files that must stay version-synced, but omitted `.codex-plugin/plugin.json` and `VERSION` (both required per `CLAUDE.md`). A version bump following the map's constraint would silently miss two files. Updated to list all five.
+
+**context-snapshot.json creation expectation clarified** — When `git init` runs mid-session via the fresh-project gate, `context-snapshot.json` is not created in that session (the context-engine hook already fired at session start before git existed). The confirm path in `using-superpowers` now states this explicitly and notes that the file will appear on the next session start from the project root.
+
 ## v6.0.0 (2026-03-24)
 
 Comprehensive codebase audit and hardening. Twelve bugs, routing gaps, and safety issues found and fixed across hooks, skill routing, and the subagent guard.
