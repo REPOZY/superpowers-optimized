@@ -62,7 +62,7 @@ Technical execution includes code edits, debugging, planning, review, test statu
    > **Set this up before we build, or start immediately?**
 
    Wait for the user's answer before continuing.
-   - **If they confirm:** run `git init --quiet` directly (do not ask again — the user just confirmed), then invoke `context-management` for map generation only. Return to step 3 when done.
+   - **If they confirm:** run `git init --quiet` directly (do not ask again — the user just confirmed), then invoke `context-management` for map generation only. Return to step 3 when done. Note: `context-snapshot.json` will not be created in this session — the context-engine hook already ran at session start before git existed. It will be created on the next session start, provided the session is opened from this project's root directory. If no commits exist yet it will be mostly empty; it populates fully after the first commit.
    - **If they decline:** proceed to step 3.
 
 3. Classify the task as **micro**, **lightweight**, or **full** (see Complexity Classification below).
@@ -71,8 +71,8 @@ Technical execution includes code edits, debugging, planning, review, test statu
 6. If `project-map.md` exists at the project root, read it to orient to the project structure without re-globbing or re-reading known files. Then check staleness:
    - **With git:** run `git rev-parse HEAD` and compare to the hash in the map header.
      - Match → map is fresh, use it as-is.
-     - Mismatch → run `git diff --name-only <saved_hash> HEAD` to find changed files. Re-read only those; everything else in the map is still valid.
-   - **Without git:** compare the map's generation timestamp to the modification time of files listed in the map's Hot Files section. Re-read any that are newer than the map.
+     - Mismatch → run `git diff --name-only <saved_hash> HEAD` to find changed files. Re-read only those; everything else in the map is still valid. Then update the corresponding Key Files entries in `project-map.md` and refresh the git hash in the header to the current HEAD — this prevents the same files from triggering a staleness re-read on every future session.
+   - **Without git:** compare the map's generation timestamp to the modification time of files listed in the map's Hot Files section. Re-read any that are newer than the map. Then update their Key Files entries and refresh the generation timestamp in the header.
 7. Follow the path for the classified complexity level.
 
 ## Complexity Classification
