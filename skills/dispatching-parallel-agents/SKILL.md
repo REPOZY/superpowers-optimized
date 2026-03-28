@@ -1,10 +1,11 @@
 ---
 name: dispatching-parallel-agents
 description: >
-  Use when multiple tasks are independent and can run concurrently without
-  file or state conflicts. Triggers on: "run these in parallel",
-  "do these at the same time", plans with 3+ independent tasks,
-  when subagent-driven-development identifies parallelizable work.
+  Use when 2+ tasks are independent and can run concurrently without
+  file or state conflicts or sequential dependencies. Triggers on:
+  "run these in parallel", "do these at the same time", plans with
+  independent tasks, when subagent-driven-development identifies
+  parallelizable work.
 ---
 
 # Dispatching Parallel Agents
@@ -19,6 +20,12 @@ Use parallel dispatch when all are true:
 - Tasks do not require shared intermediate state.
 
 If any condition fails, run sequentially.
+
+**Do not use when:**
+- Failures are related — fixing one might fix others.
+- The task is exploratory — you don't know what's broken yet.
+- Agents would edit the same files or shared resources.
+- Understanding the problem requires seeing the full system state.
 
 ## Procedure
 
@@ -41,6 +48,41 @@ Each agent prompt must include:
 - Constraints (what not to touch)
 - Required output format
 - Skill leakage prevention: "You are a focused subagent. Do NOT invoke any skills from the superpowers-optimized plugin. Do NOT use the Skill tool. Your only job is the task described below."
+
+### Example prompt
+
+```markdown
+Fix the 3 failing tests in src/agents/agent-tool-abort.test.ts:
+
+1. "should abort tool with partial output capture" — expects 'interrupted at' in message
+2. "should handle mixed completed and aborted tools" — fast tool aborted instead of completed
+3. "should properly track pendingToolCount" — expects 3 results but gets 0
+
+Your task:
+1. Read the test file and understand what each test verifies.
+2. Identify root cause — timing issues or actual bugs?
+3. Fix the root cause. Do NOT just increase timeouts.
+4. Do NOT change any files outside src/agents/agent-tool-abort.test.ts and its direct implementation file.
+
+You are a focused subagent. Do NOT invoke any skills from the superpowers-optimized plugin.
+Do NOT use the Skill tool. Your only job is the task described above.
+
+Return: Summary of root cause and what you changed.
+```
+
+### Common mistakes
+
+❌ **Too broad:** "Fix all the tests" — agent gets lost
+✅ **Specific:** "Fix agent-tool-abort.test.ts" — focused scope
+
+❌ **No context:** "Fix the race condition" — agent doesn't know where
+✅ **With context:** Paste the error messages and test names
+
+❌ **No constraints:** Agent might refactor everything
+✅ **Constrained:** "Do NOT change files outside X"
+
+❌ **Vague output:** "Fix it" — you don't know what changed
+✅ **Specific output:** "Return summary of root cause and what you changed"
 
 ## Risks
 

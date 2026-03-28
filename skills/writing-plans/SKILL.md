@@ -78,14 +78,16 @@ git commit -m "<message>"
 
 ## Plan Review
 
-After saving the plan, dispatch a plan-reviewer subagent to check for:
+After saving the plan, dispatch a plan-reviewer subagent using the prompt template in `plan-document-reviewer-prompt.md`. Replace `[PLAN_FILE_PATH]` with the saved plan path and `[SPEC_FILE_PATH]` with the approved design document path. The reviewer cross-checks the plan against the spec — not just the plan in isolation.
+
+The reviewer checks for:
 - Vague or ambiguous steps
 - Missing file paths or verification commands
 - Hidden dependencies between tasks
 - Incorrect TDD ordering
-- Scope gaps compared to the approved design
+- Scope gaps or drift compared to the approved design
 
-If the reviewer finds issues, revise the plan before offering execution options.
+If the reviewer returns **Issues Found**, revise the plan before offering execution options.
 
 ## Handoff
 

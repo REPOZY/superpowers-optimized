@@ -31,7 +31,8 @@ Do not write code, edit files, or invoke implementation skills until design appr
    - **Minor** (edge case, acceptable limitation): document as a non-goal in the design.
    Do not skip this step. An approach that survives adversarial questioning is an approach worth approving.
 9. Save approved design to `docs/plans/YYYY-MM-DD-<topic>-design.md`.
-10. Invoke `writing-plans`.
+10. Dispatch a spec reviewer subagent using the prompt template in `spec-document-reviewer-prompt.md`. Replace `[SPEC_FILE_PATH]` with the saved path. If the reviewer returns **Issues Found**, resolve critical issues before proceeding — do not pass a flawed spec to planning.
+11. Invoke `writing-plans`.
 
 ## Design Contents
 
@@ -63,4 +64,5 @@ Apply senior engineering judgment during design:
 - User approved the design.
 - Failure-mode check completed — critical failure modes resolved, minor ones documented as non-goals.
 - Design document exists at the required path.
+- Spec reviewer subagent returned **Approved** (or Issues Found were resolved).
 - `writing-plans` is invoked as the next skill.

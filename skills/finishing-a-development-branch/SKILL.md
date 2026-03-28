@@ -42,7 +42,11 @@ Detect merge base (`main`/`master` or repo default) and confirm if unclear.
 
 ### Option 2
 - Push feature branch
-- Create PR
+- Create PR with a description that includes:
+  - **What changed** — one-paragraph summary of the change set
+  - **Why** — the motivation or problem this solves (link to plan doc if one exists)
+  - **How to verify** — exact commands or steps a reviewer can run to confirm the change works
+  - **Notable decisions** — any trade-offs made, alternatives rejected, or non-obvious choices
 - Keep worktree by default (remove only if user asks)
 
 ### Option 3

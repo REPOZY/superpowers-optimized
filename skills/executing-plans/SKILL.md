@@ -39,9 +39,15 @@ When a task is architectural, high-risk, or touches cross-module boundaries:
 ## Execution Rules
 
 - Do not skip plan steps unless user approves deviation.
-- Stop immediately on repeated verification failures.
+- Never start implementation on main/master branch without explicit user consent — ensure isolated workspace is ready first (step 2).
 - Keep edits scoped to the current task batch.
 - Do not claim completion without fresh command output.
+
+**Stop immediately and ask for clarification — never guess — when:**
+- A dependency is missing or unavailable.
+- The plan has a critical gap that prevents starting.
+- An instruction is unclear or contradictory.
+- Verification fails repeatedly (2+ attempts).
 
 ## Context Hygiene
 
