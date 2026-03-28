@@ -41,7 +41,7 @@ git worktree add <path> -b <branch>
 cd <path>
 ```
 
-3. Run project setup based on detected toolchain (`npm install`, `poetry install`, `cargo build`, etc.).
+3. Run project setup using the full worktree path — the `cd` in step 2 does not persist across separate shell calls. Use absolute paths or `cd <path> && <command>` in every subsequent Bash call rather than assuming the working directory carried over.
 4. Run baseline tests.
 
 ## Failure Handling
