@@ -4,7 +4,8 @@ description: >
   Structured code review against requirements, quality, and security
   standards. Invoke after meaningful code changes or before merge.
   Triggers on: "review my code", "code review", "check this before
-  merge", "security review", "is this secure". Routed by
+  merge", "security review", "is this secure", "look over my changes",
+  "second pair of eyes", "check the diff". Routed by
   using-superpowers or executing-plans after implementation.
 ---
 

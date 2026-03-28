@@ -497,7 +497,19 @@ Or manually: `git pull` in your local clone of the repository.
 
 ### Available Update Notification
 
-You will be **automatically notified** when a new version is available.
+You will be **automatically notified** when a new version is available in Claude/Cursor.
+OpenCode and Codex perform a best-effort startup update check once per 24 hours.
+Auto-update is non-destructive: it only applies when the plugin clone is clean and can fast-forward to `origin/main` (`git merge --ff-only origin/main`).
+If the repo is dirty, ahead, or diverged, auto-update is skipped and manual `git pull` remains the fallback.
+For Codex, SessionStart update notices require `codex_hooks = true`, `~/.codex/hooks.json` setup, and a non-Windows environment.
+
+To disable startup auto-update checks for Codex/OpenCode:
+
+1. Set env var `SUPERPOWERS_AUTO_UPDATE=0`, or
+2. Create `~/.config/superpowers/update.conf` with:
+   ```ini
+   auto_update=false
+   ```
 
 ![](media/UpdatedAvailable.png)
 
