@@ -8,74 +8,225 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # ── Update check ──────────────────────────────────────────────────────────────
-# Compares the installed version against the remote plugin.json on GitHub.
-# Runs with a 3-second timeout and fails silently — never blocks session start.
-# Result is cached for 24h in ~/.claude/hooks-logs/update-check.cache to avoid
-# hitting GitHub on every single session start.
+# Two paths depending on install type:
+#
+# Path A — git-based install (Codex / OpenCode / self-hosted clone):
+#   If PLUGIN_ROOT is a git repo, fetch origin and apply a non-destructive
+#   fast-forward-only merge. When the VERSION file changes after the merge,
+#   extract "What's New" from RELEASE-NOTES.md and inject it into session
+#   context. Never applies if the clone has local changes or is diverged.
+#
+# Path B — marketplace install (Claude Code / Cursor):
+#   If PLUGIN_ROOT is NOT a git repo, compare the locally installed version
+#   against the remote plugin.json on GitHub. If an update is available,
+#   tell the user to run /plugin update superpowers-optimized.
+#
+# Both paths: cached for 24h to avoid network access on every session start.
+# Both paths: fail silently — never block session startup.
+# Both paths: respect SUPERPOWERS_AUTO_UPDATE env var and update.conf opt-out.
 
 update_notice=""
+
+is_auto_update_enabled() {
+    # Environment variable override (highest priority).
+    case "${SUPERPOWERS_AUTO_UPDATE:-}" in
+        1|true|TRUE|yes|YES|on|ON) return 0 ;;
+        0|false|FALSE|no|NO|off|OFF) return 1 ;;
+    esac
+
+    # Optional user config: ~/.config/superpowers/update.conf
+    local cfg_file="${HOME}/.config/superpowers/update.conf"
+    if [ -f "$cfg_file" ]; then
+        local raw=""
+        raw=$(awk -F '=' '
+            /^[[:space:]]*auto_update[[:space:]]*=/ {
+                v=$2
+                gsub(/[[:space:]]/, "", v)
+                print tolower(v)
+                exit
+            }
+        ' "$cfg_file" 2>/dev/null || echo "")
+        case "$raw" in
+            1|true|yes|on) return 0 ;;
+            0|false|no|off) return 1 ;;
+        esac
+    fi
+
+    # Default: enabled.
+    return 0
+}
 
 check_for_updates() {
     local cache_dir="${HOME}/.claude/hooks-logs"
     local cache_file="${cache_dir}/update-check.cache"
     local cache_ttl=86400  # 24 hours in seconds
 
-    # Read local version — prefer installed_plugins.json (authoritative: reflects the
-    # currently active installed version even if this hook is running from an older
-    # cached directory after a plugin update). Falls back to this script's own plugin.json.
-    local local_version=""
-    local registry_file="${HOME}/.claude/plugins/installed_plugins.json"
-    if [ -f "$registry_file" ]; then
-        local_version=$(grep -A 10 '"superpowers-optimized@superpowers-optimized"' "$registry_file" 2>/dev/null \
-            | grep '"version"' | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "")
-    fi
-    if [ -z "$local_version" ]; then
-        local_version=$(grep '"version"' "${PLUGIN_ROOT}/.claude-plugin/plugin.json" 2>/dev/null \
-            | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "")
-    fi
-    [ -z "$local_version" ] && return
+    is_auto_update_enabled || return
 
-    # Check cache freshness (skip remote fetch if cache is recent)
-    local cached_remote=""
-    if [ -f "$cache_file" ]; then
-        local file_mtime=$(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null || echo 0)
-        local cache_age=$(( $(date +%s) - file_mtime ))
-        if [ "$cache_age" -lt "$cache_ttl" ]; then
-            cached_remote=$(cat "$cache_file" 2>/dev/null || echo "")
+    # ── Path A: git-based install (Codex / OpenCode / self-hosted clone) ──────
+    if git -C "${PLUGIN_ROOT}" rev-parse --git-dir > /dev/null 2>&1; then
+
+        # Check cache freshness — skip fetch if cache is recent
+        if [ -f "$cache_file" ]; then
+            local file_mtime
+            file_mtime=$(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null || echo 0)
+            local cache_age=$(( $(date +%s) - file_mtime ))
+            if [ "$cache_age" -lt "$cache_ttl" ]; then
+                return
+            fi
         fi
-    fi
 
-    # Fetch remote version if cache is stale or missing
-    local remote_version="$cached_remote"
-    if [ -z "$remote_version" ]; then
-        remote_version=$(curl -sf --max-time 3 \
-            "https://raw.githubusercontent.com/REPOZY/superpowers-optimized/refs/heads/main/.claude-plugin/plugin.json" \
-            2>/dev/null \
-            | grep '"version"' | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "")
-        # Cache the result (even if empty, to avoid hammering on no-internet)
-        if [ -n "$remote_version" ]; then
-            mkdir -p "$cache_dir"
-            printf '%s' "$remote_version" > "$cache_file"
+        # Fetch origin with timeout (3s on Linux/macOS, best-effort without timeout command)
+        local fetch_ok=0
+        if command -v timeout > /dev/null 2>&1; then
+            timeout 3 git -C "${PLUGIN_ROOT}" fetch origin --quiet 2>/dev/null && fetch_ok=1
+        elif command -v gtimeout > /dev/null 2>&1; then
+            gtimeout 3 git -C "${PLUGIN_ROOT}" fetch origin --quiet 2>/dev/null && fetch_ok=1
+        else
+            git -C "${PLUGIN_ROOT}" fetch origin --quiet 2>/dev/null && fetch_ok=1
         fi
-    fi
+        [ "$fetch_ok" -eq 1 ] || return
 
-    [ -z "$remote_version" ] && return
-    [ "$remote_version" = "$local_version" ] && return
+        # Compare HEAD vs origin/main
+        local local_head
+        local remote_head
+        local_head=$(git -C "${PLUGIN_ROOT}" rev-parse HEAD 2>/dev/null || echo "")
+        remote_head=$(git -C "${PLUGIN_ROOT}" rev-parse origin/main 2>/dev/null || echo "")
+        [ -n "$local_head" ] && [ -n "$remote_head" ] || return
 
-    # Semver comparison: is remote > local?
-    local IFS='.'
-    local local_parts=($local_version)
-    local remote_parts=($remote_version)
-    for i in 0 1 2; do
-        local l="${local_parts[$i]:-0}"
-        local r="${remote_parts[$i]:-0}"
-        if [ "$r" -gt "$l" ]; then
-            update_notice="\n\n<important-reminder>IN YOUR FIRST REPLY AFTER SEEING THIS MESSAGE YOU MUST TELL THE USER: 🔄 **Superpowers Optimized v${remote_version} is available** (you have v${local_version}). Run \`/plugin update superpowers-optimized\` to update.</important-reminder>"
-            return
-        elif [ "$l" -gt "$r" ]; then
-            return  # local is ahead of remote (dev build)
+        # Update cache timestamp (we checked, regardless of whether there's an update)
+        mkdir -p "$cache_dir"
+        touch "$cache_file"
+
+        [ "$local_head" = "$remote_head" ] && return
+
+        # Never auto-update if the plugin clone has local changes.
+        git -C "${PLUGIN_ROOT}" diff --quiet --ignore-submodules -- || return
+        git -C "${PLUGIN_ROOT}" diff --cached --quiet --ignore-submodules -- || return
+        [ -z "$(git -C "${PLUGIN_ROOT}" ls-files --others --exclude-standard 2>/dev/null)" ] || return
+
+        # Require local HEAD to be an ancestor of origin/main.
+        # This skips local-ahead or diverged states (no destructive sync).
+        local base_head
+        base_head=$(git -C "${PLUGIN_ROOT}" merge-base HEAD origin/main 2>/dev/null || echo "")
+        [ -n "$base_head" ] && [ "$base_head" = "$local_head" ] || return
+
+        # Save old version before update
+        local old_version=""
+        if [ -f "${PLUGIN_ROOT}/VERSION" ]; then
+            old_version=$(head -1 "${PLUGIN_ROOT}/VERSION" 2>/dev/null | tr -d '[:space:]')
         fi
-    done
+
+        # Apply update silently (fast-forward only).
+        git -C "${PLUGIN_ROOT}" merge --ff-only origin/main > /dev/null 2>&1 || return
+
+        # Read new version after update
+        local new_version=""
+        if [ -f "${PLUGIN_ROOT}/VERSION" ]; then
+            new_version=$(head -1 "${PLUGIN_ROOT}/VERSION" 2>/dev/null | tr -d '[:space:]')
+        fi
+
+        # Extract "What's New" if version changed
+        if [ -n "$old_version" ] && [ -n "$new_version" ] && [ "$old_version" != "$new_version" ]; then
+            local whats_new=""
+            if [ -f "${PLUGIN_ROOT}/RELEASE-NOTES.md" ]; then
+                # Extract content between ## v{new_version} and ## v{old_version} (or EOF)
+                whats_new=$(awk -v new="## v${new_version}" -v old="## v${old_version}" '
+                    $0 ~ new { found=1; next }
+                    found && $0 ~ old { exit }
+                    found { print }
+                ' "${PLUGIN_ROOT}/RELEASE-NOTES.md" 2>/dev/null || echo "")
+
+                # Trim to 30 lines if longer
+                local line_count
+                line_count=$(printf '%s' "$whats_new" | wc -l)
+                if [ "$line_count" -gt 30 ]; then
+                    whats_new=$(printf '%s' "$whats_new" | head -30)
+                    whats_new="${whats_new}
+...
+
+See RELEASE-NOTES.md for full details."
+                fi
+            fi
+
+            update_notice="\n\n<important-reminder>IN YOUR FIRST REPLY AFTER SEEING THIS MESSAGE YOU MUST TELL THE USER:
+
+**Superpowers Optimized has been updated to v${new_version}** (was v${old_version})
+
+**What's New:**
+${whats_new}</important-reminder>"
+        fi
+
+    else
+        # ── Path B: marketplace install (Claude Code / Cursor) ────────────────
+        # No git repo — compare local version against the remote plugin.json via curl.
+        # Tell the user to run /plugin update if a newer version is available.
+
+        # Read local version — prefer installed_plugins.json (authoritative: reflects the
+        # currently active installed version even if this hook is running from an older
+        # cached directory after a plugin update). Falls back to this script's own plugin.json.
+        local local_version=""
+        local registry_file="${HOME}/.claude/plugins/installed_plugins.json"
+        if [ -f "$registry_file" ]; then
+            local_version=$(grep -A 10 '"superpowers-optimized@superpowers-optimized"' "$registry_file" 2>/dev/null \
+                | grep '"version"' | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+        fi
+        if [ -z "$local_version" ]; then
+            local_version=$(grep '"version"' "${PLUGIN_ROOT}/.claude-plugin/plugin.json" 2>/dev/null \
+                | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+        fi
+        [ -z "$local_version" ] && return
+
+        # Check cache freshness (skip remote fetch if cache is recent).
+        # Cache stores the last-seen remote version string so we can still
+        # surface a notification even when the fetch is skipped.
+        local cached_remote=""
+        if [ -f "$cache_file" ]; then
+            local file_mtime
+            file_mtime=$(stat -c %Y "$cache_file" 2>/dev/null || stat -f %m "$cache_file" 2>/dev/null || echo 0)
+            local cache_age=$(( $(date +%s) - file_mtime ))
+            if [ "$cache_age" -lt "$cache_ttl" ]; then
+                cached_remote=$(cat "$cache_file" 2>/dev/null || echo "")
+            fi
+        fi
+
+        # Fetch remote version if cache is stale or missing
+        local remote_version="$cached_remote"
+        if [ -z "$remote_version" ]; then
+            remote_version=$(curl -sf --max-time 3 \
+                "https://raw.githubusercontent.com/REPOZY/superpowers-optimized/refs/heads/main/.claude-plugin/plugin.json" \
+                2>/dev/null \
+                | grep '"version"' | head -1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+            # Cache the result (even if empty, to avoid hammering GitHub on no-internet)
+            if [ -n "$remote_version" ]; then
+                mkdir -p "$cache_dir"
+                printf '%s' "$remote_version" > "$cache_file"
+            fi
+        fi
+
+        [ -z "$remote_version" ] && return
+        [ "$remote_version" = "$local_version" ] && return
+
+        # Semver comparison: is remote > local?
+        local IFS='.'
+        local local_parts=($local_version)
+        local remote_parts=($remote_version)
+        for i in 0 1 2; do
+            local l="${local_parts[$i]:-0}"
+            local r="${remote_parts[$i]:-0}"
+            if [ "$r" -gt "$l" ]; then
+                update_notice="\n\n<important-reminder>IN YOUR FIRST REPLY AFTER SEEING THIS MESSAGE YOU MUST TELL THE USER: 🔄 **Superpowers Optimized v${remote_version} is available** (you have v${local_version}). Run \`/plugin update superpowers-optimized\` which opens the plugin manager UI. From there:
+
+Marketplaces tab → select REPOZY/superpowers-optimized → Update marketplace (refreshes the version catalog)
+Installed tab → select superpowers-optimized → Update now
+
+Tip: To skip manual steps in future, enable Auto-update for the marketplace in step 1.</important-reminder>"
+                return
+            elif [ "$l" -gt "$r" ]; then
+                return  # local is ahead of remote (dev build)
+            fi
+        done
+    fi
 }
 
 # Run silently — a failure here must never break the session

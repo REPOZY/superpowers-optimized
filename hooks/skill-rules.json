@@ -4,8 +4,8 @@
       "skill": "systematic-debugging",
       "type": "process",
       "priority": "critical",
-      "keywords": ["bug", "error", "broken", "not working", "crash", "exception", "stack trace", "failing", "fails", "failure", "traceback", "undefined", "null pointer", "segfault", "warning"],
-      "intentPatterns": ["fix\\s+(this|the|a)\\s+(bug|error|issue)", "why\\s+(is|does|isn't)", "not\\s+work(ing)?", "stopped\\s+working", "something\\s+(is\\s+)?wrong", "unexpected\\s+(behavior|result|output|error)", "can('t|\\s*not)\\s+(figure|find|tell|determine)", "(shows?|displays?|renders?|gives?)\\s+(a\\s+)?(blank|white|empty|wrong|incorrect)", "(went|jumped|spiked|increased|degraded)\\s+(from|to|up|down)", "(but|except|however)\\s+(it\\s+)?(works?|runs?)\\s+(fine|ok|correctly|locally)", "(works?|runs?)\\s+(fine|ok|correctly|locally|on\\s+my)\\s+(but|except|however|only)", "(throw|throwing|throws)\\s+.{0,30}(error|warning|exception)"]
+      "keywords": ["bug", "error", "broken", "not working", "crash", "exception", "stack trace", "failing", "fails", "traceback", "undefined", "null pointer", "segfault", "warning"],
+      "intentPatterns": ["fix\\s+(this|the|a)\\s+(bug|error|issue)", "why\\s+(is|does|isn't)", "not\\s+work(ing)?", "stopped\\s+working", "something\\s+(is\\s+)?wrong", "unexpected\\s+(behavior|result|output|error)", "can('t|\\s*not)\\s+(figure|find|tell|determine)", "(shows?|displays?|renders?|gives?)\\s+(a\\s+)?(blank|white|empty|wrong|incorrect)", "(went|jumped|spiked|increased|degraded)\\s+(from|to|up|down)", "(but|except|however)\\s+(it\\s+)?(works?|runs?)\\s+(fine|ok|correctly|locally)", "(works?|runs?)\\s+(fine|ok|correctly|locally|on\\s+my)\\s+(but|except|however|only)", "(throw|throwing|throws)\\s+(?!.{0,10}(custom|new|my|our|a\\s+new)).{0,30}(error|warning|exception)"]
     },
     {
       "skill": "test-driven-development",

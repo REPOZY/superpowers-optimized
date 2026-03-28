@@ -1,8 +1,7 @@
 {
   "name": "superpowers-optimized",
-  "displayName": "Superpowers Optimized",
-  "description": "Agentic development framework — disciplined workflow routing, TDD enforcement, safety hooks, systematic debugging, and code review",
   "version": "6.1.0",
+  "description": "Agentic development framework for Codex — disciplined workflow routing, TDD enforcement, safety hooks, systematic debugging, and code review",
   "author": {
     "name": "Jesse Vincent, forked by REPOZY"
   },
@@ -11,5 +10,9 @@
   "license": "MIT",
   "keywords": ["skills", "tdd", "debugging", "code-review", "workflows", "agentic", "token-efficiency", "hooks", "safety", "subagent"],
   "skills": "./skills/",
-  "agents": "./agents/"
+  "hooks": "./hooks/codex-hooks.json",
+  "interface": {
+    "displayName": "Superpowers Optimized",
+    "shortDescription": "Disciplined workflow routing, TDD, safety hooks, and code review for Codex"
+  }
 }

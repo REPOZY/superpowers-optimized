@@ -1,0 +1,13 @@
+{
+  "SessionStart": [
+    {
+      "matcher": "startup|resume",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "if [ -f \"$HOME/.codex/superpowers-optimized/hooks/session-start\" ]; then \"$HOME/.codex/superpowers-optimized/hooks/session-start\"; elif [ -f \"$HOME/.codex/superpowers/hooks/session-start\" ]; then \"$HOME/.codex/superpowers/hooks/session-start\"; fi"
+        }
+      ]
+    }
+  ]
+}
