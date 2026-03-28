@@ -1,4 +1,4 @@
-# Superpowers Release Notes
+# Superpowers Optimized Release Notes
 
 ## v6.1.0 (2026-03-28)
 
@@ -12,17 +12,17 @@ Skill quality pass: two new automated review gates, richer subagent prompts, sha
 
 ### Changes
 
-**`dispatching-parallel-agents` strengthened** — Added a "Do not use when" block covering exploratory debugging, related failures, and shared-state scenarios. Added an assembled example prompt showing all required fields (scope, goal, constraints, output format, leakage prevention) wired together. Added a ❌/✅ common mistakes section. Updated the description to "2+" (more precise than "multiple") and added "sequential dependencies" as an explicit disqualifier alongside file and state conflicts.
+`**dispatching-parallel-agents` strengthened** — Added a "Do not use when" block covering exploratory debugging, related failures, and shared-state scenarios. Added an assembled example prompt showing all required fields (scope, goal, constraints, output format, leakage prevention) wired together. Added a ❌/✅ common mistakes section. Updated the description to "2+" (more precise than "multiple") and added "sequential dependencies" as an explicit disqualifier alongside file and state conflicts.
 
-**`executing-plans` stop conditions expanded** — The single "stop on repeated verification failures" bullet is replaced with a named list: missing dependency, plan gap preventing start, unclear/contradictory instruction, repeated verification failure. Added "never guess — ask for clarification" as an explicit directive. Added the main/master branch prohibition with a reference to the worktree step.
+`**executing-plans` stop conditions expanded** — The single "stop on repeated verification failures" bullet is replaced with a named list: missing dependency, plan gap preventing start, unclear/contradictory instruction, repeated verification failure. Added "never guess — ask for clarification" as an explicit directive. Added the main/master branch prohibition with a reference to the worktree step.
 
-**`claude-md-creator` self-assesses redundancy** — The skill no longer asks the user "anything you'd cut?" It now applies the redundancy filter itself before presenting the draft: every line must pass "would the agent produce incorrect output without this?" Lines that don't survive the filter are cut before the user sees them.
+`**claude-md-creator` self-assesses redundancy** — The skill no longer asks the user "anything you'd cut?" It now applies the redundancy filter itself before presenting the draft: every line must pass "would the agent produce incorrect output without this?" Lines that don't survive the filter are cut before the user sees them.
 
 **PR description required in `finishing-a-development-branch`** — Option 2 (push + open PR) now requires a structured description: what changed, why, how to verify, and notable decisions. Previously the skill just said "Create PR" with no guidance on content.
 
 **Worktree path persistence clarified** — `using-git-worktrees` now explicitly states that the `cd` in the creation step does not persist across separate shell calls, and that all subsequent commands must use the full worktree path or `cd <path> && <command>` inline.
 
-**`find-polluter.sh` surfaced for test pollution** — `systematic-debugging` Phase 1 now references the `find-polluter.sh` script for tests that fail only in certain orderings. Previously the script existed in the skill folder but was never mentioned in the skill itself.
+`**find-polluter.sh` surfaced for test pollution** — `systematic-debugging` Phase 1 now references the `find-polluter.sh` script for tests that fail only in certain orderings. Previously the script existed in the skill folder but was never mentioned in the skill itself.
 
 ### Fixes
 
@@ -46,13 +46,13 @@ Comprehensive codebase audit and hardening. Twelve bugs, routing gaps, and safet
 
 **Awk stderr leaked into session context** — The `session-start` hook used `2>&1` when capturing the using-superpowers skill body via awk. Any awk error (permission denied, missing file) would be injected into the AI's session context as part of the skill text. Changed to `2>/dev/null`.
 
-**`premise-check` was unreachable via skill-activator hook** — Despite being the most important safety-net skill (validates whether work should exist before building it), `premise-check` had no entry in `skill-rules.json`. The skill-activator hook could never suggest it based on user input — it only fired if the model proactively read the Routing Guide text. Added a high-priority rule covering "design a system", "should we build this", "validate the premise", and related phrases.
+`**premise-check` was unreachable via skill-activator hook** — Despite being the most important safety-net skill (validates whether work should exist before building it), `premise-check` had no entry in `skill-rules.json`. The skill-activator hook could never suggest it based on user input — it only fired if the model proactively read the Routing Guide text. Added a high-priority rule covering "design a system", "should we build this", "validate the premise", and related phrases.
 
-**`receiving-code-review` was unreachable via skill-activator hook** — Same gap: no `skill-rules.json` entry. Phrases like "address review feedback" and "respond to review" never triggered it. Added a medium-priority rule.
+`**receiving-code-review` was unreachable via skill-activator hook** — Same gap: no `skill-rules.json` entry. Phrases like "address review feedback" and "respond to review" never triggered it. Added a medium-priority rule.
 
-**`error-recovery` missing from Routing Guide** — The skill existed and was in `skill-rules.json`, but was absent from the Routing Guide in `using-superpowers`. A model doing full-complexity routing would never find it as a destination. Added to the guide.
+`**error-recovery` missing from Routing Guide** — The skill existed and was in `skill-rules.json`, but was absent from the Routing Guide in `using-superpowers`. A model doing full-complexity routing would never find it as a destination. Added to the guide.
 
-**`deliberation` missing from subagent-guard** — The subagent guard's violation patterns covered 20 skills but omitted `deliberation`. A subagent invoking `deliberation` by plain name (without the `superpowers-optimized:` prefix) would slip through. Added to the patterns. The guard was also refactored to use a verb-prefix pattern (`invoking/using/running + skill name`) that eliminates false positives from prose mentions of skill names.
+`**deliberation` missing from subagent-guard** — The subagent guard's violation patterns covered 20 skills but omitted `deliberation`. A subagent invoking `deliberation` by plain name (without the `superpowers-optimized:` prefix) would slip through. Added to the patterns. The guard was also refactored to use a verb-prefix pattern (`invoking/using/running + skill name`) that eliminates false positives from prose mentions of skill names.
 
 **ReDoS vulnerability in block-dangerous-commands** — Six regex patterns used `(-.+\s+)*` which is a nested quantifier enabling catastrophic backtracking on adversarial input. Replaced with `(-\S+\s+)*` which eliminates the backtracking risk while preserving the same match semantics.
 
@@ -102,7 +102,7 @@ Session memory enhanced, auto-gitignore for AI artifacts, and routing guide comp
 
 **Routing guide now covers all user-invocable skills** — `premise-check` and `using-git-worktrees` were missing from the routing guide in `using-superpowers` and had no coverage anywhere in the entry sequence. Both are now listed: `premise-check` at the top of the guide (run before brainstorming or planning when it's unclear whether work should exist at all), and `using-git-worktrees` before the implementation entries (run before implementation when the work needs branch isolation).
 
-**`claude-md-creator` added to routing guide with explicit bypass protection** — CLAUDE.md creation was being classified as lightweight and implemented directly, bypassing the `claude-md-creator` skill that exists specifically for this task. The routing guide now includes an explicit entry for CLAUDE.md / AGENTS.md creation pointing to `claude-md-creator`, with a note that it applies at any complexity level. The lightweight action text now includes an exception: if a dedicated implementation skill exists for the task, invoke it — lightweight only skips workflow overhead, not implementation skills.
+`**claude-md-creator` added to routing guide with explicit bypass protection** — CLAUDE.md creation was being classified as lightweight and implemented directly, bypassing the `claude-md-creator` skill that exists specifically for this task. The routing guide now includes an explicit entry for CLAUDE.md / AGENTS.md creation pointing to `claude-md-creator`, with a note that it applies at any complexity level. The lightweight action text now includes an exception: if a dedicated implementation skill exists for the task, invoke it — lightweight only skips workflow overhead, not implementation skills.
 
 ## v5.5.0 (2026-03-20)
 
@@ -249,7 +249,7 @@ The following skills no longer exist as standalone skills. Their useful parts ha
 
 **Skill count: 24 → 19** (5 deleted, 1 new)
 
-**`adaptive-workflow-selector` no longer exists as a standalone skill.** If your CLAUDE.md or custom workflows reference it, update them to use `using-superpowers` which now handles complexity classification inline.
+`**adaptive-workflow-selector` no longer exists as a standalone skill.** If your CLAUDE.md or custom workflows reference it, update them to use `using-superpowers` which now handles complexity classification inline.
 
 ### Added
 
@@ -266,6 +266,7 @@ New skill that maintains `known-issues.md` at the project root — a mapping of 
 **track-session-stats.js — Progress visibility hook**
 
 New PostToolUse hook (triggered on Skill tool calls) that tracks skill invocations to `session-stats.json`. Provides:
+
 - Session duration
 - Total skill invocations with per-skill breakdown
 - Auto-expires after 2 hours (new session)
@@ -274,6 +275,7 @@ New PostToolUse hook (triggered on Skill tool calls) that tracks skill invocatio
 **Micro-task detection in skill-activator.js**
 
 The UserPromptSubmit hook now detects micro-tasks (typo fixes, variable renames, import additions, etc.) and outputs `{}` — zero routing overhead. Patterns include:
+
 - "fix the typo on line 42" → skipped
 - "rename foo to bar" → skipped
 - "add missing import" → skipped
@@ -282,12 +284,14 @@ The UserPromptSubmit hook now detects micro-tasks (typo fixes, variable renames,
 **Confidence threshold in skill-activator.js**
 
 Skill matching now requires a minimum score of 2 (was 1). Single-keyword matches that produced false positives are filtered out:
+
 - "review" alone → no suggestion (was: suggested code review)
 - "review my code before merge" → correctly routes to requesting-code-review
 
 **3-tier complexity classification in using-superpowers**
 
 Replaces the separate `adaptive-workflow-selector` skill with an inline classification:
+
 - **Micro**: typo fix, single rename, 1-line config change → skip everything, just do it
 - **Lightweight**: ~2 files, no new behavior/architecture → implement directly, only verification-before-completion at the end
 - **Full**: anything else → complete pipeline (brainstorming → planning → execution → review → verify)
@@ -389,6 +393,7 @@ New internal skill based on the Self-Consistency method (Wang et al., ICLR 2023)
 **systematic-debugging: Self-Consistency Gate in Phase 3**
 
 Phase 3 (Hypothesize and Test) now requires multi-path reasoning before committing to a root cause hypothesis. The agent generates 3-5 independent hypotheses via different approaches (trace forward from inputs, backward from error, from recent changes, from similar past bugs), takes majority vote, and gates on confidence:
+
 - High (80-100%): proceed to test
 - Moderate (60-79%): proceed but note minority hypothesis as fallback
 - Low (<=50%): hard stop — gather more evidence before choosing a direction
@@ -402,6 +407,7 @@ Added multi-path verification for non-trivial completion claims. When the eviden
 **README: Research-Driven Optimizations section**
 
 Added comprehensive documentation of the three research papers that ground the fork's optimizations:
+
 - arXiv:2602.11988 (AGENTbench) — why minimal context files outperform verbose ones
 - arXiv:2602.24287 — why prior assistant responses degrade performance
 - Wang et al., ICLR 2023 — why single reasoning chains fail on hard problems
@@ -441,13 +447,9 @@ This release adds a comprehensive hooks system with proactive skill routing, edi
 The plugin now ships a full hooks pipeline registered in `hooks/hooks.json`:
 
 - **skill-activator** (UserPromptSubmit) — Matches user prompts against 17 keyword/regex rules in `hooks/skill-rules.json` before Claude processes them. Injects up to 3 relevant skill suggestions wrapped in `<user-prompt-submit-hook>` tags, reinforcing the `using-superpowers` routing system deterministically. Returns `{}` for non-matching prompts (zero token cost).
-
 - **track-edits** (PostToolUse, matcher: Edit|Write) — Logs every file edit to `~/.claude/hooks-logs/edit-log.txt` with ISO timestamp, tool name, and resolved file path. Auto-rotates at 500 lines with a size-based check (50KB threshold) to avoid reading the file on every write. Feeds data to `stop-reminders`. Never blocks.
-
 - **stop-reminders** (Stop) — Generates contextual reminders when Claude finishes a response: TDD reminder (source files changed without corresponding test files), commit reminder (5+ files modified). Uses a file-based TTL guard (`stop-hook-fired.lock`, 2-minute expiry) to prevent the infinite loop where Stop hook output causes Claude to resume.
-
 - **block-dangerous-commands** (PreToolUse, matcher: Bash) — Blocks destructive bash commands across 3 severity tiers (critical/high/strict). Default level: `high`. Covers 26 patterns including `rm -rf /`, `git push --force`, `DROP TABLE`, `chmod 777`, `mkfs`, `:(){ :|:& };:`, and more. Logs blocked operations to `~/.claude/hooks-logs/YYYY-MM-DD.jsonl`. Based on claude-code-hooks by karanb192 (MIT License).
-
 - **protect-secrets** (PreToolUse, matcher: Read|Edit|Write|Bash) — Prevents reading, modifying, or exfiltrating sensitive files. 30 sensitive file patterns (`.env`, SSH keys, AWS credentials, PEM files, etc.) + 31 bash exfiltration patterns (`curl -d @.env`, `scp id_rsa`, `cat .env`, etc.). Allowlist for safe files (`.env.example`, `.env.template`). Allowlist intentionally NOT applied to bash commands to prevent bypass via chained commands like `cat .env.example && cat .env`. Based on claude-code-hooks by karanb192 (MIT License).
 
 **code-reviewer agent: Cross-session memory**
@@ -648,6 +650,7 @@ Improved documentation of how Codex tools map to Claude Code equivalents for sub
 OpenCode's official documentation uses `~/.config/opencode/plugins/` (plural). Our docs previously used `plugin/` (singular). While OpenCode accepts both forms, we've standardized on the official convention to avoid confusion.
 
 Changes:
+
 - Renamed `.opencode/plugin/` to `.opencode/plugins/` in repo structure
 - Updated all installation docs (INSTALL.md, README.opencode.md) across all platforms
 - Updated test scripts to match
@@ -684,7 +687,7 @@ The previous bootstrap injection method using `session.prompt({ noReply: true })
 
 **Claude Code: Fixed Windows hook execution for Claude Code 2.1.x**
 
-Claude Code 2.1.x changed how hooks execute on Windows: it now auto-detects `.sh` files in commands and prepends `bash `. This broke the polyglot wrapper pattern because `bash "run-hook.cmd" session-start.sh` tries to execute the .cmd file as a bash script.
+Claude Code 2.1.x changed how hooks execute on Windows: it now auto-detects `.sh` files in commands and prepends `bash` . This broke the polyglot wrapper pattern because `bash "run-hook.cmd" session-start.sh` tries to execute the .cmd file as a bash script.
 
 Fix: hooks.json now calls session-start.sh directly. Claude Code 2.1.x handles the bash invocation automatically. Also added .gitattributes to enforce LF line endings for shell scripts (fixes CRLF issues on Windows checkout).
 
@@ -699,6 +702,7 @@ Fix: hooks.json now calls session-start.sh directly. Claude Code 2.1.x handles t
 Addressed a failure mode where Claude would skip invoking a skill even when the user explicitly requested it by name (e.g., "subagent-driven-development, please"). Claude would think "I know what that means" and start working directly instead of loading the skill.
 
 Changes:
+
 - Updated "The Rule" to say "Invoke relevant or requested skills" instead of "Check for skills" - emphasizing active invocation over passive checking
 - Added "BEFORE any response or action" - the original wording only mentioned "response" but Claude would sometimes take action without responding first
 - Added reassurance that invoking a wrong skill is okay - reduces hesitation
@@ -747,18 +751,19 @@ Added guidance that mechanical constraints should be automated, not documented�
 Subagent workflows now use two separate review stages after each task:
 
 1. **Spec compliance review** - Skeptical reviewer verifies implementation matches spec exactly. Catches missing requirements AND over-building. Won't trust implementer's report—reads actual code.
-
 2. **Code quality review** - Only runs after spec compliance passes. Reviews for clean code, test coverage, maintainability.
 
 This catches the common failure mode where code is well-written but doesn't match what was requested. Reviews are loops, not one-shot: if reviewer finds issues, implementer fixes them, then reviewer checks again.
 
 Other subagent workflow improvements:
+
 - Controller provides full task text to workers (not file references)
 - Workers can ask clarifying questions before AND during work
 - Self-review checklist before reporting completion
 - Plan read once at start, extracted to TodoWrite
 
 New prompt templates in `skills/subagent-driven-development/`:
+
 - `implementer-prompt.md` - Includes self-review checklist, encourages questions
 - `spec-reviewer-prompt.md` - Skeptical verification against requirements
 - `code-quality-reviewer-prompt.md` - Standard code review
@@ -766,6 +771,7 @@ New prompt templates in `skills/subagent-driven-development/`:
 **Debugging techniques consolidated with tools**
 
 `systematic-debugging` now bundles supporting techniques and tools:
+
 - `root-cause-tracing.md` - Trace bugs backward through call stack
 - `defense-in-depth.md` - Add validation at multiple layers
 - `condition-based-waiting.md` - Replace arbitrary timeouts with condition polling
@@ -775,6 +781,7 @@ New prompt templates in `skills/subagent-driven-development/`:
 **Testing anti-patterns reference**
 
 `test-driven-development` now includes `testing-anti-patterns.md` covering:
+
 - Testing mock behavior instead of real behavior
 - Adding test-only methods to production classes
 - Mocking without understanding dependencies
@@ -789,6 +796,7 @@ Three new test frameworks for validating skill behavior:
 `tests/claude-code/` - Integration tests using `claude -p` for headless testing. Verifies skill usage via session transcript (JSONL) analysis. Includes `analyze-token-usage.py` for cost tracking.
 
 `tests/subagent-driven-dev/` - End-to-end workflow validation with two complete test projects:
+
 - `go-fractals/` - CLI tool with Sierpinski/Mandelbrot (10 tasks)
 - `svelte-todo/` - CRUD app with localStorage and Playwright (12 tasks)
 
@@ -811,6 +819,7 @@ Description changed to imperative: "You MUST use this before any creative work�
 ### Breaking Changes
 
 **Skill consolidation** - Six standalone skills merged:
+
 - `root-cause-tracing`, `defense-in-depth`, `condition-based-waiting` → bundled in `systematic-debugging/`
 - `testing-skills-with-subagents` → bundled in `writing-skills/`
 - `testing-anti-patterns` → bundled in `test-driven-development/`
@@ -868,7 +877,6 @@ Description changed to imperative: "You MUST use this before any creative work�
   - Eliminates code duplication between Codex and OpenCode
   - Single source of truth for skill discovery and parsing
   - Codex successfully loads ES modules via Node.js interop
-
 - **Improved Documentation**: Rewrote README to explain problem/solution clearly
   - Removed duplicate sections and conflicting information
   - Added complete workflow description (brainstorm → plan → execute → finish)
@@ -905,6 +913,7 @@ Description changed to imperative: "You MUST use this before any creative work�
 ### New Features
 
 **Experimental Codex Support**
+
 - Added unified `superpowers-codex` script with bootstrap/use-skill/find-skills commands
 - Cross-platform Node.js implementation (works on Windows, macOS, Linux)
 - Namespaced skills: `superpowers:skill-name` for superpowers skills, `skill-name` for personal
@@ -916,12 +925,14 @@ Description changed to imperative: "You MUST use this before any creative work�
 - Complete installation guide and bootstrap instructions specific to Codex
 
 **Key differences from Claude Code integration:**
+
 - Single unified script instead of separate tools
 - Tool substitution system for Codex-specific equivalents
 - Simplified subagent handling (manual work instead of delegation)
 - Updated terminology: "Superpowers skills" instead of "Core skills"
 
 ### Files Added
+
 - `.codex/INSTALL.md` - Installation guide for Codex users
 - `.codex/superpowers-bootstrap.md` - Bootstrap instructions with Codex adaptations
 - `.codex/superpowers-codex` - Unified Node.js executable with all functionality
@@ -933,6 +944,7 @@ Description changed to imperative: "You MUST use this before any creative work�
 ### Improvements
 
 **Updated using-superpowers skill to use Skill tool instead of Read tool**
+
 - Changed skill invocation instructions from Read tool to Skill tool
 - Updated description: "using Read tool" → "using Skill tool"
 - Updated step 3: "Use the Read tool" → "Use the Skill tool to read and run"
@@ -941,6 +953,7 @@ Description changed to imperative: "You MUST use this before any creative work�
 The Skill tool is the proper mechanism for invoking skills in Claude Code. This update corrects the bootstrap instructions to guide agents toward the correct tool.
 
 ### Files Changed
+
 - Updated: `skills/using-superpowers/SKILL.md` - Changed tool references from Read to Skill
 
 ## v3.2.2 (2025-10-21)
@@ -948,6 +961,7 @@ The Skill tool is the proper mechanism for invoking skills in Claude Code. This 
 ### Improvements
 
 **Strengthened using-superpowers skill against agent rationalization**
+
 - Added EXTREMELY-IMPORTANT block with absolute language about mandatory skill checking
   - "If even 1% chance a skill applies, you MUST read it"
   - "You do not have a choice. You cannot rationalize your way out."
@@ -963,6 +977,7 @@ The Skill tool is the proper mechanism for invoking skills in Claude Code. This 
 These changes address observed agent behavior where they rationalize around skill usage despite clear instructions. The forceful language and pre-emptive counter-arguments aim to make non-compliance harder.
 
 ### Files Changed
+
 - Updated: `skills/using-superpowers/SKILL.md` - Added three layers of enforcement to prevent skill-skipping rationalization
 
 ## v3.2.1 (2025-10-20)
@@ -970,6 +985,7 @@ These changes address observed agent behavior where they rationalize around skil
 ### New Features
 
 **Code reviewer agent now included in plugin**
+
 - Added `superpowers:code-reviewer` agent to plugin's `agents/` directory
 - Agent provides systematic code review against plans and coding standards
 - Previously required users to have personal agent configuration
@@ -977,6 +993,7 @@ These changes address observed agent behavior where they rationalize around skil
 - Fixes #55
 
 ### Files Changed
+
 - New: `agents/code-reviewer.md` - Agent definition with review checklist and output format
 - Updated: `skills/requesting-code-review/SKILL.md` - References to `superpowers:code-reviewer`
 - Updated: `skills/subagent-driven-development/SKILL.md` - References to `superpowers:code-reviewer`
@@ -986,6 +1003,7 @@ These changes address observed agent behavior where they rationalize around skil
 ### New Features
 
 **Design documentation in brainstorming workflow**
+
 - Added Phase 4: Design Documentation to brainstorming skill
 - Design documents now written to `docs/plans/YYYY-MM-DD-<topic>-design.md` before implementation
 - Restores functionality from original brainstorming command that was lost during skill conversion
@@ -995,6 +1013,7 @@ These changes address observed agent behavior where they rationalize around skil
 ### Breaking Changes
 
 **Skill reference namespace standardization**
+
 - All internal skill references now use `superpowers:` namespace prefix
 - Updated format: `superpowers:test-driven-development` (previously just `test-driven-development`)
 - Affects all REQUIRED SUB-SKILL, RECOMMENDED SUB-SKILL, and REQUIRED BACKGROUND references
@@ -1004,6 +1023,7 @@ These changes address observed agent behavior where they rationalize around skil
 ### Improvements
 
 **Design vs implementation plan naming**
+
 - Design documents use `-design.md` suffix to prevent filename collisions
 - Implementation plans continue using existing `YYYY-MM-DD-<feature-name>.md` format
 - Both stored in `docs/plans/` directory with clear naming distinction
@@ -1019,6 +1039,7 @@ These changes address observed agent behavior where they rationalize around skil
 ### Breaking Changes
 
 **Skill names standardized to lowercase**
+
 - All skill frontmatter `name:` fields now use lowercase kebab-case matching directory names
 - Examples: `brainstorming`, `test-driven-development`, `using-git-worktrees`
 - All skill announcements and cross-references updated to lowercase format
@@ -1027,6 +1048,7 @@ These changes address observed agent behavior where they rationalize around skil
 ### New Features
 
 **Enhanced brainstorming skill**
+
 - Added Quick Reference table showing phases, activities, and tool usage
 - Added copyable workflow checklist for tracking progress
 - Added decision flowchart for when to revisit earlier phases
@@ -1035,6 +1057,7 @@ These changes address observed agent behavior where they rationalize around skil
 - Restructured Key Principles as scannable table
 
 **Anthropic best practices integration**
+
 - Added `skills/writing-skills/anthropic-best-practices.md` - Official Anthropic skill authoring guide
 - Referenced in writing-skills SKILL.md for comprehensive guidance
 - Provides patterns for progressive disclosure, workflows, and evaluation
@@ -1042,8 +1065,9 @@ These changes address observed agent behavior where they rationalize around skil
 ### Improvements
 
 **Skill cross-reference clarity**
+
 - All skill references now use explicit requirement markers:
-  - `**REQUIRED BACKGROUND:**` - Prerequisites you must understand
+  - `**REQUIRED BACKGROUND:`** - Prerequisites you must understand
   - `**REQUIRED SUB-SKILL:**` - Skills that must be used in workflow
   - `**Complementary skills:**` - Optional but helpful related skills
 - Removed old path format (`skills/collaboration/X` → just `X`)
@@ -1051,6 +1075,7 @@ These changes address observed agent behavior where they rationalize around skil
 - Updated cross-reference documentation with best practices
 
 **Alignment with Anthropic best practices**
+
 - Fixed description grammar and voice (fully third-person)
 - Added Quick Reference tables for scanning
 - Added workflow checklists Claude can copy and track
@@ -1069,6 +1094,7 @@ These changes address observed agent behavior where they rationalize around skil
 ### Documentation
 
 **writing-skills improvements**
+
 - Updated cross-referencing guidance with explicit requirement markers
 - Added reference to Anthropic's official best practices
 - Improved examples showing proper skill reference format
@@ -1124,6 +1150,7 @@ Users experience seamless operation: the plugin handles cloning, forking, and up
 **Migration:**
 
 If you have an existing installation:
+
 1. Your old `~/.config/superpowers/.git` will be backed up to `~/.config/superpowers/.git.bak`
 2. Old skills will be backed up to `~/.config/superpowers/skills.bak`
 3. Fresh clone of obra/superpowers-skills will be created at `~/.config/superpowers/skills/`
@@ -1138,12 +1165,14 @@ If you have an existing installation:
 ### Skills Repository Infrastructure
 
 **Automatic Clone & Setup** (`lib/initialize-skills.sh`)
+
 - Clones obra/superpowers-skills on first run
 - Offers fork creation if GitHub CLI is installed
 - Sets up upstream/origin remotes correctly
 - Handles migration from old installation
 
 **Auto-Update**
+
 - Fetches from tracking remote on every session start
 - Auto-merges with fast-forward when possible
 - Notifies when manual sync needed (branch diverged)
@@ -1152,6 +1181,7 @@ If you have an existing installation:
 ### New Skills
 
 **Problem-Solving Skills** (`skills/problem-solving/`)
+
 - **collision-zone-thinking** - Force unrelated concepts together for emergent insights
 - **inversion-exercise** - Flip assumptions to reveal hidden constraints
 - **meta-pattern-recognition** - Spot universal principles across domains
@@ -1160,14 +1190,17 @@ If you have an existing installation:
 - **when-stuck** - Dispatch to right problem-solving technique
 
 **Research Skills** (`skills/research/`)
+
 - **tracing-knowledge-lineages** - Understand how ideas evolved over time
 
 **Architecture Skills** (`skills/architecture/`)
+
 - **preserving-productive-tensions** - Keep multiple valid approaches instead of forcing premature resolution
 
 ### Skills Improvements
 
 **using-skills (formerly getting-started)**
+
 - Renamed from getting-started to using-skills
 - Complete rewrite with imperative tone (v4.0.0)
 - Front-loaded critical rules
@@ -1176,32 +1209,38 @@ If you have an existing installation:
 - Clearer distinction between rigid rules and flexible patterns
 
 **writing-skills**
+
 - Cross-referencing guidance moved from using-skills
 - Added token efficiency section (word count targets)
 - Improved CSO (Claude Search Optimization) guidance
 
 **sharing-skills**
+
 - Updated for new branch-and-PR workflow (v2.0.0)
 - Removed personal/core split references
 
 **pulling-updates-from-skills-repository** (new)
+
 - Complete workflow for syncing with upstream
 - Replaces old "updating-skills" skill
 
 ### Tools Improvements
 
 **find-skills**
+
 - Now outputs full paths with /SKILL.md suffix
 - Makes paths directly usable with Read tool
 - Updated help text
 
 **skill-run**
+
 - Moved from scripts/ to skills/using-skills/
 - Improved documentation
 
 ### Plugin Infrastructure
 
 **Session Start Hook**
+
 - Now loads from skills repository location
 - Shows full skills list at session start
 - Prints skills location info
@@ -1209,6 +1248,7 @@ If you have an existing installation:
 - Moved "skills behind" warning to end of output
 
 **Environment Variables**
+
 - `SUPERPOWERS_SKILLS_ROOT` set to `~/.config/superpowers/skills`
 - Used consistently throughout all paths
 
@@ -1222,6 +1262,7 @@ If you have an existing installation:
 ## Documentation
 
 ### README
+
 - Updated for new skills repository architecture
 - Prominent link to superpowers-skills repo
 - Updated auto-update description
@@ -1229,6 +1270,7 @@ If you have an existing installation:
 - Updated Meta skills list
 
 ### Testing Documentation
+
 - Added comprehensive testing checklist (`docs/TESTING-CHECKLIST.md`)
 - Created local marketplace config for testing
 - Documented manual testing scenarios
@@ -1238,16 +1280,19 @@ If you have an existing installation:
 ### File Changes
 
 **Added:**
+
 - `lib/initialize-skills.sh` - Skills repo initialization and auto-update
 - `docs/TESTING-CHECKLIST.md` - Manual testing scenarios
 - `.claude-plugin/marketplace.json` - Local testing config
 
 **Removed:**
+
 - `skills/` directory (82 files) - Now in obra/superpowers-skills
 - `scripts/` directory - Now in obra/superpowers-skills/skills/using-skills/
 - `hooks/setup-personal-superpowers.sh` - Obsolete
 
 **Modified:**
+
 - `hooks/session-start.sh` - Use skills from ~/.config/superpowers/skills
 - `commands/brainstorm.md` - Updated paths to SUPERPOWERS_SKILLS_ROOT
 - `commands/write-plan.md` - Updated paths to SUPERPOWERS_SKILLS_ROOT
@@ -1257,6 +1302,7 @@ If you have an existing installation:
 ### Commit History
 
 This release includes:
+
 - 20+ commits for skills repository separation
 - PR #1: Amplifier-inspired problem-solving and research skills
 - PR #2: Personal superpowers overlay system (later replaced)
@@ -1277,25 +1323,22 @@ The plugin handles everything automatically.
 ### Upgrading from v1.x
 
 1. **Backup your personal skills** (if you have any):
-   ```bash
+  ```bash
    cp -r ~/.config/superpowers/skills ~/superpowers-skills-backup
-   ```
-
+  ```
 2. **Update the plugin:**
-   ```bash
+  ```bash
    /plugin update superpowers
-   ```
-
+  ```
 3. **On next session start:**
-   - Old installation will be backed up automatically
-   - Fresh skills repo will be cloned
-   - If you have GitHub CLI, you'll be offered the option to fork
-
+  - Old installation will be backed up automatically
+  - Fresh skills repo will be cloned
+  - If you have GitHub CLI, you'll be offered the option to fork
 4. **Migrate personal skills** (if you had any):
-   - Create a branch in your local skills repo
-   - Copy your personal skills from backup
-   - Commit and push to your fork
-   - Consider contributing back via PR
+  - Create a branch in your local skills repo
+  - Copy your personal skills from backup
+  - Commit and push to your fork
+  - Consider contributing back via PR
 
 ## What's Next
 
@@ -1307,7 +1350,7 @@ The plugin handles everything automatically.
 
 ### For Contributors
 
-- Skills repository is now at https://github.com/obra/superpowers-skills
+- Skills repository is now at [https://github.com/obra/superpowers-skills](https://github.com/obra/superpowers-skills)
 - Fork → Branch → PR workflow
 - See skills/meta/writing-skills/SKILL.md for TDD approach to documentation
 
@@ -1323,6 +1366,6 @@ None at this time.
 
 ---
 
-**Full Changelog:** https://github.com/obra/superpowers/compare/dd013f6...main
-**Skills Repository:** https://github.com/obra/superpowers-skills
-**Issues:** https://github.com/obra/superpowers/issues
+**Full Changelog:** [https://github.com/obra/superpowers/compare/dd013f6...main](https://github.com/obra/superpowers/compare/dd013f6...main)
+**Skills Repository:** [https://github.com/obra/superpowers-skills](https://github.com/obra/superpowers-skills)
+**Issues:** [https://github.com/obra/superpowers/issues](https://github.com/obra/superpowers/issues)
