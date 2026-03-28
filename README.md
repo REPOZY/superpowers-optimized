@@ -514,6 +514,10 @@ To disable startup auto-update checks for Codex/OpenCode:
 ![](media/UpdatedAvailable.png)
 
 
+# Verify Installation
+
+Start a new session in your chosen platform and ask for something that should trigger a skill (for example, "help me plan this feature" or "let's debug this issue"). The agent should automatically invoke the relevant superpowers skill.
+
 ---
 
 
