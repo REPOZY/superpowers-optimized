@@ -26,6 +26,7 @@ If any condition fails, run sequentially.
 - The task is exploratory — you don't know what's broken yet.
 - Agents would edit the same files or shared resources.
 - Understanding the problem requires seeing the full system state.
+- The task is content relay — fetching raw content (file contents, web pages, API responses) to bring back to the parent session. Agent results are compressed; raw content will be lost. Fetch it directly instead with Read (local files) or `curl` (URLs).
 
 ## Procedure
 

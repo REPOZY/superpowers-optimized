@@ -148,6 +148,8 @@ function buildContext(matches) {
     'Remember: invoke superpowers-optimized:using-superpowers FIRST as the mandatory entry point,',
     'then follow its routing to these suggested skills:',
     skillList,
+    'IMPORTANT: If the user names a skill directly (e.g. "use brainstorming"), invoke it via the Skill tool.',
+    'Do NOT re-implement the skill\'s purpose with ad-hoc agents or manual steps.',
     '</user-prompt-submit-hook>',
   ].join('\n');
 }
