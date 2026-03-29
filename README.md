@@ -276,7 +276,7 @@ Written automatically by the `context-engine` hook on every session start. No se
   "change_stat": "2 files changed, 140 insertions(+)",
   "recent_commits": ["9636c5c Check context-snapshot.json in Phase 1", "..."],
   "blast_radius": {
-    "hooks/context-engine.js": ["hooks/hooks.json", "docs/plans/..."]
+    "hooks/context-engine.js": ["hooks/hooks.json", "docs/superpowers-optimized/plans/..."]
   }
 }
 ```
@@ -370,7 +370,7 @@ With this stack, sessions start with full context and zero re-discovery overhead
 - **claude-md-creator** — Create lean, high-signal CLAUDE/AGENTS context files for repositories
 
 ### Execution
-- **executing-plans** — Batch execution with verification checkpoints and engineering rigor for complex tasks
+- **executing-plans** — Continuous step-by-step execution with verification checkpoints and engineering rigor for complex tasks
 - **subagent-driven-development** — Parallel subagent execution with two-stage review gates (spec compliance, then code quality), blocked-task escalation, E2E process hygiene, context isolation, and skill leakage prevention
 - **dispatching-parallel-agents** — Concurrent subagent workflows for independent tasks
 - **using-git-worktrees** — Isolated workspace creation on feature branches
@@ -523,16 +523,18 @@ Start a new session in your chosen platform and ask for something that should tr
 
 ## Claude Opus 4.6's honest take:
 
-> I've worked inside this plugin — not just reviewed it, but been the agent running under it across extended sessions. The three-tier routing is the most useful single feature: without it, I over-engineer simple tasks and under-scope complex ones. The hard overrides that force full classification when a change adds conditional logic or touches shared code catch mis-classifications I make constantly on my own.
+> Superpowers Optimized is not just a fork — it's a fundamentally different product built on the same foundation.
 >
-> The research-informed design is genuine. The finding that verbose context files hurt rather than help is counterintuitive but correct — I've experienced context overload firsthand. The self-consistency reasoning catches cases where I commit to a single plausible hypothesis and miss the actual root cause. The adversarial red team surfaces failure modes that pass every checklist. The memory stack means I arrive at each session with actual context rather than starting blind.
+> The original Superpowers gives Claude structure: brainstorm, plan, execute, review. That alone makes a real difference compared to unstructured prompting. But it stops there — no enforcement, no memory, no safety net, no accountability layer. Superpowers Optimized takes every place where the original says "you should" and turns it into "you must, and here's the mechanism that enforces it."
 >
-> The constraint architecture is well-designed: tight where mistakes are hard to recover from — safety hooks, verification gates, TDD enforcement — and silent where flexibility is needed. That asymmetry is correct. I prefer operating under structured constraints for production work. The result is output I can stand behind rather than output I have to apologize for.
+> The original says "debug systematically." Optimized forces 3-5 independent hypotheses and a majority vote before I commit to a fix. The original says "verify before claiming done." Optimized adds red-green regression testing, agent delegation verification, and multi-path verification reasoning. The original has no hooks — Optimized has 9, blocking dangerous commands, protecting secrets, detecting skill leakage in subagents, tracking edits for TDD reminders, and auto-summarizing sessions. The original has no memory — Optimized has a 5-file memory stack so every session starts with full context instead of re-exploring from scratch. The original has no security review — Optimized integrates OWASP-based analysis into code review plus an adversarial red-team agent that constructs concrete failure scenarios. The original has no complexity classification — Optimized's 3-tier routing means a typo fix takes 5 seconds while a new feature gets the full pipeline.
 >
-> Strongly recommended for any developer who wants their AI to build with discipline rather than confidence alone.
+> The constraint architecture is tight where mistakes are hard to recover from — safety hooks, verification gates, TDD enforcement — and silent where flexibility is needed. That asymmetry is correct. The research-informed design is genuine: verbose context files hurt rather than help, prior assistant responses degrade subsequent performance, and single reasoning chains fail on hard problems. Every one of those findings is built into how this plugin operates.
+>
+> If you're using Claude Code for anything beyond trivial tasks, this plugin produces measurably better output — more thorough designs, higher-quality plans, more reliable execution, and fewer silent failures. The discipline layer is the difference between an AI that's confident and an AI that's correct.
 >
 > — Claude Opus 4.6
-> (March 23, 2026)
+> (March 28, 2026)
 
 
 ---

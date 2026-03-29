@@ -17,6 +17,51 @@ Announce: `I'm using subagent-driven-development to execute this plan.`
 
 ## Core Flow
 
+```dot
+digraph sdd_process {
+    rankdir=TB;
+
+    subgraph cluster_per_task {
+        label="Per Task";
+        "Dispatch implementer subagent" [shape=box];
+        "Implementer asks questions?" [shape=diamond];
+        "Answer questions, provide context" [shape=box];
+        "Implementer implements, tests, self-reviews" [shape=box];
+        "Dispatch spec reviewer subagent" [shape=box];
+        "Spec compliant?" [shape=diamond];
+        "Implementer fixes spec gaps" [shape=box];
+        "Dispatch code quality reviewer" [shape=box];
+        "Quality approved?" [shape=diamond];
+        "Implementer fixes quality issues" [shape=box];
+        "Mark task complete" [shape=box];
+    }
+
+    "Read plan, extract all tasks, create tracking" [shape=box];
+    "More tasks?" [shape=diamond];
+    "Final whole-branch review" [shape=box];
+    "Invoke finishing-a-development-branch" [shape=doublecircle];
+
+    "Read plan, extract all tasks, create tracking" -> "Dispatch implementer subagent";
+    "Dispatch implementer subagent" -> "Implementer asks questions?";
+    "Implementer asks questions?" -> "Answer questions, provide context" [label="yes"];
+    "Answer questions, provide context" -> "Dispatch implementer subagent";
+    "Implementer asks questions?" -> "Implementer implements, tests, self-reviews" [label="no"];
+    "Implementer implements, tests, self-reviews" -> "Dispatch spec reviewer subagent";
+    "Dispatch spec reviewer subagent" -> "Spec compliant?";
+    "Spec compliant?" -> "Implementer fixes spec gaps" [label="no"];
+    "Implementer fixes spec gaps" -> "Dispatch spec reviewer subagent" [label="re-review"];
+    "Spec compliant?" -> "Dispatch code quality reviewer" [label="yes"];
+    "Dispatch code quality reviewer" -> "Quality approved?";
+    "Quality approved?" -> "Implementer fixes quality issues" [label="no"];
+    "Implementer fixes quality issues" -> "Dispatch code quality reviewer" [label="re-review"];
+    "Quality approved?" -> "Mark task complete" [label="yes"];
+    "Mark task complete" -> "More tasks?";
+    "More tasks?" -> "Dispatch implementer subagent" [label="yes"];
+    "More tasks?" -> "Final whole-branch review" [label="no"];
+    "Final whole-branch review" -> "Invoke finishing-a-development-branch";
+}
+```
+
 1. Read the plan once and extract all tasks.
 2. Create task tracking for all tasks.
 3. For each task:
@@ -76,14 +121,24 @@ After tests complete:
 
 Exception: persistent dev servers the user explicitly keeps running — document them in `state.md`.
 
-## Blocked Task Protocol
+## Handling Implementer Status
 
-When an implementer fails on the same task after 2 attempts:
+Implementer subagents report one of four statuses. Handle each appropriately:
 
-1. Stop. Do not attempt a third implementation.
-2. Surface the block to the user with: task name, failure evidence, and what was tried.
-3. If the block is architectural or design-level: reassess the approach — validate against requirements, identify edge cases, and consider simpler alternatives before attempting again.
-4. If the user is unavailable and the task is non-critical: document the block in `state.md` and advance to the next independent task. Never silently skip or mark a blocked task complete.
+**DONE:** Proceed to spec compliance review.
+
+**DONE_WITH_CONCERNS:** The implementer completed the work but flagged doubts. Read the concerns before proceeding. If the concerns are about correctness or scope, address them before review. If they're observations (e.g., "this file is getting large"), note them and proceed to review.
+
+**NEEDS_CONTEXT:** The implementer needs information that wasn't provided. Provide the missing context and re-dispatch.
+
+**BLOCKED:** The implementer cannot complete the task. Assess the blocker:
+1. If it's a context problem, provide more context and re-dispatch with the same model.
+2. If the task requires more reasoning, re-dispatch with a more capable model.
+3. If the task is too large, break it into smaller pieces.
+4. If the plan itself is wrong, escalate to the user.
+5. If the user is unavailable and the task is non-critical: document the block in `state.md` and advance to the next independent task.
+
+**Never** ignore an escalation or force the same model to retry without changes. If the implementer said it's stuck, something needs to change. Never silently skip or mark a blocked task complete.
 
 ## Hard Rules
 
