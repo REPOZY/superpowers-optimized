@@ -27,6 +27,16 @@ This skill MUST be invoked when any of the following occur:
 
 **Exception:** Micro tasks (typo fix, single variable rename, 1-line config change) can skip the entry sequence entirely. Just do them.
 
+## When the User Names a Specific Skill
+
+If the user's prompt references a skill by name (e.g., "use brainstorming," "use context management," "run verification"), that is a **Skill tool invocation request**:
+
+1. Still complete Entry Sequence steps 1–6 (token-efficiency, staleness check, etc.) — these are always-on prerequisites, not routing.
+2. **Invoke the named skill via the `Skill` tool.** Do not re-implement the skill's purpose with ad-hoc agents, manual file reads, or improvised workflows. The skill contains tested, structured logic — use it.
+3. Skip complexity classification and routing (step 7) — the user already chose the route.
+
+This is the most common cause of entry sequence bypass: the AI interprets "use X skill" as a goal to achieve creatively rather than as a tool invocation. It is always a tool invocation.
+
 ## Instruction Priority (highest to lowest)
 
 1. Explicit user instructions in the current conversation
@@ -72,7 +82,7 @@ Technical execution includes code edits, debugging, planning, review, test statu
 3. Classify the task as **micro**, **lightweight**, or **full** (see Complexity Classification below).
 4. If resuming work from a prior session, read `state.md` if it exists. Use `context-management` to save state before ending a session with ongoing work.
 5. If `known-issues.md` exists at the project root, read it to avoid rediscovering known error→solution mappings.
-6. If `project-map.md` exists at the project root, read it to orient to the project structure without re-globbing or re-reading known files. Then check staleness:
+6. If `project-map.md` exists at the project root, read it to orient to the project structure without re-globbing or re-reading known files. The map tells you what exists and where — when you need a file's actual content (for modification, comparison, or debugging), read it directly with the Read tool. Then check staleness:
    - **With git:** run `git rev-parse HEAD` and compare to the hash in the map header.
      - Match → map is fresh, use it as-is.
      - Mismatch → run `git diff --name-only <saved_hash> HEAD` to find changed files. Re-read only those; everything else in the map is still valid. Then update the corresponding Key Files entries in `project-map.md` and refresh the git hash in the header to the current HEAD — this prevents the same files from triggering a staleness re-read on every future session.

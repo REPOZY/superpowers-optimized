@@ -102,8 +102,8 @@
       "skill": "context-management",
       "type": "workflow",
       "priority": "high",
-      "keywords": ["map this project", "project map", "map the project", "generate project map", "create project map", "update project map"],
-      "intentPatterns": ["map\\s+(this|the)\\s+project", "generate\\s+(a\\s+)?project\\s+map", "(create|update|write)\\s+(the\\s+|a\\s+)?project.?map"]
+      "keywords": ["map this project", "project map", "map the project", "generate project map", "create project map", "update project map", "context management"],
+      "intentPatterns": ["map\\s+(this|the)\\s+project", "generate\\s+(a\\s+)?project\\s+map", "(create|update|write)\\s+(the\\s+|a\\s+)?project.?map", "use\\s+(the\\s+)?context.?management"]
     },
     {
       "skill": "context-management",

@@ -299,7 +299,7 @@ update_escaped=$(escape_for_json "$update_notice")
 git_escaped=$(escape_for_json "$git_notice")
 project_map_escaped=$(escape_for_json "$project_map_content")
 
-session_context="<EXTREMELY_IMPORTANT>\nYou have superpowers-optimized.\n\n**The \`superpowers-optimized:using-superpowers\` guidance is loaded below. For all other skills, use the \`Skill\` tool.**\n\n${using_superpowers_escaped}\n\n${warning_escaped}${update_escaped}${git_escaped}\n</EXTREMELY_IMPORTANT>${project_map_escaped}"
+session_context="<EXTREMELY_IMPORTANT>\nYou have superpowers-optimized.\n\n**The \`superpowers-optimized:using-superpowers\` guidance is loaded below. For all other skills, use the \`Skill\` tool.**\n\n**MANDATORY FIRST ACTIONS — before ANY tool calls beyond reading files:**\n1. Silently activate token-efficiency (its rules apply immediately)\n2. Classify the task complexity (micro/lightweight/full) per the Entry Sequence below\n3. If the user names a specific skill (e.g. \"use brainstorming\", \"use context management\"), that IS a Skill tool invocation — call \`Skill\` with that skill name. Do NOT re-implement the skill's purpose with ad-hoc agents or manual steps.\n\n${using_superpowers_escaped}\n\n${warning_escaped}${update_escaped}${git_escaped}\n</EXTREMELY_IMPORTANT>${project_map_escaped}"
 
 # ── Output ─────────────────────────────────────────────────────────────────────
 # Uses printf instead of heredoc (cat <<EOF) to work around a bash 5.3+
