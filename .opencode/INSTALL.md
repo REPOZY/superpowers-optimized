@@ -157,4 +157,4 @@ When skills reference Claude Code tools:
 ## Getting Help
 
 - Report issues: https://github.com/REPOZY/superpowers-optimized/issues
-- Full documentation: https://github.com/REPOZY/superpowers-optimized/blob/main/docs/README.opencode.md
+- Full documentation: https://github.com/REPOZY/superpowers-optimized/blob/main/docs/platforms/opencode.md

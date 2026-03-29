@@ -162,13 +162,13 @@ Frontend design intelligence and documentation improvements. The frontend skill 
 
 **frontend-design skill (complete rewrite)** — The former `frontend-craftsmanship` skill has been renamed to `frontend-design` and rewritten from scratch. It now includes a 4-step design system generation framework that forces deliberate style, color, typography, and effects decisions before writing code. Adds a 25-style reference catalog (Minimalism through Cyberpunk), a 30-category industry design reference table mapping product types to recommended design directions, 8 common page structure patterns (dashboard, landing page, admin panel, etc.), 5-state UI state management (loading, error, empty, success, partial), frontend-backend integration patterns (API loading, optimistic updates, error boundaries, auth flows), dark mode implementation guidance, micro-copy and UX writing standards, and 10 priority quality standard categories covering accessibility, touch targets, performance, animation, forms, navigation, and charts. 353 lines, single file, zero dependencies.
 
-**Red team pipeline documentation** — New `docs/red-team-pipeline.md` explains the end-to-end flow from code review through red team dispatch to auto-fix pipeline, including when each component fires, what the red team produces, how auto-fix processes findings, and merge blocking rules.
+**Red team pipeline documentation** — New `docs/architecture/red-team-pipeline.md` explains the end-to-end flow from code review through red team dispatch to auto-fix pipeline, including when each component fires, what the red team produces, how auto-fix processes findings, and merge blocking rules.
 
-**Frontend design documentation** — New `docs/frontend-design.md` explains the skill's 7 capabilities with examples, what users can expect when prompting for frontend work, and how activation integrates with other Superpowers skills.
+**Frontend design documentation** — New `docs/architecture/frontend-design.md` explains the skill's 7 capabilities with examples, what users can expect when prompting for frontend work, and how activation integrates with other Superpowers skills.
 
 ### Changes
 
-**Testing documentation updated** — `docs/testing.md` (now `docs/testing-structure.md`) was rewritten to reflect the actual 5-directory test structure: claude-code, skill-triggering, explicit-skill-requests, subagent-driven-dev, and opencode. Added the subagent hook scope test, fixed stale plugin name references, and added a quick reference section with copy-paste commands for every test suite.
+**Testing documentation updated** — `docs/testing.md` (now `docs/architecture/testing-structure.md`) was rewritten to reflect the actual 5-directory test structure: claude-code, skill-triggering, explicit-skill-requests, subagent-driven-dev, and opencode. Added the subagent hook scope test, fixed stale plugin name references, and added a quick reference section with copy-paste commands for every test suite.
 
 **AGENTS.minimal.md updated** — Added missing `premise-check` skill reference.
 
@@ -474,7 +474,7 @@ Added `memory: user` to `agents/code-reviewer.md`. The code-reviewer agent now r
 
 ## v4.4.0 (2026-03-06)
 
-This release closes the gap between what the skills document and what agents actually do wrong. Improvements are sourced from a systematic AI self-review of the plugin combined with the previously-documented real-session failure patterns from `docs/plans/2025-11-28-skills-improvements-from-user-feedback.md`.
+This release closes the gap between what the skills document and what agents actually do wrong. Improvements are sourced from a systematic AI self-review of the plugin combined with the previously-documented real-session failure patterns from `docs/superpowers-optimized/specs/2025-11-28-skills-improvements-from-user-feedback.md`.
 
 ### Added
 
@@ -869,7 +869,7 @@ Description changed to imperative: "You MUST use this before any creative work�
   - Project-local skills support (`.opencode/skills/`)
   - Shared core module (`lib/skills-core.js`) for code reuse with Codex
   - Automated test suite with proper isolation (`tests/opencode/`)
-  - Platform-specific documentation (`docs/README.opencode.md`, `docs/README.codex.md`)
+  - Platform-specific documentation (`docs/platforms/opencode.md`, `docs/platforms/codex.md`)
 
 ### Changed
 
@@ -1005,7 +1005,7 @@ These changes address observed agent behavior where they rationalize around skil
 **Design documentation in brainstorming workflow**
 
 - Added Phase 4: Design Documentation to brainstorming skill
-- Design documents now written to `docs/plans/YYYY-MM-DD-<topic>-design.md` before implementation
+- Design documents now written to `docs/superpowers-optimized/specs/YYYY-MM-DD-<topic>-design.md` before implementation
 - Restores functionality from original brainstorming command that was lost during skill conversion
 - Documents written before worktree setup and implementation planning
 - Tested with subagent to verify compliance under time pressure
@@ -1026,7 +1026,7 @@ These changes address observed agent behavior where they rationalize around skil
 
 - Design documents use `-design.md` suffix to prevent filename collisions
 - Implementation plans continue using existing `YYYY-MM-DD-<feature-name>.md` format
-- Both stored in `docs/plans/` directory with clear naming distinction
+- Design specs stored in `docs/superpowers-optimized/specs/`, implementation plans in `docs/superpowers-optimized/plans/`
 
 ## v3.1.1 (2025-10-17)
 

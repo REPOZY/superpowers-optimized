@@ -33,6 +33,37 @@ This is non-negotiable. Every fix must trace back to a proven root cause. A fix 
   - If `context-snapshot.json` exists at the project root: read it. The `changed_files` and `recent_commits` fields answer this immediately without additional git commands.
   - Otherwise: run `git log --oneline -10` and `git diff HEAD~1..HEAD --name-only`.
 - Add instrumentation (logging, breakpoints) at component boundaries.
+- **Multi-component systems:** When the system has multiple components (CI → build → signing, API → service → database), add diagnostic logging at EACH component boundary before proposing fixes:
+  ```
+  For EACH component boundary:
+    - Log what data enters the component
+    - Log what data exits the component
+    - Verify environment/config propagation
+    - Check state at each layer
+
+  Run once to gather evidence showing WHERE it breaks
+  THEN analyze evidence to identify the failing component
+  THEN investigate that specific component
+  ```
+  Example (multi-layer system):
+  ```bash
+  # Layer 1: Workflow
+  echo "=== Secrets available in workflow: ==="
+  echo "IDENTITY: ${IDENTITY:+SET}${IDENTITY:-UNSET}"
+
+  # Layer 2: Build script
+  echo "=== Env vars in build script: ==="
+  env | grep IDENTITY || echo "IDENTITY not in environment"
+
+  # Layer 3: Signing script
+  echo "=== Keychain state: ==="
+  security list-keychains
+  security find-identity -v
+
+  # Layer 4: Actual signing
+  codesign --sign "$IDENTITY" --verbose=4 "$APP"
+  ```
+  This reveals which layer fails (e.g., secrets → workflow OK, workflow → build FAILS).
 - Trace data/control flow backward from the error to its source.
 
 ### Phase 2: Compare Patterns

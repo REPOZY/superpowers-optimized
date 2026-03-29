@@ -12,6 +12,10 @@ description: >
 
 # Using Superpowers
 
+<SUBAGENT-STOP>
+If you were dispatched as a subagent to execute a specific task, skip this skill entirely.
+</SUBAGENT-STOP>
+
 ## Trigger Conditions
 
 This skill MUST be invoked when any of the following occur:
@@ -111,6 +115,27 @@ All of these must be true:
 Anything that doesn't qualify as micro or lightweight.
 
 **Action:** Follow the Routing Guide below for the full skill pipeline.
+
+## EnterPlanMode Intercept
+
+If Claude is about to enter plan mode (`EnterPlanMode`), check whether brainstorming has been completed for the current task:
+
+- **No brainstorming done for this task**: invoke `brainstorming` first — plan mode without a validated design leads to plans built on unexamined assumptions.
+- **Brainstorming already completed and design approved**: proceed to plan mode / `writing-plans`.
+
+```dot
+digraph planmode_intercept {
+    "About to EnterPlanMode?" [shape=doublecircle];
+    "Already brainstormed?" [shape=diamond];
+    "Invoke brainstorming skill" [shape=box];
+    "Proceed to writing-plans" [shape=box];
+
+    "About to EnterPlanMode?" -> "Already brainstormed?";
+    "Already brainstormed?" -> "Invoke brainstorming skill" [label="no"];
+    "Already brainstormed?" -> "Proceed to writing-plans" [label="yes"];
+    "Invoke brainstorming skill" -> "Proceed to writing-plans";
+}
+```
 
 ## Routing Guide
 
