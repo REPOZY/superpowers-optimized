@@ -86,6 +86,10 @@ Session starts
 │  session-start →                                          │
 │    Injects using-superpowers routing instructions         │
 │    Injects project-map.md content (if exists)             │
+│    Injects session-log.md last 2 [saved] entries          │
+│    Injects state.md in full (if exists)                   │
+│    Injects known-issues.md in full (if exists)            │
+│    Injects context-snapshot.json changed files+commits    │
 │    Checks for available plugin update                     │
 └───────────────────────────────────────────────────────────┘
         │
@@ -105,9 +109,9 @@ User sends a prompt
 ┌─ using-superpowers (always loaded at SessionStart) ───────┐
 │  Entry sequence:                                          │
 │    1. token-efficiency (always)                           │
-│    2. Read state.md if resuming prior work                │
-│    3. Read known-issues.md if exists                      │
-│    4. Read project-map.md if exists → check git staleness │
+│    2. state.md already in context (auto-injected)         │
+│    3. known-issues.md already in context (auto-injected)  │
+│    4. project-map.md already in context → check staleness │
 │       (only re-read files that changed since last map)    │
 │                                                           │
 │  Classify: micro / lightweight / full                     │
@@ -287,21 +291,25 @@ Automatically added to `.gitignore` — it's a tooling artifact, not project cod
 
 ### session-log.md — What happened
 
-An optional, manually-maintained record of decisions, rejected approaches, and key facts. Write an entry when something is worth preserving — an architectural choice, a constraint discovered the hard way, an approach that was tried and failed. Skip it when there's nothing durable to record.
+A growing record of decisions, rejected approaches, and key facts. Two entry types are written automatically:
 
-| Written by | Contains |
-|---|---|
-| You, via `context-management` | Goal, decisions, rejected approaches, key facts |
+| Written by | Entry type | Contains |
+|---|---|---|
+| `stop-reminders.js` (Stop hook) | `[auto]` | Files edited this session — mechanical breadcrumb |
+| AI via `context-management` | `[saved]` | Goal, decisions, rejected approaches, key facts |
+
+The Stop hook prompts for a `[saved]` entry whenever the session modified core skill or hook files — the sessions where the "why" matters most. The last 2 `[saved]` entries are injected into session context automatically at start, so future sessions arrive knowing what was tried, decided, and why.
 
 ```markdown
-## 2026-03-15 10:04 [saved]
-Goal: Add cross-session memory to the plugin
+## 2026-03-30 [saved]
+Goal: Overhaul cross-session memory injection
 Decisions:
-- project-map.md injected by the session-start hook directly — makes it unconditional, not dependent on Claude following instructions
-- session-log.md is manual-only; auto-entries were low-signal noise, all derivable from git log
-Approaches rejected: Auto-appending a [auto] entry on every Stop event — produced 30 near-identical entries per session with no decisions or reasoning, just file lists
-Key facts: hooks.json requires \" not ' around ${CLAUDE_PLUGIN_ROOT} — single quotes break variable expansion on Linux
-Open: Monitor whether [saved] entries get used in practice; if not, consider folding key facts into project-map.md Critical Constraints instead
+- All memory stack files now injected at session start by hook — unconditional, no AI compliance required
+- stop-reminders.js writes [auto] entries to session-log.md on Stop
+- known-issues.md added to auto-gitignore list in track-edits.js
+Approaches rejected: Moving memory files to a subfolder — high refactor cost, low benefit; root placement is standard tooling convention
+Key facts: Agent results are always compressed on return — never use agents as content relays; WebFetch summarizes, use curl -sf for verbatim URL content
+Open: None
 ```
 
 Write an entry by invoking `context-management`. Grep-searchable. The AI surfaces relevant history at the start of any task that touches the same area.
@@ -359,7 +367,7 @@ With this stack, sessions start with full context and zero re-discovery overhead
 ### Core Workflow
 - **using-superpowers** — Mandatory workflow router with 3-tier complexity classification (micro/lightweight/full) and instruction priority hierarchy
 - **token-efficiency** — Always-on: concise responses, parallel tool batching, exploration tracking, no redundant work
-- **context-management** — Four-file memory stack: `project-map.md` (structure + key files + critical constraints, git-hash staleness detection), `session-log.md` (accumulated decision history, auto-appended every session), `state.md` (ephemeral current-task snapshot), `known-issues.md` (error→solution map)
+- **context-management** — Four-file memory stack: `project-map.md` (structure + key files + critical constraints, git-hash staleness detection), `session-log.md` (`[auto]` entries written by Stop hook + `[saved]` decision entries written on invocation, last 2 `[saved]` injected every session start), `state.md` (ephemeral current-task snapshot, injected at session start if present), `known-issues.md` (error→solution map, injected at session start if present)
 
 - **premise-check** — Validates whether proposed work should exist before investing in it; triggers reassessment when new evidence changes the original motivation
 
@@ -499,6 +507,7 @@ Or manually: `git pull` in your local clone of the repository.
 
 You will be **automatically notified** when a new version is available in Claude/Cursor.
 OpenCode and Codex perform a best-effort startup update check once per 24 hours.
+
 Auto-update is non-destructive: it only applies when the plugin clone is clean and can fast-forward to `origin/main` (`git merge --ff-only origin/main`).
 If the repo is dirty, ahead, or diverged, auto-update is skipped and manual `git pull` remains the fallback.
 For Codex, SessionStart update notices require `codex_hooks = true`, `~/.codex/hooks.json` setup, and a non-Windows environment.
