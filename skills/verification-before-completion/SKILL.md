@@ -42,6 +42,26 @@ Before any completion claim:
 - Bugfix: reproduction case now passes
 - Requirements: explicit checklist against plan
 
+## Regression Test Verification (Red-Green Cycle)
+
+When verifying a bugfix with a regression test, the test must prove it catches the bug:
+
+```
+✅ Write test → Run (PASS) → Revert fix → Run (MUST FAIL) → Restore fix → Run (PASS)
+❌ "I've written a regression test" (without red-green verification)
+```
+
+A regression test that has never been seen failing proves nothing — it might pass for the wrong reason.
+
+## Agent Delegation Verification
+
+When a subagent reports success, verify independently:
+
+```
+✅ Agent reports success → Check VCS diff → Verify changes match task → Report actual state
+❌ Trust agent report at face value
+```
+
 ## Rule
 
 If evidence is missing, report current status as unverified and run the command.

@@ -24,6 +24,14 @@ Core operating standard for all sessions. Apply permanently from activation.
 4. Use Glob instead of Bash `ls` or `find`
 5. Do not verify existence of a path already confirmed earlier in the session
 
+## Agent & External Content Rules
+
+1. **Agent results are compressed.** When a subagent returns to the parent session, its full context (all file reads, web fetches, reasoning) is reduced to a summary. Never dispatch agents to "fetch and return" raw content — the content lives in the agent's context and only a compressed summary survives the return. This applies to local file reads AND web-fetched content.
+2. **WebFetch returns AI-generated summaries, not raw text.** For verbatim content from URLs (e.g., GitHub raw files, config files, source code), use `curl -sf <url>` via Bash instead.
+3. **Use agents for conclusions, not data relay.** Good: "Analyze the test failures in X and recommend fixes." Bad: "Fetch files A, B, C and return their contents." If you need raw content in your context, fetch it yourself with direct tool calls.
+4. **For local files: Read directly.** Do not dispatch an agent to read project files and report back. You lose the actual content and waste tokens on the round trip. Use the Read tool.
+5. **project-map.md is orientation, not understanding.** The map tells you what exists and where — directory purposes, key file roles, constraints. It does NOT contain the logic inside each file. When you need to understand a file's actual implementation (for modification, comparison, or debugging), read it directly. The map saves you from re-discovering project *structure*; it does not replace reading the files you need to work with.
+
 ## Exploration Tracking
 
 Maintain a mental index of repository exploration performed in this session. Before every Read, Grep, or Glob call, check this index and skip the call if the result is already known and the file has not been modified since.

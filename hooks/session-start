@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # Determine plugin root directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 # ── Update check ──────────────────────────────────────────────────────────────
@@ -275,6 +275,66 @@ ${project_map_raw}"
     fi
 fi
 
+# ── session-log.md injection ──────────────────────────────────────────────────
+# Inject the last 2 [saved] entries from session-log.md so the AI has decision
+# history from day 1 without needing to grep it manually.
+# [auto] entries (just file lists) are skipped — only [saved] entries carry rationale.
+session_log_content=""
+if [ -f "session-log.md" ]; then
+    saved_raw=$(awk '
+        /^## .* \[saved\]/ { found=1; block="" }
+        found { block = block "\n" $0 }
+        /^## / && !/\[saved\]/ && found && block != "" { saved_entries[++n] = block; found=0; block="" }
+        END { if (found && block != "") saved_entries[++n] = block
+              # Print last 2 saved entries
+              start = (n > 2) ? n-1 : 1
+              for (i = start; i <= n; i++) print saved_entries[i] }
+    ' "session-log.md" 2>/dev/null || echo "")
+    if [ -n "$saved_raw" ]; then
+        session_log_content="\n\n<session-log>\n*(Last saved decisions from session-log.md — full history searchable at session-log.md)*\n${saved_raw}\n</session-log>"
+    fi
+fi
+
+# ── state.md injection ────────────────────────────────────────────────────────
+# If state.md exists, inject it in full — it means the last session ended with
+# work in progress and the AI must resume from it. Capped at 100 lines by design.
+state_content=""
+if [ -f "state.md" ]; then
+    state_raw=$(cat "state.md" 2>/dev/null || echo "")
+    if [ -n "$state_raw" ]; then
+        state_content="\n\n<state>\n**ACTIVE TASK STATE — resume from here, do not start fresh:**\n${state_raw}\n</state>"
+    fi
+fi
+
+# ── known-issues.md injection ─────────────────────────────────────────────────
+# If known-issues.md exists, inject it so the AI never re-debugs a known error.
+known_issues_content=""
+if [ -f "known-issues.md" ]; then
+    known_raw=$(cat "known-issues.md" 2>/dev/null || echo "")
+    if [ -n "$known_raw" ]; then
+        known_issues_content="\n\n<known-issues>\n${known_raw}\n</known-issues>"
+    fi
+fi
+
+# ── context-snapshot.json injection ───────────────────────────────────────────
+# Inject changed files + recent commits from context-snapshot.json so the AI
+# knows what changed since last session without reading the file manually.
+# Skip blast radius (too verbose) — just the actionable signals.
+context_snapshot_content=""
+if [ -f "context-snapshot.json" ]; then
+    changed=$(node -e "
+        try {
+            const s = JSON.parse(require('fs').readFileSync('context-snapshot.json','utf8'));
+            const files = (s.changed_files||[]).join(', ');
+            const commits = (s.recent_commits||[]).slice(0,3).join('\n  ');
+            if (files) process.stdout.write('Changed since last commit: ' + files + '\nRecent commits:\n  ' + commits);
+        } catch(e) {}
+    " 2>/dev/null || echo "")
+    if [ -n "$changed" ]; then
+        context_snapshot_content="\n\n<context-snapshot>\n${changed}\n</context-snapshot>"
+    fi
+fi
+
 # ── Load using-superpowers skill body ─────────────────────────────────────────
 using_superpowers_content=$(awk '
 NR == 1 && $0 == "---" { in_frontmatter = 1; next }
@@ -298,18 +358,27 @@ warning_escaped=$(escape_for_json "$warning_message")
 update_escaped=$(escape_for_json "$update_notice")
 git_escaped=$(escape_for_json "$git_notice")
 project_map_escaped=$(escape_for_json "$project_map_content")
+session_log_escaped=$(escape_for_json "$session_log_content")
+state_escaped=$(escape_for_json "$state_content")
+known_issues_escaped=$(escape_for_json "$known_issues_content")
+context_snapshot_escaped=$(escape_for_json "$context_snapshot_content")
 
-session_context="<EXTREMELY_IMPORTANT>\nYou have superpowers-optimized.\n\n**The \`superpowers-optimized:using-superpowers\` guidance is loaded below. For all other skills, use the \`Skill\` tool.**\n\n${using_superpowers_escaped}\n\n${warning_escaped}${update_escaped}${git_escaped}\n</EXTREMELY_IMPORTANT>${project_map_escaped}"
+session_context="<EXTREMELY_IMPORTANT>\nYou have superpowers-optimized.\n\n**The \`superpowers-optimized:using-superpowers\` guidance is loaded below. For all other skills, use the \`Skill\` tool.**\n\n**MANDATORY FIRST ACTIONS — before ANY tool calls beyond reading files:**\n1. Silently activate token-efficiency (its rules apply immediately)\n2. Classify the task complexity (micro/lightweight/full) per the Entry Sequence below\n3. If the user names a specific skill (e.g. use brainstorming, use context management), that IS a Skill tool invocation — call \`Skill\` with that skill name. Do NOT re-implement the skill's purpose with ad-hoc agents or manual steps.\n\n${using_superpowers_escaped}\n\n${warning_escaped}${update_escaped}${git_escaped}\n</EXTREMELY_IMPORTANT>${project_map_escaped}${session_log_escaped}${state_escaped}${known_issues_escaped}${context_snapshot_escaped}"
 
 # ── Output ─────────────────────────────────────────────────────────────────────
-cat <<EOF
-{
-  "additional_context": "${session_context}",
-  "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "additionalContext": "${session_context}"
-  }
-}
-EOF
+# Uses printf instead of heredoc (cat <<EOF) to work around a bash 5.3+
+# bug where heredoc variable expansion hangs when content exceeds ~512 bytes.
+# Platform detection: emit only the field consumed by the current platform
+# to avoid double context injection.
+if [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
+  # Cursor sets CURSOR_PLUGIN_ROOT (may also set CLAUDE_PLUGIN_ROOT) — emit additional_context only
+  printf '{\n  "additional_context": "%s"\n}\n' "$session_context"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  # Claude Code sets CLAUDE_PLUGIN_ROOT — emit hookSpecificOutput only
+  printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
+else
+  # Other platforms — emit additional_context as fallback
+  printf '{\n  "additional_context": "%s"\n}\n' "$session_context"
+fi
 
 exit 0
