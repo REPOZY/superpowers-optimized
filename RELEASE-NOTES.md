@@ -1,5 +1,35 @@
 # Superpowers Optimized Release Notes
 
+## v6.2.0 (2026-03-30)
+
+Cross-session memory overhaul: the full memory stack is now injected automatically at session start, stop-reminders actually writes to session-log.md, and agents can no longer waste tokens as content relays.
+
+### New Features
+
+**Full memory stack injected at session start** — `session-log.md` (last 2 `[saved]` decisions), `state.md` (active task snapshot), `known-issues.md` (error map), and `context-snapshot.json` (changed files + recent commits) are now all injected into session context by the session-start hook — unconditionally, without requiring the AI to remember to read them. Previously only `project-map.md` was injected; the rest depended entirely on AI compliance with the entry sequence.
+
+**Decision-log reminder in stop-reminders** — When the session modified SKILL.md files, hooks, or plugin config, the Stop hook now surfaces an explicit prompt to invoke `context-management` before ending the session. These are the sessions where the "why" matters most and is most likely to be lost.
+
+### Changes
+
+**Agent & External Content Rules added to token-efficiency** — Five new rules cover the behavioral characteristics of the Agent tool and WebFetch that the AI previously had to discover by failure: agent results are always compressed on return (never use agents as content relays), WebFetch returns AI summaries not raw text (use `curl -sf` for verbatim URL content), and local files should always be Read directly. These rules are always-on from session start.
+
+**"When the User Names a Specific Skill" section added to using-superpowers** — Clarifies that phrases like "use brainstorming" or "use context management" are Skill tool invocations, not conceptual goals to achieve ad-hoc. This was the root cause of entry sequence bypass in analyzed session transcripts: the AI improvised with agents instead of calling the Skill tool.
+
+**Mandatory first actions surfaced at injection point** — The session-start hook now prepends three concrete steps before the full using-superpowers body: activate token-efficiency, classify complexity, and invoke named skills via the Skill tool. Previously these were buried in the skill text where they competed with everything else for attention.
+
+**Content-relay anti-pattern added to dispatching-parallel-agents** — "The task is content relay" is now an explicit entry in the "Do not use when" list, with a one-line explanation: agent results are compressed, raw content will be lost.
+
+**using-superpowers step 4 extended** — Now requires a `[saved]` entry at the end of any session where significant decisions were made, not just sessions with ongoing incomplete work.
+
+**`known-issues.md` added to auto-gitignore list** — `track-edits.js` now includes `known-issues.md` in the AI_ARTIFACTS list so it is automatically added to `.gitignore` on first write.
+
+### Fixes
+
+**stop-reminders.js never wrote to session-log.md** — The hook was documented as "auto-writes session-log.md `[auto]` entry" but only wrote to a private temp file at `~/.claude/hooks-logs/edit-log.txt`. The `[auto]` entries visible in prior session logs were written manually by the AI. Fixed: the hook now writes a proper `[auto]` entry to `session-log.md` in the project root on session stop, gated by the existing 2-minute guard to prevent duplicates.
+
+**MANDATORY FIRST ACTIONS had invalid JSON** — The preamble added in the previous session contained literal unescaped double-quotes (`"use brainstorming"`) inside the bash string that produced the hook's JSON output. This caused `JSON.parse` failures on every session start for any platform that validated the JSON. Fixed by removing the quotes from the example text.
+
 ## v6.1.0 (2026-03-28)
 
 Skill quality pass: two new automated review gates, richer subagent prompts, sharper stop conditions, and a fix to the project-map staleness loop.
@@ -162,13 +192,13 @@ Frontend design intelligence and documentation improvements. The frontend skill 
 
 **frontend-design skill (complete rewrite)** — The former `frontend-craftsmanship` skill has been renamed to `frontend-design` and rewritten from scratch. It now includes a 4-step design system generation framework that forces deliberate style, color, typography, and effects decisions before writing code. Adds a 25-style reference catalog (Minimalism through Cyberpunk), a 30-category industry design reference table mapping product types to recommended design directions, 8 common page structure patterns (dashboard, landing page, admin panel, etc.), 5-state UI state management (loading, error, empty, success, partial), frontend-backend integration patterns (API loading, optimistic updates, error boundaries, auth flows), dark mode implementation guidance, micro-copy and UX writing standards, and 10 priority quality standard categories covering accessibility, touch targets, performance, animation, forms, navigation, and charts. 353 lines, single file, zero dependencies.
 
-**Red team pipeline documentation** — New `docs/red-team-pipeline.md` explains the end-to-end flow from code review through red team dispatch to auto-fix pipeline, including when each component fires, what the red team produces, how auto-fix processes findings, and merge blocking rules.
+**Red team pipeline documentation** — New `docs/architecture/red-team-pipeline.md` explains the end-to-end flow from code review through red team dispatch to auto-fix pipeline, including when each component fires, what the red team produces, how auto-fix processes findings, and merge blocking rules.
 
-**Frontend design documentation** — New `docs/frontend-design.md` explains the skill's 7 capabilities with examples, what users can expect when prompting for frontend work, and how activation integrates with other Superpowers skills.
+**Frontend design documentation** — New `docs/architecture/frontend-design.md` explains the skill's 7 capabilities with examples, what users can expect when prompting for frontend work, and how activation integrates with other Superpowers skills.
 
 ### Changes
 
-**Testing documentation updated** — `docs/testing.md` (now `docs/testing-structure.md`) was rewritten to reflect the actual 5-directory test structure: claude-code, skill-triggering, explicit-skill-requests, subagent-driven-dev, and opencode. Added the subagent hook scope test, fixed stale plugin name references, and added a quick reference section with copy-paste commands for every test suite.
+**Testing documentation updated** — `docs/testing.md` (now `docs/architecture/testing-structure.md`) was rewritten to reflect the actual 5-directory test structure: claude-code, skill-triggering, explicit-skill-requests, subagent-driven-dev, and opencode. Added the subagent hook scope test, fixed stale plugin name references, and added a quick reference section with copy-paste commands for every test suite.
 
 **AGENTS.minimal.md updated** — Added missing `premise-check` skill reference.
 
@@ -474,7 +504,7 @@ Added `memory: user` to `agents/code-reviewer.md`. The code-reviewer agent now r
 
 ## v4.4.0 (2026-03-06)
 
-This release closes the gap between what the skills document and what agents actually do wrong. Improvements are sourced from a systematic AI self-review of the plugin combined with the previously-documented real-session failure patterns from `docs/plans/2025-11-28-skills-improvements-from-user-feedback.md`.
+This release closes the gap between what the skills document and what agents actually do wrong. Improvements are sourced from a systematic AI self-review of the plugin combined with the previously-documented real-session failure patterns from `docs/superpowers-optimized/specs/2025-11-28-skills-improvements-from-user-feedback.md`.
 
 ### Added
 
@@ -869,7 +899,7 @@ Description changed to imperative: "You MUST use this before any creative work�
   - Project-local skills support (`.opencode/skills/`)
   - Shared core module (`lib/skills-core.js`) for code reuse with Codex
   - Automated test suite with proper isolation (`tests/opencode/`)
-  - Platform-specific documentation (`docs/README.opencode.md`, `docs/README.codex.md`)
+  - Platform-specific documentation (`docs/platforms/opencode.md`, `docs/platforms/codex.md`)
 
 ### Changed
 
@@ -1005,7 +1035,7 @@ These changes address observed agent behavior where they rationalize around skil
 **Design documentation in brainstorming workflow**
 
 - Added Phase 4: Design Documentation to brainstorming skill
-- Design documents now written to `docs/plans/YYYY-MM-DD-<topic>-design.md` before implementation
+- Design documents now written to `docs/superpowers-optimized/specs/YYYY-MM-DD-<topic>-design.md` before implementation
 - Restores functionality from original brainstorming command that was lost during skill conversion
 - Documents written before worktree setup and implementation planning
 - Tested with subagent to verify compliance under time pressure
@@ -1026,7 +1056,7 @@ These changes address observed agent behavior where they rationalize around skil
 
 - Design documents use `-design.md` suffix to prevent filename collisions
 - Implementation plans continue using existing `YYYY-MM-DD-<feature-name>.md` format
-- Both stored in `docs/plans/` directory with clear naming distinction
+- Design specs stored in `docs/superpowers-optimized/specs/`, implementation plans in `docs/superpowers-optimized/plans/`
 
 ## v3.1.1 (2025-10-17)
 

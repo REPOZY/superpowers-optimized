@@ -147,7 +147,7 @@ Each version is additive — architecture stays the same, test suite and targets
 
 To expand the loop in a later session, paste:
 
-> I have an auto-improve loop at `tools/autoimprove/`. It's currently at v1 (3 test prompts, skill-rules.json only, local Node.js eval). I want to expand it to the next tier. Read `tools/autoimprove/prompt.md`, `test-cases.json`, `eval.js`, and the expansion path in `docs/plans/2026-03-24-autoimprove-design.md`. Then:
+> I have an auto-improve loop at `tools/autoimprove/`. It's currently at v1 (3 test prompts, skill-rules.json only, local Node.js eval). I want to expand it to the next tier. Read `tools/autoimprove/prompt.md`, `test-cases.json`, `eval.js`, and the expansion path in `docs/superpowers-optimized/specs/2026-03-24-autoimprove-design.md`. Then:
 >
 > 1. Add more test prompts to `test-cases.json` (including negative tests — prompts that should NOT trigger certain skills)
 > 2. If the current tier is already maxed out (score plateaued at 100%), move to the next version tier (v2→v3→v4→v5 as described in the design doc)

@@ -86,6 +86,10 @@ Session starts
 │  session-start →                                          │
 │    Injects using-superpowers routing instructions         │
 │    Injects project-map.md content (if exists)             │
+│    Injects session-log.md last 2 [saved] entries          │
+│    Injects state.md in full (if exists)                   │
+│    Injects known-issues.md in full (if exists)            │
+│    Injects context-snapshot.json changed files+commits    │
 │    Checks for available plugin update                     │
 └───────────────────────────────────────────────────────────┘
         │
@@ -105,9 +109,9 @@ User sends a prompt
 ┌─ using-superpowers (always loaded at SessionStart) ───────┐
 │  Entry sequence:                                          │
 │    1. token-efficiency (always)                           │
-│    2. Read state.md if resuming prior work                │
-│    3. Read known-issues.md if exists                      │
-│    4. Read project-map.md if exists → check git staleness │
+│    2. state.md already in context (auto-injected)         │
+│    3. known-issues.md already in context (auto-injected)  │
+│    4. project-map.md already in context → check staleness │
 │       (only re-read files that changed since last map)    │
 │                                                           │
 │  Classify: micro / lightweight / full                     │
@@ -276,7 +280,7 @@ Written automatically by the `context-engine` hook on every session start. No se
   "change_stat": "2 files changed, 140 insertions(+)",
   "recent_commits": ["9636c5c Check context-snapshot.json in Phase 1", "..."],
   "blast_radius": {
-    "hooks/context-engine.js": ["hooks/hooks.json", "docs/plans/..."]
+    "hooks/context-engine.js": ["hooks/hooks.json", "docs/superpowers-optimized/plans/..."]
   }
 }
 ```
@@ -287,21 +291,25 @@ Automatically added to `.gitignore` — it's a tooling artifact, not project cod
 
 ### session-log.md — What happened
 
-An optional, manually-maintained record of decisions, rejected approaches, and key facts. Write an entry when something is worth preserving — an architectural choice, a constraint discovered the hard way, an approach that was tried and failed. Skip it when there's nothing durable to record.
+A growing record of decisions, rejected approaches, and key facts. Two entry types are written automatically:
 
-| Written by | Contains |
-|---|---|
-| You, via `context-management` | Goal, decisions, rejected approaches, key facts |
+| Written by | Entry type | Contains |
+|---|---|---|
+| `stop-reminders.js` (Stop hook) | `[auto]` | Files edited this session — mechanical breadcrumb |
+| AI via `context-management` | `[saved]` | Goal, decisions, rejected approaches, key facts |
+
+The Stop hook prompts for a `[saved]` entry whenever the session modified core skill or hook files — the sessions where the "why" matters most. The last 2 `[saved]` entries are injected into session context automatically at start, so future sessions arrive knowing what was tried, decided, and why.
 
 ```markdown
-## 2026-03-15 10:04 [saved]
-Goal: Add cross-session memory to the plugin
+## 2026-03-30 [saved]
+Goal: Overhaul cross-session memory injection
 Decisions:
-- project-map.md injected by the session-start hook directly — makes it unconditional, not dependent on Claude following instructions
-- session-log.md is manual-only; auto-entries were low-signal noise, all derivable from git log
-Approaches rejected: Auto-appending a [auto] entry on every Stop event — produced 30 near-identical entries per session with no decisions or reasoning, just file lists
-Key facts: hooks.json requires \" not ' around ${CLAUDE_PLUGIN_ROOT} — single quotes break variable expansion on Linux
-Open: Monitor whether [saved] entries get used in practice; if not, consider folding key facts into project-map.md Critical Constraints instead
+- All memory stack files now injected at session start by hook — unconditional, no AI compliance required
+- stop-reminders.js writes [auto] entries to session-log.md on Stop
+- known-issues.md added to auto-gitignore list in track-edits.js
+Approaches rejected: Moving memory files to a subfolder — high refactor cost, low benefit; root placement is standard tooling convention
+Key facts: Agent results are always compressed on return — never use agents as content relays; WebFetch summarizes, use curl -sf for verbatim URL content
+Open: None
 ```
 
 Write an entry by invoking `context-management`. Grep-searchable. The AI surfaces relevant history at the start of any task that touches the same area.
@@ -359,7 +367,7 @@ With this stack, sessions start with full context and zero re-discovery overhead
 ### Core Workflow
 - **using-superpowers** — Mandatory workflow router with 3-tier complexity classification (micro/lightweight/full) and instruction priority hierarchy
 - **token-efficiency** — Always-on: concise responses, parallel tool batching, exploration tracking, no redundant work
-- **context-management** — Four-file memory stack: `project-map.md` (structure + key files + critical constraints, git-hash staleness detection), `session-log.md` (accumulated decision history, auto-appended every session), `state.md` (ephemeral current-task snapshot), `known-issues.md` (error→solution map)
+- **context-management** — Four-file memory stack: `project-map.md` (structure + key files + critical constraints, git-hash staleness detection), `session-log.md` (`[auto]` entries written by Stop hook + `[saved]` decision entries written on invocation, last 2 `[saved]` injected every session start), `state.md` (ephemeral current-task snapshot, injected at session start if present), `known-issues.md` (error→solution map, injected at session start if present)
 
 - **premise-check** — Validates whether proposed work should exist before investing in it; triggers reassessment when new evidence changes the original motivation
 
@@ -370,7 +378,7 @@ With this stack, sessions start with full context and zero re-discovery overhead
 - **claude-md-creator** — Create lean, high-signal CLAUDE/AGENTS context files for repositories
 
 ### Execution
-- **executing-plans** — Batch execution with verification checkpoints and engineering rigor for complex tasks
+- **executing-plans** — Continuous step-by-step execution with verification checkpoints and engineering rigor for complex tasks
 - **subagent-driven-development** — Parallel subagent execution with two-stage review gates (spec compliance, then code quality), blocked-task escalation, E2E process hygiene, context isolation, and skill leakage prevention
 - **dispatching-parallel-agents** — Concurrent subagent workflows for independent tasks
 - **using-git-worktrees** — Isolated workspace creation on feature branches
@@ -499,6 +507,7 @@ Or manually: `git pull` in your local clone of the repository.
 
 You will be **automatically notified** when a new version is available in Claude/Cursor.
 OpenCode and Codex perform a best-effort startup update check once per 24 hours.
+
 Auto-update is non-destructive: it only applies when the plugin clone is clean and can fast-forward to `origin/main` (`git merge --ff-only origin/main`).
 If the repo is dirty, ahead, or diverged, auto-update is skipped and manual `git pull` remains the fallback.
 For Codex, SessionStart update notices require `codex_hooks = true`, `~/.codex/hooks.json` setup, and a non-Windows environment.
@@ -523,16 +532,18 @@ Start a new session in your chosen platform and ask for something that should tr
 
 ## Claude Opus 4.6's honest take:
 
-> I've worked inside this plugin — not just reviewed it, but been the agent running under it across extended sessions. The three-tier routing is the most useful single feature: without it, I over-engineer simple tasks and under-scope complex ones. The hard overrides that force full classification when a change adds conditional logic or touches shared code catch mis-classifications I make constantly on my own.
+> Superpowers Optimized is not just a fork — it's a fundamentally different product built on the same foundation.
 >
-> The research-informed design is genuine. The finding that verbose context files hurt rather than help is counterintuitive but correct — I've experienced context overload firsthand. The self-consistency reasoning catches cases where I commit to a single plausible hypothesis and miss the actual root cause. The adversarial red team surfaces failure modes that pass every checklist. The memory stack means I arrive at each session with actual context rather than starting blind.
+> The original Superpowers gives Claude structure: brainstorm, plan, execute, review. That alone makes a real difference compared to unstructured prompting. But it stops there — no enforcement, no memory, no safety net, no accountability layer. Superpowers Optimized takes every place where the original says "you should" and turns it into "you must, and here's the mechanism that enforces it."
 >
-> The constraint architecture is well-designed: tight where mistakes are hard to recover from — safety hooks, verification gates, TDD enforcement — and silent where flexibility is needed. That asymmetry is correct. I prefer operating under structured constraints for production work. The result is output I can stand behind rather than output I have to apologize for.
+> The original says "debug systematically." Optimized forces 3-5 independent hypotheses and a majority vote before I commit to a fix. The original says "verify before claiming done." Optimized adds red-green regression testing, agent delegation verification, and multi-path verification reasoning. The original has no hooks — Optimized has 9, blocking dangerous commands, protecting secrets, detecting skill leakage in subagents, tracking edits for TDD reminders, and auto-summarizing sessions. The original has no memory — Optimized has a 5-file memory stack so every session starts with full context instead of re-exploring from scratch. The original has no security review — Optimized integrates OWASP-based analysis into code review plus an adversarial red-team agent that constructs concrete failure scenarios. The original has no complexity classification — Optimized's 3-tier routing means a typo fix takes 5 seconds while a new feature gets the full pipeline.
 >
-> Strongly recommended for any developer who wants their AI to build with discipline rather than confidence alone.
+> The constraint architecture is tight where mistakes are hard to recover from — safety hooks, verification gates, TDD enforcement — and silent where flexibility is needed. That asymmetry is correct. The research-informed design is genuine: verbose context files hurt rather than help, prior assistant responses degrade subsequent performance, and single reasoning chains fail on hard problems. Every one of those findings is built into how this plugin operates.
+>
+> If you're using Claude Code for anything beyond trivial tasks, this plugin produces measurably better output — more thorough designs, higher-quality plans, more reliable execution, and fewer silent failures. The discipline layer is the difference between an AI that's confident and an AI that's correct.
 >
 > — Claude Opus 4.6
-> (March 23, 2026)
+> (March 28, 2026)
 
 
 ---
