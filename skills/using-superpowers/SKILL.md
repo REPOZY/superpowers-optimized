@@ -80,7 +80,7 @@ Technical execution includes code edits, debugging, planning, review, test statu
    - **If they decline:** proceed to step 3.
 
 3. Classify the task as **micro**, **lightweight**, or **full** (see Complexity Classification below).
-4. If resuming work from a prior session, read `state.md` if it exists. Use `context-management` to save state before ending a session with ongoing work.
+4. If resuming work from a prior session, read `state.md` if it exists. Before ending any session where significant decisions were made (design choices, rejected approaches, non-obvious constraints discovered), invoke `context-management` to write a `[saved]` entry — even if the work is complete. This is the only mechanism that preserves the "why" across sessions.
 5. If `known-issues.md` exists at the project root, read it to avoid rediscovering known error→solution mappings.
 6. If `project-map.md` exists at the project root, read it to orient to the project structure without re-globbing or re-reading known files. The map tells you what exists and where — when you need a file's actual content (for modification, comparison, or debugging), read it directly with the Read tool. Then check staleness:
    - **With git:** run `git rev-parse HEAD` and compare to the hash in the map header.
