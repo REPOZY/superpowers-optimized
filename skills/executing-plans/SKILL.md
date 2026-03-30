@@ -17,15 +17,46 @@ Announce: `I'm using the executing-plans skill to implement this plan.`
 
 ## Process
 
+```dot
+digraph executing_plans {
+    "Load and review plan" [shape=box];
+    "Concerns?" [shape=diamond];
+    "Raise with user" [shape=box];
+    "Set up worktree" [shape=box];
+    "Execute next task" [shape=box];
+    "Run verification" [shape=box];
+    "More tasks?" [shape=diamond];
+    "Invoke finishing-a-development-branch" [shape=doublecircle];
+
+    "Load and review plan" -> "Concerns?";
+    "Concerns?" -> "Raise with user" [label="yes"];
+    "Raise with user" -> "Load and review plan" [label="plan updated"];
+    "Concerns?" -> "Set up worktree" [label="no"];
+    "Set up worktree" -> "Execute next task";
+    "Execute next task" -> "Run verification";
+    "Run verification" -> "More tasks?";
+    "More tasks?" -> "Execute next task" [label="yes"];
+    "More tasks?" -> "Invoke finishing-a-development-branch" [label="no"];
+}
+```
+
+### Step 1: Load and Review Plan
 1. Read the plan completely.
-2. Ensure isolated workspace is ready (`using-git-worktrees`).
-3. Identify blockers or ambiguities; ask before starting if any exist.
-4. Create task tracking entries.
-5. Execute the next batch (default: 3 tasks).
-6. Run required verification commands for each task.
-7. Report completed work and evidence.
-8. Wait for feedback, then continue with next batch.
-9. For tasks involving UI/UX or frontend implementation, apply guidance from `frontend-design` to ensure production-grade, accessible interfaces.
+2. Review critically — identify any questions or concerns.
+3. If concerns: raise them with the user before starting.
+4. If no concerns: create task tracking and proceed.
+
+### Step 2: Set Up Workspace
+Ensure isolated workspace is ready (`using-git-worktrees`).
+
+### Step 3: Execute Tasks
+For each task:
+1. Follow each step exactly (plan has bite-sized steps with checkboxes).
+2. Run verifications as specified.
+3. Mark task complete.
+4. For tasks involving UI/UX or frontend implementation, apply guidance from `frontend-design`.
+
+**Note:** Superpowers works significantly better with subagent support. If subagents are available, use `subagent-driven-development` instead — the quality of work will be higher with fresh-context-per-task and two-stage review gates.
 
 ## Engineering Rigor for Complex Tasks
 
@@ -39,8 +70,8 @@ When a task is architectural, high-risk, or touches cross-module boundaries:
 ## Execution Rules
 
 - Do not skip plan steps unless user approves deviation.
-- Never start implementation on main/master branch without explicit user consent — ensure isolated workspace is ready first (step 2).
-- Keep edits scoped to the current task batch.
+- Never start implementation on main/master branch without explicit user consent — ensure isolated workspace is ready first.
+- Keep edits scoped to the current task.
 - Do not claim completion without fresh command output.
 
 **Stop immediately and ask for clarification — never guess — when:**
@@ -51,13 +82,13 @@ When a task is architectural, high-risk, or touches cross-module boundaries:
 
 ## Context Hygiene
 
-For each batch, restate only:
-- Current tasks
+For each task, keep only:
+- Current task details
 - Constraints
 - Relevant prior decisions
 - Verification evidence
 
-Do not carry long historical summaries that are unrelated to the current batch. Never forward full session history to subagents — construct their prompts from scratch with only the items above.
+Do not carry long historical summaries. Never forward full session history to subagents — construct their prompts from scratch with only the items above.
 
 ## Completion
 

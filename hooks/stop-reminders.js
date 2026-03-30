@@ -193,22 +193,82 @@ function generateReminders(edits) {
 }
 
 
+/**
+ * Detect sessions where significant architectural decisions were made.
+ * These are sessions that modified skill files, hooks, or plugin config —
+ * places where the "why" matters and would be costly to rediscover.
+ */
+function isSignificantSession(edits) {
+  const sigPatterns = [
+    /SKILL\.md$/i,
+    /[/\\]hooks[/\\][^/\\]+\.js$/,
+    /[/\\]hooks[/\\]session-start$/,
+    /skill-rules\.json$/,
+    /CLAUDE\.md$/i,
+    /agents[/\\][^/\\]+\.md$/i,
+  ];
+  return edits.some(e => sigPatterns.some(p => p.test(e.filePath)));
+}
+
+/**
+ * Write an [auto] entry to session-log.md in the project directory.
+ * This is the mechanical breadcrumb — files edited this session.
+ * Only writes if the project already has session-log.md or project-map.md
+ * (i.e. it's a project that opted into the memory system).
+ */
+function writeSessionLogAuto(cwd, edits) {
+  if (!cwd || edits.length === 0) return;
+
+  try {
+    const sessionLogPath = path.join(cwd, 'session-log.md');
+    const hasSessionLog = fs.existsSync(sessionLogPath);
+    const hasProjectMap = fs.existsSync(path.join(cwd, 'project-map.md'));
+    if (!hasSessionLog && !hasProjectMap) return;
+
+    const editedPaths = [...new Set(edits.map(e => {
+      try { return path.relative(cwd, e.filePath); } catch { return e.filePath; }
+    }))];
+
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 16).replace('T', ' ');
+    const entry = `## ${dateStr} [auto]\nFiles: ${editedPaths.join(', ')}\n\n`;
+    fs.appendFileSync(sessionLogPath, entry);
+  } catch {
+    // Never block session stop
+  }
+}
+
 async function main() {
   let input = '';
   for await (const chunk of process.stdin) input += chunk;
 
   try {
-    JSON.parse(input); // validate JSON
+    const data = JSON.parse(input);
+    const cwd = data.cwd || process.cwd();
 
     const edits = getRecentEdits();
 
     // File-based guard prevents infinite loop for reminder injection
+    // and also gates the [auto] session-log write (prevents duplicate entries)
     if (!shouldFire()) {
       process.stdout.write('{}');
       return;
     }
 
+    // Write [auto] entry to session-log.md — gated by shouldFire() to prevent duplicates
+    writeSessionLogAuto(cwd, edits);
+
     const reminders = generateReminders(edits);
+
+    // Decision-log reminder: significant files modified this session
+    if (isSignificantSession(edits)) {
+      reminders.push(
+        'Decision log: This session modified core skill/hook/config files. ' +
+        'Before stopping, invoke context-management via the Skill tool to write a [saved] entry ' +
+        'capturing decisions, rationale, and rejected approaches. ' +
+        'Future sessions start with zero context — this is the only way to preserve the "why".'
+      );
+    }
 
     if (reminders.length === 0) {
       process.stdout.write('{}');

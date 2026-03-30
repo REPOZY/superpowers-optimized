@@ -12,6 +12,10 @@ description: >
 
 # Using Superpowers
 
+<SUBAGENT-STOP>
+If you were dispatched as a subagent to execute a specific task, skip this skill entirely.
+</SUBAGENT-STOP>
+
 ## Trigger Conditions
 
 This skill MUST be invoked when any of the following occur:
@@ -22,6 +26,16 @@ This skill MUST be invoked when any of the following occur:
 - The user asks "what should I use" or "which workflow"
 
 **Exception:** Micro tasks (typo fix, single variable rename, 1-line config change) can skip the entry sequence entirely. Just do them.
+
+## When the User Names a Specific Skill
+
+If the user's prompt references a skill by name (e.g., "use brainstorming," "use context management," "run verification"), that is a **Skill tool invocation request**:
+
+1. Still complete Entry Sequence steps 1–6 (token-efficiency, staleness check, etc.) — these are always-on prerequisites, not routing.
+2. **Invoke the named skill via the `Skill` tool.** Do not re-implement the skill's purpose with ad-hoc agents, manual file reads, or improvised workflows. The skill contains tested, structured logic — use it.
+3. Skip complexity classification and routing (step 7) — the user already chose the route.
+
+This is the most common cause of entry sequence bypass: the AI interprets "use X skill" as a goal to achieve creatively rather than as a tool invocation. It is always a tool invocation.
 
 ## Instruction Priority (highest to lowest)
 
@@ -66,9 +80,9 @@ Technical execution includes code edits, debugging, planning, review, test statu
    - **If they decline:** proceed to step 3.
 
 3. Classify the task as **micro**, **lightweight**, or **full** (see Complexity Classification below).
-4. If resuming work from a prior session, read `state.md` if it exists. Use `context-management` to save state before ending a session with ongoing work.
+4. If resuming work from a prior session, read `state.md` if it exists. Before ending any session where significant decisions were made (design choices, rejected approaches, non-obvious constraints discovered), invoke `context-management` to write a `[saved]` entry — even if the work is complete. This is the only mechanism that preserves the "why" across sessions.
 5. If `known-issues.md` exists at the project root, read it to avoid rediscovering known error→solution mappings.
-6. If `project-map.md` exists at the project root, read it to orient to the project structure without re-globbing or re-reading known files. Then check staleness:
+6. If `project-map.md` exists at the project root, read it to orient to the project structure without re-globbing or re-reading known files. The map tells you what exists and where — when you need a file's actual content (for modification, comparison, or debugging), read it directly with the Read tool. Then check staleness:
    - **With git:** run `git rev-parse HEAD` and compare to the hash in the map header.
      - Match → map is fresh, use it as-is.
      - Mismatch → run `git diff --name-only <saved_hash> HEAD` to find changed files. Re-read only those; everything else in the map is still valid. Then update the corresponding Key Files entries in `project-map.md` and refresh the git hash in the header to the current HEAD — this prevents the same files from triggering a staleness re-read on every future session.
@@ -111,6 +125,27 @@ All of these must be true:
 Anything that doesn't qualify as micro or lightweight.
 
 **Action:** Follow the Routing Guide below for the full skill pipeline.
+
+## EnterPlanMode Intercept
+
+If Claude is about to enter plan mode (`EnterPlanMode`), check whether brainstorming has been completed for the current task:
+
+- **No brainstorming done for this task**: invoke `brainstorming` first — plan mode without a validated design leads to plans built on unexamined assumptions.
+- **Brainstorming already completed and design approved**: proceed to plan mode / `writing-plans`.
+
+```dot
+digraph planmode_intercept {
+    "About to EnterPlanMode?" [shape=doublecircle];
+    "Already brainstormed?" [shape=diamond];
+    "Invoke brainstorming skill" [shape=box];
+    "Proceed to writing-plans" [shape=box];
+
+    "About to EnterPlanMode?" -> "Already brainstormed?";
+    "Already brainstormed?" -> "Invoke brainstorming skill" [label="no"];
+    "Already brainstormed?" -> "Proceed to writing-plans" [label="yes"];
+    "Invoke brainstorming skill" -> "Proceed to writing-plans";
+}
+```
 
 ## Routing Guide
 

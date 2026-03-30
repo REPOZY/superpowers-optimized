@@ -85,10 +85,17 @@ function matchSkills(prompt) {
   for (const rule of RULES) {
     let score = 0;
 
-    // Check keywords (case-insensitive substring)
+    // Check keywords (case-insensitive, left-boundary aware)
     for (const kw of rule.keywords || []) {
-      if (lower.includes(kw.toLowerCase())) {
-        score += 1;
+      const kwLower = kw.toLowerCase();
+      // Multi-word keywords: use substring match (boundary is implicit)
+      // Single-word keywords: use left word boundary to avoid partial matches
+      // (e.g. "fix" in "prefix") while still allowing inflected forms (e.g. "errors" for "error")
+      if (kwLower.includes(' ')) {
+        if (lower.includes(kwLower)) score += 1;
+      } else {
+        const re = new RegExp(`\\b${kwLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+        if (re.test(lower)) score += 1;
       }
     }
 
@@ -141,6 +148,8 @@ function buildContext(matches) {
     'Remember: invoke superpowers-optimized:using-superpowers FIRST as the mandatory entry point,',
     'then follow its routing to these suggested skills:',
     skillList,
+    'IMPORTANT: If the user names a skill directly (e.g. "use brainstorming"), invoke it via the Skill tool.',
+    'Do NOT re-implement the skill\'s purpose with ad-hoc agents or manual steps.',
     '</user-prompt-submit-hook>',
   ].join('\n');
 }
