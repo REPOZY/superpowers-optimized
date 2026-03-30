@@ -11,6 +11,7 @@ context-snapshot.json
 project-map.md
 session-log.md
 state.md
+known-issues.md
 
 *.txt
 docs/superpowers-optimized/specs/2026-03-23-extension-ecosystem-design.md
