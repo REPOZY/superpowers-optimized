@@ -38,7 +38,9 @@ Five research-backed principles run throughout: *less is more* (minimal always-o
 ### Try it in 30 seconds
 In any supported agent IDE, start a new chat and paste:
 
+```
 Activate Superpowers Optimized and plan a secure user-authentication endpoint with full TDD and security review.
+```
 
 The agent will automatically route to the correct workflow, apply safety guards, and run an integrated security review during code review — no manual skill selection required.
 
@@ -464,23 +466,7 @@ Read more: [Superpowers for Claude Code](https://blog.fsck.com/2025/10/09/superp
 
 ---
 
-### Codex / OpenCode
-
-**Install** — tell the agent:
-```
-Fetch and follow instructions from https://raw.githubusercontent.com/REPOZY/superpowers-optimized/refs/heads/main/.codex/INSTALL.md
-```
-
-**Update** — tell the agent:
-```
-Fetch and follow the update instructions from https://raw.githubusercontent.com/REPOZY/superpowers-optimized/refs/heads/main/.codex/INSTALL.md
-```
-
-Or manually: `git pull` in your local clone of the repository.
-
----
-
-### Gemini CLI
+### Codex / OpenCode / Gemini CLI
 
 **Install** — tell the agent:
 ```
@@ -498,12 +484,12 @@ Or manually: `git pull` in your local clone of the repository.
 ### Available Update Notification
 
 You will be **automatically notified** when a new version is available in Claude/Cursor.
-OpenCode and Codex perform a best-effort startup update check once per 24 hours.
+OpenCode, Codex, and Gemini CLI perform a best-effort startup update check once per 24 hours.
 Auto-update is non-destructive: it only applies when the plugin clone is clean and can fast-forward to `origin/main` (`git merge --ff-only origin/main`).
 If the repo is dirty, ahead, or diverged, auto-update is skipped and manual `git pull` remains the fallback.
 For Codex, SessionStart update notices require `codex_hooks = true`, `~/.codex/hooks.json` setup, and a non-Windows environment.
 
-To disable startup auto-update checks for Codex/OpenCode:
+To disable startup auto-update checks for Codex/OpenCode/Gemini CLI:
 
 1. Set env var `SUPERPOWERS_AUTO_UPDATE=0`, or
 2. Create `~/.config/superpowers/update.conf` with:
