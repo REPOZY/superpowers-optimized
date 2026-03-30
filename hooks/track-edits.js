@@ -20,7 +20,7 @@ const LOG_DIR = path.join(
 );
 
 // AI-generated workspace artifacts that should never be committed
-const AI_ARTIFACTS = ['project-map.md', 'session-log.md', 'state.md'];
+const AI_ARTIFACTS = ['project-map.md', 'session-log.md', 'state.md', 'known-issues.md'];
 
 /**
  * Ensure an AI artifact file is listed in the nearest .gitignore.

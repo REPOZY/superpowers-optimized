@@ -24,6 +24,8 @@ Identify these before choosing any visual direction:
 - **Audience** — Who uses this? (developers, executives, consumers, elderly, children)
 - **Platform** — Web, mobile, desktop, or cross-platform?
 - **Constraints** — Existing brand guidelines? Required framework? Accessibility level (AA/AAA)?
+- **Trust sensitivity** — How much does visual credibility matter? (critical for finance/healthcare, lower for playful apps)
+- **Primary user goal** — What does the user come here to do? (scan, convert, explore, act)
 
 ### Step 2: Select Design Direction
 
@@ -34,6 +36,8 @@ Choose explicitly:
 - **Color mood** — Emotional tone (trust blue, energetic orange, calm pastels, dark OLED)
 - **Typography mood** — Character (professional, playful, editorial, technical)
 - **Key effects** — Signature interactions (hover lifts, parallax, scroll reveals, blur)
+- **Density level** — Compact (data-dense, minimal padding), balanced (standard), or spacious (generous whitespace, editorial feel)
+- **Visual anchor** — What element draws the eye first? (hero metric, primary CTA, key image, headline)
 
 ### Step 3: Define Anti-Patterns
 
@@ -56,6 +60,26 @@ Before writing code, output a brief design system summary:
 ```
 
 This takes 30 seconds and prevents hours of rework from misaligned visual direction.
+
+---
+
+## Distinctiveness Enforcement
+
+Most AI-generated UIs fail here. They're technically correct but visually forgettable — the same blue-and-white SaaS template with rounded cards and a gradient hero. Professional UIs have identity.
+
+The UI must include at least one of these distinctiveness signals:
+- **Strong typography decision** — A deliberate scale, weight contrast, or editorial type treatment that gives the interface character
+- **Distinctive layout structure** — Something beyond standard stacked sections (asymmetric grid, bento layout, split-screen, offset columns)
+- **Controlled visual motif** — A repeating design element (border system, grid pattern, spacing rhythm, accent shape) that ties the interface together
+- **Deliberate density choice** — Intentionally compact for data-rich contexts, or intentionally spacious for editorial/luxury feel — not just "default padding"
+
+Avoid these generic patterns:
+- Default SaaS layout (hero + 3 feature cards + testimonials + pricing + footer)
+- Random gradients without structural purpose
+- Card grids where every card has equal visual weight
+- "Pleasant but forgettable" — passes review but has no identity
+
+**The test:** If the UI could belong to any startup with a search-and-replace on the logo and copy, it has failed. The design direction chosen in Step 2 should be visible in the final output.
 
 ---
 
@@ -158,6 +182,7 @@ Every data-dependent view must handle all five states. Shipping only the success
 | **Empty** | Helpful message + primary action to populate | Illustration optional; clear CTA ("Create your first project") |
 | **Success** | The actual content, fully interactive | Default state — but don't forget the other four |
 | **Partial / Degraded** | Available data + indicator for what's missing or stale | "Last updated 5m ago" badge, greyed-out sections, retry for failed parts |
+| **Pending** | User-triggered async action in progress | Inline spinner or progress indicator on the triggering element, disable re-trigger, revert UI on failure |
 
 ---
 
@@ -177,7 +202,7 @@ When building a tool with both backend and frontend, these patterns determine pe
 
 ## Dark Mode Implementation
 
-When the project needs dark mode, implement it properly — not as an afterthought:
+When the project needs dark mode, implement it properly — not as an afterthought. But first, evaluate whether dark mode is actually appropriate for the product. Not every interface benefits from it — light mode is often the right default for content-heavy, trust-sensitive, or general-audience products. Do not add dark mode just because it's trendy.
 
 - Use CSS custom properties for all colors: `--color-bg`, `--color-text`, `--color-surface`
 - Apply via `prefers-color-scheme` media query for system default + class toggle for user override
@@ -185,6 +210,15 @@ When the project needs dark mode, implement it properly — not as an afterthoug
 - Shadows become less visible in dark mode — use border or elevated surface colors instead
 - Test all semantic colors (error red, success green, warning amber) against dark backgrounds
 - Store user preference in `localStorage`; respect system preference as default
+
+---
+
+## Design Token Scales
+
+Beyond color and spacing tokens (covered in Quality Standards §6), define these additional token scales to prevent ad-hoc values:
+
+- **Radius scale** — Border radius values tied to the design direction (e.g., `--radius-sm: 4px`, `--radius-md: 8px`, `--radius-lg: 16px`). A brutalist design uses sharp radii; glassmorphism uses larger values.
+- **Elevation scale** — Shadow definitions for consistent depth (e.g., `--shadow-sm`, `--shadow-md`, `--shadow-lg`). These must match the chosen style — flat design uses none, neumorphism uses dual light/dark shadows.
 
 ---
 
@@ -249,6 +283,8 @@ Words are UI. Bad copy makes good design feel broken.
 - Design light and dark variants together — test contrast separately
 - One primary CTA per screen; secondary actions visually subordinate
 - Effects (shadows, blur, radius) must align with chosen style
+- Avoid "card spam" — not everything needs a container. Use spacing and typography to group related content instead of wrapping everything in bordered boxes
+- Visual hierarchy must not rely only on color — use size, weight, spacing, and position to establish importance
 
 ### 5. Layout & Responsive (HIGH)
 
@@ -262,6 +298,7 @@ Words are UI. Bad copy makes good design feel broken.
 - `max-width` container on desktop (e.g., `max-w-7xl`)
 - Use `min-h-dvh` instead of `100vh` on mobile (accounts for browser chrome)
 - Consistent `z-index` scale: 0 / 10 / 20 / 40 / 100 / 1000
+- Layout should adapt hierarchy on different breakpoints, not just stack columns — what's a sidebar on desktop might become a bottom sheet on mobile, not just a collapsed column
 
 ### 6. Typography & Color (MEDIUM)
 
@@ -327,6 +364,14 @@ Words are UI. Bad copy makes good design feel broken.
 
 ---
 
+## Post-Build Fix Priority
+
+When self-reviewing frontend work, fix issues in this order. Earlier items affect everything downstream — fixing color before structure wastes effort.
+
+**structure → hierarchy → spacing → typography → color → interaction → polish**
+
+---
+
 ## Pre-Delivery Checklist
 
 Run this verification gate before declaring any frontend work complete:
@@ -342,6 +387,9 @@ Run this verification gate before declaring any frontend work complete:
 - [ ] Empty states with helpful message + action
 - [ ] Dark mode tested if applicable (contrast, readability, brand)
 - [ ] Responsive tested at 375px, 768px, 1024px, 1440px
+- [ ] UI does not look like a generic AI template
+- [ ] Visual hierarchy is clear within 3 seconds of scanning
+- [ ] One clear primary action per major section
 
 ---
 

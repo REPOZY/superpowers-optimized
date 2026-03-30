@@ -23,6 +23,12 @@ const MAX_FILES = 10;    // cap blast radius queries to avoid slowness on large 
 const MIN_NAME_LEN = 3;  // skip very short filenames to avoid false-positive grep hits
 const TIMEOUT_MS = 5000; // max time for any single git command
 
+// Generic basenames that match too many files and produce noisy blast radius results
+const BASENAME_DENYLIST = new Set([
+  'index', 'main', 'test', 'tests', 'spec', 'utils', 'util', 'helpers', 'helper',
+  'config', 'setup', 'app', 'types', 'constants', 'common', 'shared', 'lib', 'mod',
+]);
+
 function run(cmd, cwd) {
   try {
     return execSync(cmd, { encoding: 'utf8', timeout: TIMEOUT_MS, cwd }).trim();
@@ -92,6 +98,7 @@ async function main() {
   for (const file of changedFiles.slice(0, MAX_FILES)) {
     const basename = path.basename(file, path.extname(file));
     if (basename.length < MIN_NAME_LEN) continue;
+    if (BASENAME_DENYLIST.has(basename.toLowerCase())) continue;
 
     // Strip characters that could break the grep pattern
     const safeName = basename.replace(/[^a-zA-Z0-9_\-]/g, '');
