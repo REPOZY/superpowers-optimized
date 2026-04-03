@@ -58,6 +58,7 @@ function ensureGitignored(filePath, cwd) {
 }
 
 const EDIT_LOG = path.join(LOG_DIR, 'edit-log.txt');
+const LAST_SAVED_FILE = path.join(LOG_DIR, 'last-saved-entry.txt');
 const MAX_LINES = 500;
 
 /**
@@ -152,6 +153,22 @@ async function main() {
     const filePath = tool_input?.file_path;
     if (filePath) {
       logEdit(tool_name, filePath, cwd);
+
+      // Track when a [saved] entry is written to session-log.md so that
+      // stop-reminders can ask "any significant edits since last [saved]?"
+      // rather than "any significant edits in the last 30 minutes?"
+      const content = tool_input?.new_string || tool_input?.content || '';
+      if (
+        path.basename(filePath).toLowerCase().startsWith('session-log') &&
+        content.includes('[saved]')
+      ) {
+        try {
+          if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+          fs.writeFileSync(LAST_SAVED_FILE, new Date().toISOString());
+        } catch {
+          // Never block tool execution
+        }
+      }
     }
   } catch {
     // Silently ignore parse errors
@@ -163,5 +180,5 @@ async function main() {
 if (require.main === module) {
   main();
 } else {
-  module.exports = { logEdit, getRecentEdits, rotateIfNeeded, ensureGitignored, EDIT_LOG, LOG_DIR };
+  module.exports = { logEdit, getRecentEdits, rotateIfNeeded, ensureGitignored, EDIT_LOG, LAST_SAVED_FILE, LOG_DIR };
 }

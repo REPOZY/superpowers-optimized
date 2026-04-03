@@ -29,7 +29,7 @@ Five research-backed principles run throughout: *less is more* (minimal always-o
 | Security review          | None                          | Built into code review with OWASP checklist    | Security catches before merge      |
 | Adversarial red team     | None                          | Red team agent + auto-fix pipeline             | Finds bugs checklists miss, fixes them with TDD |
 | Error recovery           | None                          | Project-specific known-issues.md               | No rediscovering the same bug      |
-| Token efficiency         | Standard                      | Always-on context hygiene + exploration tracking | Less re-discovery, fewer wasted iterations    |
+| Token efficiency         | Standard                      | Always-on context hygiene + exploration tracking + automatic Bash output compression (76% savings on mixed sessions) | Less re-discovery, fewer wasted iterations    |
 | Discipline enforcement   | Instructional tone             | Rationalization tables, red flags, iron laws   | Fewer LLM shortcuts                |
 | Progress visibility      | None                          | Session stats (skills used, duration, actions)  | See what the plugin did for you    |
 | Cross-session memory     | None                          | Four-file memory stack: `project-map.md` (structure cache) + `session-log.md` (decision history) + `state.md` (task snapshot) + `known-issues.md` (error map) + automatic `context-snapshot.json` (git blast radius, written every session start) | The AI starts every session with full project context — no re-exploring, no re-explaining, no re-debugging |
@@ -126,11 +126,15 @@ User sends a prompt
 └───────────────────────────────────────────────────────────┘
         │
         ▼  (meanwhile, running on every tool call)
-┌─ Safety Hooks (PreToolUse) ───────────────────────────────┐
+┌─ Safety & Optimization Hooks (PreToolUse) ────────────────┐
 │  block-dangerous-commands.js → 30+ patterns (rm -rf, etc) │
 │  protect-secrets.js → 50+ file patterns + 14 content      │
 │    patterns (blocks hardcoded API keys, tokens, PEM blocks │
 │    in source code — instructs agent to use env vars)       │
+│  bash-compress-hook.js → rewrites noisy Bash commands      │
+│    to run through optimizer; never compresses diffs,       │
+│    file reads, or failed commands; ~76% token savings      │
+│    on mixed sessions; transparency markers always shown    │
 └───────────────────────────────────────────────────────────┘
         │
         ▼  (after every Edit/Write and Skill call)
@@ -391,7 +395,7 @@ With this stack, sessions start with full context and zero re-discovery overhead
 - **error-recovery** — Maintains project-specific `known-issues.md` mapping recurring errors to solutions, consulted before debugging
 - **frontend-design** — Design intelligence system with industry-aware style selection, 25 UI styles, 30 product-category mappings, page structure patterns, UI state management, and 10 priority quality standards (accessibility, touch, performance, animation, forms, navigation, charts)
 
-### Hooks (9 total)
+### Hooks (10 total)
 - **context-engine** (SessionStart) — Runs git commands on every session start and writes `context-snapshot.json`: changed files, blast radius (which other files reference each changed file), recent commits, and change stats. Zero dependencies. Silent no-op on non-git projects
 - **session-start** (SessionStart) — Injects using-superpowers routing into every session; injects `project-map.md` content directly if it exists (full content ≤200 lines, Critical Constraints + Hot Files only above that); checks for available plugin update
 - **skill-activator** (UserPromptSubmit) — Micro-task detection + confidence-threshold skill matching
@@ -400,6 +404,7 @@ With this stack, sessions start with full context and zero re-discovery overhead
 - **stop-reminders** (Stop) — Surfaces TDD reminders, commit nudges, and session summary after each response turn
 - **block-dangerous-commands** (PreToolUse: Bash) — 30+ patterns blocking destructive commands with 3-tier severity
 - **protect-secrets** (PreToolUse: Read/Edit/Write/Bash) — 50+ file patterns protecting sensitive files + 14 content patterns detecting hardcoded secrets (API keys, tokens, PEM blocks, connection strings) in source code with actionable env var guidance
+- **bash-compress-hook** (PreToolUse: Bash) — smart-compress: automatically removes noise from Bash output before it enters context. Covers 17 command types across two tiers: near-lossless summaries for install/push/pull commands (e.g. `npm install` → `ok, added 150 packages, in 12s`), and smart filtering for commands like `git status` (hint lines removed) and passing test runs (individual lines collapsed to summary). Hard safety rules: diffs, file reads, piped commands, `--verbose`/`--debug` output, and any failed command always pass through raw — no information loss on errors. Every filtered output gets a `[compressed: X->Y lines | type]` marker so Claude always knows compression occurred and can re-run if it needs more detail. If Claude does re-run the same command within 60 seconds, the hook automatically passes through the full uncompressed output on that second run. ~76% token savings on mixed sessions. Disable per-project with a `.sp-no-compress` file or globally with `SP_NO_COMPRESS=1`. See `docs/architecture/smart-compress.md` for full details
 - **subagent-guard** (SubagentStop) — Detects and blocks subagent skill leakage with automatic recovery
 
 ### Agents

@@ -22,6 +22,7 @@ const LOG_DIR = path.join(
   'hooks-logs'
 );
 const EDIT_LOG = path.join(LOG_DIR, 'edit-log.txt');
+const LAST_SAVED_FILE = path.join(LOG_DIR, 'last-saved-entry.txt');
 const STATS_FILE = path.join(LOG_DIR, 'session-stats.json');
 const GUARD_FILE = path.join(LOG_DIR, 'stop-hook-fired.lock');
 
@@ -126,6 +127,41 @@ function getRecentEdits() {
 }
 
 /**
+ * Return the timestamp of the last [saved] entry written to session-log.md,
+ * or null if no saved entry exists yet this session.
+ */
+function getLastSavedEntryTime() {
+  try {
+    if (!fs.existsSync(LAST_SAVED_FILE)) return null;
+    const ts = new Date(fs.readFileSync(LAST_SAVED_FILE, 'utf8').trim());
+    return isNaN(ts.getTime()) ? null : ts;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Return all edit log entries after the given timestamp.
+ * If timestamp is null, returns all entries (i.e. no [saved] baseline exists).
+ */
+function getEditsAfter(timestamp) {
+  try {
+    if (!fs.existsSync(EDIT_LOG)) return [];
+    const cutoff = timestamp || new Date(0);
+    return fs.readFileSync(EDIT_LOG, 'utf8')
+      .split('\n').filter(Boolean)
+      .map(line => {
+        const parts = line.split(' | ');
+        if (parts.length < 3) return null;
+        return { timestamp: parts[0], tool: parts[1], filePath: parts.slice(2).join(' | ') };
+      })
+      .filter(e => e && new Date(e.timestamp) > cutoff);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Load session statistics for progress visibility.
  */
 function getSessionStats() {
@@ -211,6 +247,49 @@ function isSignificantSession(edits) {
 }
 
 /**
+ * Check the last 2 [saved] entries in session-log.md and warn if they
+ * exceed the token budget. Hard cap is 250 tokens (~1000 chars) per entry.
+ * Returns a warning string if over budget, null otherwise.
+ */
+function checkSessionLogSize(cwd) {
+  try {
+    const sessionLogPath = path.join(cwd, 'session-log.md');
+    if (!fs.existsSync(sessionLogPath)) return null;
+
+    const lines = fs.readFileSync(sessionLogPath, 'utf8').split('\n');
+    const entries = [];
+    let current = null;
+
+    for (const line of lines) {
+      if (/^## .+\[saved\]/.test(line)) {
+        if (current) entries.push(current);
+        current = { header: line, chars: line.length + 1 };
+      } else if (/^## .+\[auto\]/.test(line)) {
+        if (current) { entries.push(current); current = null; }
+      } else if (current) {
+        current.chars += line.length + 1;
+      }
+    }
+    if (current) entries.push(current);
+
+    const last2 = entries.slice(-2);
+    const HARD_CAP_CHARS = 1000; // ~250 tokens
+    const over = last2.filter(e => e.chars > HARD_CAP_CHARS);
+    if (over.length === 0) return null;
+
+    const totalTokens = last2.reduce((s, e) => s + Math.round(e.chars / 4), 0);
+    return (
+      `Session-log size warning: last 2 [saved] entries inject ~${totalTokens} tokens per session ` +
+      `(target: <300). Entries over budget: ${over.map(e => e.header.trim()).join('; ')}. ` +
+      `Trim to: Goal / Decisions / Rejected / Open only. Hard cap 250 tokens per entry. ` +
+      `Task checklists → state.md. Speculative analysis → design docs. Test results → delete.`
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Write an [auto] entry to session-log.md in the project directory.
  * This is the mechanical breadcrumb — files edited this session.
  * Only writes if the project already has session-log.md or project-map.md
@@ -260,14 +339,24 @@ async function main() {
 
     const reminders = generateReminders(edits);
 
-    // Decision-log reminder: significant files modified this session
-    if (isSignificantSession(edits)) {
+    // Decision-log reminder: significant files modified since the last [saved] entry.
+    // Using "since last saved" (not "last 30 min") means long sessions with multiple
+    // work phases keep getting reminded until each phase is explicitly documented.
+    const lastSavedTime = getLastSavedEntryTime();
+    const editsSinceLastSaved = getEditsAfter(lastSavedTime);
+    if (isSignificantSession(editsSinceLastSaved)) {
       reminders.push(
         'Decision log: This session modified core skill/hook/config files. ' +
         'Before stopping, invoke context-management via the Skill tool to write a [saved] entry ' +
         'capturing decisions, rationale, and rejected approaches. ' +
         'Future sessions start with zero context — this is the only way to preserve the "why".'
       );
+    }
+
+    // Session-log size guard: warn if last 2 [saved] entries exceed token budget
+    const sizeWarning = checkSessionLogSize(cwd);
+    if (sizeWarning) {
+      reminders.push(sizeWarning);
     }
 
     if (reminders.length === 0) {
@@ -299,5 +388,5 @@ async function main() {
 if (require.main === module) {
   main();
 } else {
-  module.exports = { generateReminders, getRecentEdits, isTestFile, isSourceFile, shouldFire, setGuard };
+  module.exports = { generateReminders, getRecentEdits, getLastSavedEntryTime, getEditsAfter, checkSessionLogSize, isTestFile, isSourceFile, shouldFire, setGuard };
 }

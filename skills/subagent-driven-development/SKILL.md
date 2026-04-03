@@ -78,16 +78,21 @@ digraph sdd_process {
 4. Run final whole-branch review.
 5. Invoke `finishing-a-development-branch`.
 
-## Optional Speed Mode: Parallel Waves
+## Parallel Waves (default for independent tasks)
 
-Use only when tasks are independent and touch disjoint files.
+When tasks are independent and touch disjoint files, dispatch them as a wave — this is the preferred mode, not a special case. Sequential execution is the fallback for dependent tasks, not the default.
+
+**Decision rule:** Before starting execution, group tasks into waves based on file overlap and state dependencies. Tasks with no shared files and no sequential dependency belong in the same wave.
 
 1. Build a wave of independent tasks.
-2. Dispatch implementers in parallel for that wave.
+2. Dispatch all implementers in a **single message** with multiple parallel Agent tool calls. Do not stagger across multiple messages.
 3. Review each task with the same two-stage gate.
-4. Run integration verification after the wave.
+4. Run integration verification after the wave completes.
+5. Proceed to the next wave.
 
-If any overlap or shared-state risk exists, revert to single-task sequence.
+If any overlap or shared-state risk exists within a wave, move the conflicting task to the next sequential wave.
+
+**Why single-message dispatch matters for cost:** All subagents share the same cached system prompt prefix. Dispatching them simultaneously in one message means every agent gets a cache hit on that prefix and only pays for its small unique task prompt. Staggered dispatch provides no additional benefit and wastes wall-clock time.
 
 ## E2E Process Hygiene
 
@@ -157,6 +162,8 @@ Never forward parent session context or history to subagents. Construct each sub
 - Relevant constraints
 
 Exclude unrelated prior assistant analysis and old failed hypotheses. Subagents must not receive conversation history, prior reasoning chains, or context from other subagent runs.
+
+**Why this is also the cache-optimal approach:** All subagents share the same system prompt prefix, which the API caches. Keeping each subagent's input as `[cached system prompt] + [small unique task prompt]` means every agent hits the cache for the heavy shared prefix and only pays full input token price for its small task-specific tail. Forwarding parent conversation history would make each subagent's prefix unique, breaking cache sharing and multiplying input costs across the wave.
 
 ## Subagent Skill Leakage Prevention
 

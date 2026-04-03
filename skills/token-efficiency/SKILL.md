@@ -61,14 +61,30 @@ When Claude Code compresses earlier messages, you lose the raw tool output but r
 
 Do not wait for context to auto-compress mid-task. Break proactively at logical seams — before compaction forces it in the middle of implementation where you need variable names, file paths, and discovered facts intact.
 
-**Break context here:**
-- After research/exploration phase, before writing any code
-- After a failed approach is abandoned, before starting a new direction
-- After a large read-heavy investigation, before implementation begins
+**Phase-transition guide — when to break:**
 
-**Break context by:** invoking `context-management` to write `state.md` with discovered facts, then starting fresh with only `state.md` as input.
+| Transition | Break? | Reason |
+|---|---|---|
+| Research → Planning | Yes | Exploration context is bulky; the plan is the distilled output |
+| Planning → Implementation | Yes | Plan is in files/TodoWrite; free context for code |
+| Implementation → Testing | Maybe | Keep if tests reference recent code; break if switching focus |
+| After a failed approach | Yes | Dead-end reasoning pollutes the next attempt |
+| Debugging → next feature | Yes | Debug traces are noise for unrelated work |
+| **Mid-implementation** | **No** | Losing variable names, discovered paths, and partial state mid-task is costly |
 
-**Why this matters:** Auto-compaction at 95% context fill destroys the most recent content — exactly the variable names, discovered paths, and evidence gathered just before implementation. A proactive break at 50% preserves all of it.
+**Break context by:** invoking `context-management` to write `state.md` with discovered facts, then starting fresh with only `state.md` as input. Always save to `state.md` *before* compacting — never after.
+
+**What survives compaction** (re-injected automatically by the session-start hook):
+
+| Survives | Lost |
+|---|---|
+| `CLAUDE.md` and `project-map.md` | Intermediate reasoning and analysis |
+| Last 2 `[saved]` entries from `session-log.md` | File contents previously read into context |
+| `known-issues.md` and `context-snapshot.json` | Tool call history |
+| `state.md` (if written before compacting) | Multi-step conversation context |
+| Git state, files on disk | Variable names, paths, facts not saved to `state.md` |
+
+**Why this matters:** Auto-compaction at 95% context fill destroys the most recent content — exactly the variable names, discovered paths, and evidence gathered just before implementation. A proactive break at 50% preserves all of it. And because project-map.md and session-log entries survive automatically, you only need to save task-specific working state to `state.md` — not the entire project context.
 
 ## Context Rules
 
@@ -82,6 +98,34 @@ Within a session, Claude Code handles context compression automatically — do n
 ## Front-Loading
 
 Before any multi-step task, identify all missing information and request it in a single message rather than asking across multiple turns.
+
+## Bash Output Compression (smart-compress)
+
+The plugin automatically compresses noisy Bash output before it enters your context. When you see a line like `[compressed: 120->4 lines | git-status]`, the output was filtered to remove noise while preserving signal.
+
+### What gets compressed
+
+- **Tier 1 (near-lossless):** git add/commit/push/pull/clone/fetch, npm/pip/cargo install — reduced to one-line summaries
+- **Tier 2 (smart filtering):** git status (hint lines removed), git log (truncated), passing tests (summary only), successful builds (summary only), lint output (grouped by severity), large ls/find results (truncated)
+
+### What is NEVER compressed
+
+- `git diff` (any variant) — every line matters for review
+- `cat`/`head`/`tail` file reads — content was explicitly requested
+- Commands with user-applied pipes (`| grep`, `| awk`, `| sed`)
+- Commands with `--verbose` or `--debug` flags
+- `curl`/`wget` responses — API output should not be truncated
+- **Any command that fails** (non-zero exit code) — error output is passed through raw
+- Output shorter than 200 characters — not worth compressing
+
+### Adaptive re-run
+
+If the same command runs twice within 60 seconds, the second run passes through uncompressed. This handles the case where you re-run a command because the compressed output was insufficient.
+
+### Disabling compression
+
+- Set environment variable: `SP_NO_COMPRESS=1`
+- Create file: `.sp-no-compress` in the project root
 
 ## Anti-Patterns
 
