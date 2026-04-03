@@ -1,5 +1,25 @@
 # Superpowers Optimized Release Notes
 
+## v6.3.0 (2026-04-03)
+
+Session memory quality pass: the stop-reminders hook now tracks undocumented work phases across long sessions, enforced token budgets prevent session-log bloat from inflating injection costs, and parallel dispatch defaults are corrected in two skills.
+
+### New Features
+
+**Phase-aware decision-log reminders** — The stop-reminders hook previously asked "were significant files edited in the last 30 minutes?" — a window that fails in long sessions with multiple work phases (same edits stay in the window after a `[saved]` entry, while later phases can slip out entirely). It now asks "were significant files edited since the last `[saved]` entry?" The `track-edits` hook detects when a `[saved]` entry is written to `session-log.md` and records a timestamp marker; `stop-reminders` reads that marker at Stop time. Each logical work batch gets exactly one reminder at the right time, with no false positives between phases.
+
+**Session-log token budget guard** — `stop-reminders` now measures the last 2 `[saved]` entries at every session Stop and warns when any entry exceeds the 250-token budget (~1,000 characters). These entries are injected into every future session; a bloated entry costs tokens forever. The warning identifies the specific over-budget entry and instructs what to trim.
+
+**Strict `[saved]` entry template in context-management** — The context-management skill's `[saved]` entry template now has an explicit structure (Goal / Decisions / Rejected / Open only), a "Never include" list (test results, task checklists → `state.md`, how-it-works walkthroughs, speculative analysis → design docs, one-time confirmations), and a hard token budget. Without this enforcement, the AI defaulted to "more is safer" and wrote entries that were 5–10× over the optimal size.
+
+**dispatching-parallel-agents skill hint added** — `skill-rules.json` now includes a rule for `dispatching-parallel-agents` — it was the only skill with no hint coverage, meaning prompts like "dispatch these tasks simultaneously" received no routing suggestion.
+
+### Changes
+
+**Parallel Waves is now the default in subagent-driven-development** — "Parallel Waves" was previously labeled "Optional Speed Mode". It is now the stated default for independent tasks; sequential execution is the explicit fallback for tasks with shared-file or state dependencies. The single-message dispatch requirement is now explicit in both `subagent-driven-development` and `dispatching-parallel-agents`, with a rationale: all subagents share the same cached system prompt prefix, and dispatching them in one message ensures every agent gets a cache hit on the heavy shared prefix.
+
+**Anti-sycophancy rules added to global CLAUDE.md** — Four rules now govern position stability: don't revise a stated position under pushback without new evidence; proactively state the strongest objection to any non-trivial proposal; agreement must cite a specific reason, not just affirm; state confidence level explicitly when uncertain.
+
 ## v6.2.0 (2026-03-30)
 
 Cross-session memory overhaul: the full memory stack is now injected automatically at session start, stop-reminders actually writes to session-log.md, and agents can no longer waste tokens as content relays.

@@ -65,17 +65,29 @@ Use 2-3 keywords (e.g., "hook", "auth", "deploy"). If relevant entries are found
    - `Evidence`
    - `Open Issues`
 
-3. Append a rich `[saved]` entry to `session-log.md`:
+3. Append a `[saved]` entry to `session-log.md`:
+
+**What belongs here vs state.md:**
+- `session-log.md [saved]`: permanent decisions, anti-patterns to avoid, carry-forward open items
+- `state.md`: active task status, in-progress plans, checklists, version bump readiness — anything that will be resolved soon
+
+**Never include in a [saved] entry:**
+- Test results or verification confirmations ("11/11 tests pass")
+- Task checklists, file changelogs, or release notes → use `state.md`
+- "How it works" walkthroughs → read the code
+- Speculative analysis not approved for implementation → use a design doc in `docs/`
+- One-time confirmations ("file deleted", "folder removed")
+- Newly discovered permanent architectural constraints → add to `project-map.md` Critical Constraints instead
+
+**Token budget: target ≤150 tokens per entry. Hard cap 250. If you're going over, you're writing the wrong content.**
 
 ```markdown
 ## YYYY-MM-DD HH:MM [saved]
-Goal: <what we were trying to achieve>
+Goal: <one line>
 Decisions:
-- <decision 1 and why>
-- <decision 2 and why>
-Approaches rejected: <what was tried and why it was abandoned>
-Key facts: <non-obvious constraints, quoting rules, env-specific behavior, etc.>
-Open: <unresolved questions for next session>
+- <what was chosen and the one-sentence why — not how it works>
+Rejected: <what NOT to try, one line each — the anti-pattern knowledge>
+Open: <carry-forward items only>
 ```
 
 4. In a new session, read `state.md` first to restore task context, then grep `session-log.md` for relevant history.

@@ -32,7 +32,7 @@ If any condition fails, run sequentially.
 
 1. Split work into independent domains.
 2. Write one focused prompt per domain.
-3. Dispatch all prompts concurrently.
+3. Dispatch all agents in a **single message** with multiple parallel Agent tool calls. Do not dispatch sequentially across multiple messages — staggered dispatch delays start times, burns cache TTL, and undermines the parallelism.
 4. Collect summaries and changed files.
 5. Resolve conflicts between summaries and changed files.
 6. Run integration verification: execute the full project test suite plus any cross-domain checks. Do not mark the wave complete until integration passes.
@@ -40,6 +40,8 @@ If any condition fails, run sequentially.
 ## Context Isolation
 
 Never forward parent session context or history to subagents. Construct each subagent's prompt from scratch using only the items listed below. Subagents must not receive conversation history, prior reasoning chains, or context from other subagent runs.
+
+**Why this is also the cache-optimal approach:** All subagents share the same system prompt prefix, which is cached by the API. By keeping each subagent's input as `[cached system prompt] + [small unique task prompt]`, every agent gets a cache hit on the heavy shared prefix and only pays full price for its small task-specific tail. Forwarding parent conversation history would make each subagent's prefix unique and large, breaking cache sharing and multiplying input token costs.
 
 ## Prompt Requirements
 
@@ -90,5 +92,6 @@ Return: Summary of root cause and what you changed.
 - False independence assumptions
 - Merge conflicts across shared files
 - Inconsistent behavior across parallel fixes
+- Cache TTL expiry for long-running tasks: the default prompt cache TTL is 5 minutes. If individual agent tasks are expected to run longer than that, the cache benefit diminishes. For very long tasks this is not a reason to avoid parallelism — it just means the input token saving is smaller.
 
 When risk is high, fall back to sequential execution.

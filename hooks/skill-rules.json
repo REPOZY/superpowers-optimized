@@ -57,6 +57,18 @@
       "intentPatterns": ["(execute|follow|implement|run)\\s+(the|this)\\s+plan", "start\\s+(building|implementing|coding)", "let('s|\\s+us)\\s+(go|start|begin)"]
     },
     {
+      "skill": "dispatching-parallel-agents",
+      "type": "workflow",
+      "priority": "medium",
+      "keywords": ["dispatch", "simultaneously", "at the same time", "fire off", "independent tasks"],
+      "intentPatterns": [
+        "(dispatch|fire\\s+off)\\s+(these|them|the|\\d+)\\s+(agents?|tasks?|subagents?)",
+        "run\\s+(these|them|the\\s+tasks?)\\s+(simultaneously|at\\s+the\\s+same\\s+time)",
+        "do\\s+(these|them|all)\\s+(simultaneously|at\\s+the\\s+same\\s+time|in\\s+one\\s+go)",
+        "(all|both)\\s+(at\\s+the\\s+same\\s+time|simultaneously)"
+      ]
+    },
+    {
       "skill": "subagent-driven-development",
       "type": "workflow",
       "priority": "medium",

@@ -52,13 +52,16 @@ Open: Verify emoji renders correctly in Claude's context injection
 
 ### How it helps
 
-At the start of any non-trivial task, Claude greps the log for keywords relevant to the current work. If there's a matching entry — a past decision, a rejected approach, a known constraint — it surfaces that before diving in. This prevents:
+The `session-start` hook automatically injects the **last two `[saved]` entries** into every session before your first message arrives. This means recent decisions are always available without any instruction-following required.
 
+For older history — decisions from earlier in a project's lifetime — Claude can `Grep session-log.md` for keywords relevant to the current task. The log is keyword-searchable, per-project, and stays under 200 entries (entries older than 6 months are pruned when the limit is reached).
+
+This prevents:
 - Rediscovering the same bug twice
 - Proposing an approach that was already tried and rejected
 - Forgetting why a non-obvious constraint exists
 
-The log is keyword-searchable, per-project, and stays under 200 entries (entries older than 6 months are pruned when the limit is reached).
+**Why injection rather than grep-only:** Relying on the AI to proactively grep is fragile — it might skip the step. Injecting the last two entries is unconditional and reliable. The cost is bounded: two entries is a fixed overhead regardless of how large the log grows.
 
 ---
 
@@ -132,21 +135,26 @@ Unlike `session-log.md` (which is permanent history), `state.md` represents acti
 ## How the Three Files Work Together
 
 ```
-Session starts
+Session starts (session-start hook fires automatically)
     │
-    ├── Read state.md (if task is in progress)
-    └── Grep session-log.md for task keywords
+    ├── Inject project-map.md (full content if ≤200 lines, else Critical Constraints + Hot Files)
+    ├── Inject state.md in full (if exists — means work is in progress)
+    ├── Inject last 2 [saved] entries from session-log.md (if exists)
+    ├── Inject known-issues.md in full (if exists)
+    └── Inject context-snapshot.json summary (changed files + recent commits)
             │
             ▼
         Work happens
             │
+            ├── For older session history: Grep session-log.md for task keywords
             ├── [auto] Stop hook appends minimal entry to session-log.md
             └── [manual] context-management writes rich [saved] entry + updates state.md
 
 Over time:
     project-map.md ──► fast orientation for any future session
-    session-log.md ──► "what happened before" for any task
+    session-log.md ──► "what happened before" for any task (recent: injected; older: grep)
     state.md       ──► "where we were" for the current task
+    known-issues.md ──► error→solution map, always injected so debugging starts with it
 ```
 
 ---
@@ -161,7 +169,7 @@ Over time:
 
 **Works on existing projects.** Installing the plugin on a large existing codebase works exactly the same way — the memory files start accumulating from the first session forward. `project-map.md` can be generated at any time to map the existing structure.
 
-**Token-efficient by design.** Claude greps the log rather than reading the whole file. The project map is capped at 150 lines. State is capped at 100 lines. The memory system adds context proportional to its relevance, not uniformly.
+**Token-efficient by design.** The session-start hook injects only the last two `[saved]` entries from session-log.md — not the full file. For older history, Claude greps rather than reads. The project map is capped at 150 lines. State is capped at 100 lines. known-issues.md is injected in full but stays short by design (one entry per error signature).
 
 ---
 
