@@ -23,6 +23,7 @@ Core operating standard for all sessions. Apply permanently from activation.
 3. Grep for the relevant section before reading an entire file
 4. Use Glob instead of Bash `ls` or `find`
 5. Do not verify existence of a path already confirmed earlier in the session
+6. The Read tool returns a maximum of 2,000 lines per call. For files you have reason to believe exceed 2,000 lines, use `offset` and `limit` parameters to read in sequential chunks. Never assume a single read covered the complete file.
 
 ## Agent & External Content Rules
 

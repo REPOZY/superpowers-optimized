@@ -5,7 +5,38 @@
       "hooks": [
         {
           "type": "command",
-          "command": "if [ -f \"$HOME/.codex/superpowers-optimized/hooks/session-start\" ]; then \"$HOME/.codex/superpowers-optimized/hooks/session-start\"; elif [ -f \"$HOME/.codex/superpowers/hooks/session-start\" ]; then \"$HOME/.codex/superpowers/hooks/session-start\"; fi"
+          "command": "if [ -f \"$HOME/.codex/superpowers-optimized/hooks/codex/session-start-adapter.js\" ]; then node \"$HOME/.codex/superpowers-optimized/hooks/codex/session-start-adapter.js\"; elif [ -f \"$HOME/.codex/superpowers/hooks/codex/session-start-adapter.js\" ]; then node \"$HOME/.codex/superpowers/hooks/codex/session-start-adapter.js\"; else echo '{}'; fi"
+        }
+      ]
+    }
+  ],
+  "UserPromptSubmit": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "if [ -f \"$HOME/.codex/superpowers-optimized/hooks/skill-activator.js\" ]; then node \"$HOME/.codex/superpowers-optimized/hooks/skill-activator.js\"; elif [ -f \"$HOME/.codex/superpowers/hooks/skill-activator.js\" ]; then node \"$HOME/.codex/superpowers/hooks/skill-activator.js\"; else echo '{}'; fi"
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "if [ -f \"$HOME/.codex/superpowers-optimized/hooks/codex/stop-adapter.js\" ]; then node \"$HOME/.codex/superpowers-optimized/hooks/codex/stop-adapter.js\"; elif [ -f \"$HOME/.codex/superpowers/hooks/codex/stop-adapter.js\" ]; then node \"$HOME/.codex/superpowers/hooks/codex/stop-adapter.js\"; else echo '{}'; fi"
+        }
+      ]
+    }
+  ],
+  "PreToolUse": [
+    {
+      "matcher": "Bash",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "if [ -f \"$HOME/.codex/superpowers-optimized/hooks/codex/pretool-bash-adapter.js\" ]; then node \"$HOME/.codex/superpowers-optimized/hooks/codex/pretool-bash-adapter.js\"; elif [ -f \"$HOME/.codex/superpowers/hooks/codex/pretool-bash-adapter.js\" ]; then node \"$HOME/.codex/superpowers/hooks/codex/pretool-bash-adapter.js\"; else echo '{}'; fi"
         }
       ]
     }

@@ -1,158 +1,167 @@
 # Installing Superpowers Optimized for Codex
 
-Enable superpowers-optimized skills in Codex via native skill discovery. Just clone and symlink.
+## What you get
+
+| Feature | macOS / Linux (hooks enabled) | Windows native |
+|---|---|---|
+| 30+ workflow skills | ✅ | ✅ |
+| Explicit/implicit skill activation | ✅ | ✅ |
+| AGENTS.md workflow guidance | ✅ | ✅ |
+| Startup context injection (project map, state, known issues) | ✅ with hooks | ❌ |
+| Proactive skill routing on every prompt | ✅ with hooks | ❌ |
+| Dangerous Bash command blocking | ✅ with hooks | ❌ |
+| Stop-time discipline reminders | ✅ with hooks | ❌ |
+| Custom agents (code-reviewer, red-team) | ✅ manual install | ✅ manual install |
+| Bash compression / Read/Write interception | ❌ Codex limitation | ❌ |
+| Subagent leakage guard | ❌ Codex limitation | ❌ |
+
+**Skills work on all platforms. Lifecycle hooks require macOS or Linux.**
+
+---
 
 ## Prerequisites
 
+- OpenAI Codex CLI (`npm i -g @openai/codex`)
 - Git
+
+---
 
 ## Installation
 
-1. **Clone the superpowers repository:**
-   ```bash
-   git clone https://github.com/REPOZY/superpowers-optimized.git ~/.codex/superpowers-optimized
-   ```
+### 1. Clone the repository
 
-2. **Create the skills symlink:**
-   ```bash
-   mkdir -p ~/.agents/skills
-   ln -s ~/.codex/superpowers-optimized/skills ~/.agents/skills/superpowers
-   ```
+```bash
+git clone https://github.com/REPOZY/superpowers-optimized.git ~/.codex/superpowers-optimized
+```
 
-   **Windows (PowerShell):**
-   ```powershell
-   New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.agents\skills"
-   cmd /c mklink /J "$env:USERPROFILE\.agents\skills\superpowers" "$env:USERPROFILE\.codex\superpowers-optimized\skills"
-   ```
+### 2. Create the skills symlink
 
-3. **(Optional — for auto-update only) Enable Codex lifecycle hooks in config:**
-   ```toml
-   [features]
-   codex_hooks = true
-   ```
+**macOS / Linux:**
+```bash
+mkdir -p ~/.agents/skills
+ln -s ~/.codex/superpowers-optimized/skills ~/.agents/skills/superpowers
+```
 
-   Add this to `~/.codex/config.toml`. Skills work without this step — hooks only add the startup auto-update check.
+**Windows (PowerShell):**
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.agents\skills"
+cmd /c mklink /J "$env:USERPROFILE\.agents\skills\superpowers" "$env:USERPROFILE\.codex\superpowers-optimized\skills"
+```
 
-4. **(Optional — for auto-update only) Enable the Codex SessionStart hook:**
-   ```bash
-   ln -s ~/.codex/superpowers-optimized/hooks/codex-hooks.json ~/.codex/hooks.json
-   ```
+### 3. Restart Codex
 
-   If `~/.codex/hooks.json` already exists, merge the `SessionStart` entry from
-   `~/.codex/superpowers-optimized/hooks/codex-hooks.json` into your existing file instead of replacing it.
+Quit and relaunch the CLI. Skills are discovered at startup.
 
-5. **Restart Codex** (quit and relaunch the CLI) to discover the skills.
+### 4. (macOS/Linux only) Enable lifecycle hooks
 
-6. **Verify setup:**
-   ```bash
-   ls -la ~/.agents/skills/superpowers
-   ```
+Hooks add startup context injection (project map, known issues, session state). They are **disabled on Windows native** — skip this step on Windows.
 
-   To verify hook setup (if you completed steps 3–4):
-   ```bash
-   grep -n "codex_hooks" ~/.codex/config.toml
-   test -f ~/.codex/hooks.json && echo "hooks.json present"
-   ```
+**4a.** Add to `~/.codex/config.toml`:
+```toml
+[features]
+codex_hooks = true
+```
 
-### Hook support note
+**4b.** Link the hook registry:
+```bash
+ln -s ~/.codex/superpowers-optimized/hooks/codex-hooks.json ~/.codex/hooks.json
+```
 
-Codex lifecycle hooks are currently not supported on Windows native.
-On Windows, installation still works for skills, but the SessionStart hook auto-update does not run.
+If `~/.codex/hooks.json` already exists, merge the `SessionStart` entry from `~/.codex/superpowers-optimized/hooks/codex-hooks.json` into your existing file instead of replacing it.
 
-When hooks run, startup auto-update is non-destructive: it only applies if the
-plugin clone is clean and can fast-forward to `origin/main`. Dirty, local-ahead,
-or diverged clones are not changed automatically.
+### 5. Verify setup
 
-To disable startup auto-update checks:
-
-1. Set `SUPERPOWERS_AUTO_UPDATE=0`, or
-2. Create `~/.config/superpowers/update.conf` with `auto_update=false`.
-
-## Migrating from old install path
-
-If you previously installed to `~/.codex/superpowers` (the old canonical path), migrate to the new path:
-
-1. **Update the repo (supports both old and new install paths):**
-   ```bash
-   if [ -d ~/.codex/superpowers-optimized ]; then
-     cd ~/.codex/superpowers-optimized && git pull
-   elif [ -d ~/.codex/superpowers ]; then
-     cd ~/.codex/superpowers && git pull
-   else
-     git clone https://github.com/REPOZY/superpowers-optimized.git ~/.codex/superpowers-optimized
-   fi
-   ```
-
-2. **Rename old install path if needed** (legacy `~/.codex/superpowers` → new canonical path):
-   ```bash
-   if [ -d ~/.codex/superpowers ] && [ ! -d ~/.codex/superpowers-optimized ]; then
-     mv ~/.codex/superpowers ~/.codex/superpowers-optimized
-   fi
-   ```
-
-   **Windows (PowerShell):**
-   ```powershell
-   if ((Test-Path "$env:USERPROFILE\.codex\superpowers") -and -not (Test-Path "$env:USERPROFILE\.codex\superpowers-optimized")) {
-     Rename-Item "$env:USERPROFILE\.codex\superpowers" "superpowers-optimized"
-   }
-   ```
-
-3. **Recreate the skills symlink** pointing to the new path (step 2 above).
-
-4. **(If using hooks) Enable `codex_hooks` in config** (step 3 above).
-
-5. **(If using hooks) Enable/merge `~/.codex/hooks.json`** (step 4 above).
-
-6. **Remove the old bootstrap block** from `~/.codex/AGENTS.md` — any block referencing `superpowers-codex bootstrap` is no longer needed.
-
-7. **Restart Codex.**
-
-## Migrating from old bootstrap
-
-If you installed superpowers before native skill discovery, you need to:
-
-1. **Update the repo:**
-   ```bash
-   cd ~/.codex/superpowers-optimized && git pull
-   ```
-
-2. **Create the skills symlink** (step 2 above) — this is the new discovery mechanism.
-
-3. **Remove the old bootstrap block** from `~/.codex/AGENTS.md` — any block referencing `superpowers-codex bootstrap` is no longer needed.
-
-4. **Restart Codex.**
-
-## Verify
-
-**Unix/macOS:**
+**Check skills:**
 ```bash
 ls -la ~/.agents/skills/superpowers
 ```
 
-**Windows (PowerShell):**
-```powershell
-Get-Item "$env:USERPROFILE\.agents\skills\superpowers"
+**Check hooks (if you completed step 4):**
+```bash
+grep -n "codex_hooks" ~/.codex/config.toml
+test -f ~/.codex/hooks.json && echo "hooks.json present"
 ```
 
-You should see a symlink (or junction on Windows) pointing to your superpowers skills directory.
+### 5. (Optional) Install custom agents
+
+Installs `code-reviewer` and `red-team` agents for use in Codex subagent workflows.
+
+**macOS / Linux:**
+```bash
+mkdir -p ~/.codex/agents
+cp ~/.codex/superpowers-optimized/codex-agents/*.toml ~/.codex/agents/
+```
+
+**Windows (PowerShell):**
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.codex\agents"
+Copy-Item "$env:USERPROFILE\.codex\superpowers-optimized\codex-agents\*.toml" "$env:USERPROFILE\.codex\agents\"
+```
+
+After installing, these agents are available by name in Codex subagent workflows (e.g., "Use the code-reviewer agent to review this branch").
+
+> **Note:** Codex does not officially support bundling custom agents via the plugin manifest. Manual placement in `~/.codex/agents/` is required.
+
+---
+
+## Hook behavior notes
+
+**What hooks do:**
+- **SessionStart:** Inject project context (project map, state, known issues, using-superpowers skill) at session start. Check for plugin updates (non-destructive: only applies if the clone is clean and can fast-forward to `origin/main`).
+- **UserPromptSubmit:** Proactive skill routing — analyzes each prompt and injects skill suggestions before the model responds.
+- **PreToolUse (Bash):** Safety dispatcher — blocks dangerous shell commands (rm -rf ~, curl|sh, fork bombs, etc.) and secret exfiltration attempts before execution.
+- **Stop:** Discipline reminders — TDD warning if source files changed without test changes, commit reminder if many files are uncommitted, decision log prompt if core files were modified.
+
+**Windows:** Codex lifecycle hooks are disabled on Windows native. This is a Codex platform limitation. Skills still work. Use WSL for hook functionality on Windows.
+
+To disable startup update checks:
+- Set `SUPERPOWERS_AUTO_UPDATE=0`, or
+- Create `~/.config/superpowers/update.conf` with `auto_update=false`
+
+---
+
+## Migrating from old install path
+
+If you previously installed to `~/.codex/superpowers` (old path):
+
+```bash
+# Update and rename
+if [ -d ~/.codex/superpowers ] && [ ! -d ~/.codex/superpowers-optimized ]; then
+  mv ~/.codex/superpowers ~/.codex/superpowers-optimized
+fi
+cd ~/.codex/superpowers-optimized && git pull
+
+# Recreate symlink to new path
+rm -f ~/.agents/skills/superpowers
+ln -s ~/.codex/superpowers-optimized/skills ~/.agents/skills/superpowers
+```
+
+**Windows (PowerShell):**
+```powershell
+if ((Test-Path "$env:USERPROFILE\.codex\superpowers") -and -not (Test-Path "$env:USERPROFILE\.codex\superpowers-optimized")) {
+  Rename-Item "$env:USERPROFILE\.codex\superpowers" "superpowers-optimized"
+}
+cmd /c rmdir "$env:USERPROFILE\.agents\skills\superpowers"
+cmd /c mklink /J "$env:USERPROFILE\.agents\skills\superpowers" "$env:USERPROFILE\.codex\superpowers-optimized\skills"
+```
+
+Also remove any old bootstrap block from `~/.codex/AGENTS.md` referencing `superpowers-codex bootstrap` — no longer needed.
+
+---
 
 ## Updating
 
-**Unix/macOS:**
 ```bash
 cd ~/.codex/superpowers-optimized && git pull
 ```
 
-**Windows (PowerShell):**
-```powershell
-Set-Location "$env:USERPROFILE\.codex\superpowers-optimized"; git pull
-```
-
 Skills update instantly through the symlink.
+
+---
 
 ## Uninstalling
 
-**Unix/macOS:**
+**macOS / Linux:**
 ```bash
 rm ~/.agents/skills/superpowers
 rm -rf ~/.codex/superpowers-optimized   # optional: delete the clone
@@ -161,5 +170,5 @@ rm -rf ~/.codex/superpowers-optimized   # optional: delete the clone
 **Windows (PowerShell):**
 ```powershell
 cmd /c rmdir "$env:USERPROFILE\.agents\skills\superpowers"
-Remove-Item -Recurse -Force "$env:USERPROFILE\.codex\superpowers-optimized"   # optional: delete the clone
+Remove-Item -Recurse -Force "$env:USERPROFILE\.codex\superpowers-optimized"
 ```

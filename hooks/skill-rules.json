@@ -11,15 +11,15 @@
       "skill": "test-driven-development",
       "type": "process",
       "priority": "critical",
-      "keywords": ["tdd", "test first", "write tests", "failing test", "red green", "test driven", "test strategy", "test coverage", "integration test", "e2e test", "unit test", "improve coverage"],
-      "intentPatterns": ["write\\s+(a\\s+)?test", "add\\s+test", "test\\s+(for|that|this)", "need(s)?\\s+test", "(improve|increase|add)\\s+(test\\s+)?coverage", "(write|create|design)\\s+(a\\s+)?test\\s+strategy"]
+      "keywords": ["tdd", "test first", "tests first", "write tests", "failing test", "red green", "test driven", "test strategy", "test coverage", "integration test", "e2e test", "unit test", "improve coverage"],
+      "intentPatterns": ["write\\s+(a\\s+)?test", "add\\s+test", "test\\s+(for|that|this)", "need(s)?\\s+test", "(improve|increase|add)\\s+(test\\s+)?coverage", "(write|create|design)\\s+(a\\s+)?test\\s+strategy", "failing\\s+tests?\\s+first", "tests?\\s+first\\s+before", "write\\s+the\\s+failing\\s+tests?"]
     },
     {
       "skill": "verification-before-completion",
       "type": "process",
       "priority": "critical",
-      "keywords": ["ready to merge", "ship it", "wrap up"],
-      "intentPatterns": ["(i('m|\\s+am)|we('re|\\s+are))\\s+(done|finished)\\s*(with|here|now|$)", "ready\\s+(to|for)\\s+(merge|ship|deploy|pr)", "this\\s+is\\s+(done|complete|ready)\\s+(to|for)", "let('s|\\s+us)\\s+(merge|ship|commit)"]
+      "keywords": ["ready to merge", "ship it", "wrap up", "verify everything", "all done", "we're done", "i'm done"],
+      "intentPatterns": ["(i('m|\\s+am)|we('re|\\s+are))\\s+(done|finished)\\s*(with|here|now|$)", "ready\\s+(to|for)\\s+(merge|ship|deploy|pr)", "this\\s+is\\s+(done|complete|ready)\\s+(to|for)", "let('s|\\s+us)\\s+(merge|ship|commit)", "verify\\s+(everything|it'?s?\\s+(all\\s+)?correct|this\\s+is\\s+(correct|done|complete))", "before\\s+we\\s+(say|call|mark)\\s+(it|this)\\s+(done|complete|finished)", "think\\s+(i('m|\\s+am)|we('re|\\s+are))\\s+(done|finished)"]
     },
     {
       "skill": "deliberation",

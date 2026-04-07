@@ -1,6 +1,6 @@
 ---
 name: premise-check
-description: Validates whether proposed or in-progress work should exist before investing in it. Invoke BEFORE designing, planning, or building anything non-trivial — and WHEN new evidence arrives that could change the motivation for existing work. Triggers on: "design a system", "create a plan", "build out the full version", "extend this to handle", architecture proposals, or any moment where test results, research findings, or changed requirements weaken the original reason for doing something. Also triggers when you catch yourself updating a document's facts without reassessing its conclusions.
+description: "Validates whether proposed or in-progress work should exist before investing in it. Invoke BEFORE designing, planning, or building anything non-trivial — and WHEN new evidence arrives that could change the motivation for existing work. Triggers on: 'design a system', 'create a plan', 'build out the full version', 'extend this to handle', architecture proposals, or any moment where test results, research findings, or changed requirements weaken the original reason for doing something. Also triggers when you catch yourself updating a document's facts without reassessing its conclusions."
 ---
 
 # Premise Check
