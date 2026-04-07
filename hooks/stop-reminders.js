@@ -264,8 +264,6 @@ function checkSessionLogSize(cwd) {
       if (/^## .+\[saved\]/.test(line)) {
         if (current) entries.push(current);
         current = { header: line, chars: line.length + 1 };
-      } else if (/^## .+\[auto\]/.test(line)) {
-        if (current) { entries.push(current); current = null; }
       } else if (current) {
         current.chars += line.length + 1;
       }
@@ -289,34 +287,6 @@ function checkSessionLogSize(cwd) {
   }
 }
 
-/**
- * Write an [auto] entry to session-log.md in the project directory.
- * This is the mechanical breadcrumb — files edited this session.
- * Only writes if the project already has session-log.md or project-map.md
- * (i.e. it's a project that opted into the memory system).
- */
-function writeSessionLogAuto(cwd, edits) {
-  if (!cwd || edits.length === 0) return;
-
-  try {
-    const sessionLogPath = path.join(cwd, 'session-log.md');
-    const hasSessionLog = fs.existsSync(sessionLogPath);
-    const hasProjectMap = fs.existsSync(path.join(cwd, 'project-map.md'));
-    if (!hasSessionLog && !hasProjectMap) return;
-
-    const editedPaths = [...new Set(edits.map(e => {
-      try { return path.relative(cwd, e.filePath); } catch { return e.filePath; }
-    }))];
-
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 16).replace('T', ' ');
-    const entry = `## ${dateStr} [auto]\nFiles: ${editedPaths.join(', ')}\n\n`;
-    fs.appendFileSync(sessionLogPath, entry);
-  } catch {
-    // Never block session stop
-  }
-}
-
 async function main() {
   let input = '';
   for await (const chunk of process.stdin) input += chunk;
@@ -328,14 +298,10 @@ async function main() {
     const edits = getRecentEdits();
 
     // File-based guard prevents infinite loop for reminder injection
-    // and also gates the [auto] session-log write (prevents duplicate entries)
     if (!shouldFire()) {
       process.stdout.write('{}');
       return;
     }
-
-    // Write [auto] entry to session-log.md — gated by shouldFire() to prevent duplicates
-    writeSessionLogAuto(cwd, edits);
 
     const reminders = generateReminders(edits);
 

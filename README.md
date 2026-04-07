@@ -25,7 +25,7 @@ Five research-backed principles run throughout: *less is more* (minimal always-o
 | Feature                  | Original Superpowers          | Superpowers Optimized                          | Real-world impact                  |
 |--------------------------|-------------------------------|------------------------------------------------|------------------------------------|
 | Workflow selection       | Manual                        | Automatic 3-tier (micro / lightweight / full)  | Zero overhead on simple tasks      |
-| Safety & hooks           | None                          | 9 proactive hooks (dangerous-command blocker, secrets protector, subagent guard, edit tracker, session stats, stop reminders, skill activator, session start, context engine) | Zero risk of rm -rf or secret leaks|
+| Safety & hooks           | None                          | 10 proactive hooks (dangerous-command blocker, secrets protector, bash output compressor, subagent guard, edit tracker, session stats, stop reminders, skill activator, session start, context engine) | Zero risk of rm -rf or secret leaks|
 | Security review          | None                          | Built into code review with OWASP checklist    | Security catches before merge      |
 | Adversarial red team     | None                          | Red team agent + auto-fix pipeline             | Finds bugs checklists miss, fixes them with TDD |
 | Error recovery           | None                          | Project-specific known-issues.md               | No rediscovering the same bug      |
@@ -364,7 +364,7 @@ With this stack, sessions start with full context and zero re-discovery overhead
 ### Core Workflow
 - **using-superpowers** — Mandatory workflow router with 3-tier complexity classification (micro/lightweight/full) and instruction priority hierarchy
 - **token-efficiency** — Always-on: concise responses, parallel tool batching, exploration tracking, no redundant work
-- **context-management** — Four-file memory stack: `project-map.md` (structure + key files + critical constraints, git-hash staleness detection), `session-log.md` (accumulated decision history, auto-appended every session), `state.md` (ephemeral current-task snapshot), `known-issues.md` (error→solution map)
+- **context-management** — Four-file memory stack: `project-map.md` (structure + key files + critical constraints, git-hash staleness detection), `session-log.md` (decision history, manually written via `context-management` — [saved] entries only), `state.md` (ephemeral current-task snapshot), `known-issues.md` (error→solution map)
 
 - **premise-check** — Validates whether proposed work should exist before investing in it; triggers reassessment when new evidence changes the original motivation
 
@@ -470,7 +470,7 @@ Read more: [Superpowers for Claude Code](https://blog.fsck.com/2025/10/09/superp
 
 ---
 
-### Codex / OpenCode / Gemini CLI
+### Codex / Gemini CLI
 
 **Install** — tell the agent:
 ```
@@ -480,6 +480,22 @@ Fetch and follow instructions from https://raw.githubusercontent.com/REPOZY/supe
 **Update** — tell the agent:
 ```
 Fetch and follow the update instructions from https://raw.githubusercontent.com/REPOZY/superpowers-optimized/refs/heads/main/.codex/INSTALL.md
+```
+
+Or manually: `git pull` in your local clone of the repository.
+
+---
+
+### OpenCode
+
+**Install** — tell the agent:
+```
+Fetch and follow instructions from https://raw.githubusercontent.com/REPOZY/superpowers-optimized/refs/heads/main/.opencode/INSTALL.md
+```
+
+**Update** — tell the agent:
+```
+Fetch and follow the update instructions from https://raw.githubusercontent.com/REPOZY/superpowers-optimized/refs/heads/main/.opencode/INSTALL.md
 ```
 
 Or manually: `git pull` in your local clone of the repository.
@@ -538,6 +554,8 @@ Skills live directly in this repository. To contribute:
 2. Create a branch for your skill
 3. Follow the existing skill structure in `skills/` (each skill has a `SKILL.md` with YAML frontmatter)
 4. Submit a PR
+
+**Modifying hooks:** Hook files (`hooks/hooks.json`, `hooks/codex-hooks.json`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`) are generated — never edit them directly. Edit `plugin.universal.yaml` at the repo root, then run `hookbridge compile` to regenerate. See [hookbridge](https://github.com/REPOZY/Hookbridge) for the compiler tool.
 
 
 ### License

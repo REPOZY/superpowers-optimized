@@ -42,13 +42,23 @@ Claude Code automatically compresses context within a session. This skill has tw
 
 ### At the start of any non-trivial task
 
-Before diving in, grep `session-log.md` for keywords from the current task:
+Before diving in, grep `session-log.md` for history relevant to the current task.
 
+**Step 1 — Extract keywords.** Take the 2-3 most distinctive nouns from the task description. Avoid generic words ("fix", "update", "file") — use domain nouns ("hook", "auth", "deploy", "staleness").
+
+**Step 2 — Grep each keyword individually first:**
 ```bash
-grep -i "<keyword>" session-log.md | tail -20
+grep -i "<keyword1>" session-log.md | tail -20
+grep -i "<keyword2>" session-log.md | tail -20
 ```
+Check the hit count before reading results. This tells you whether to narrow or widen before committing to any output.
 
-Use 2-3 keywords (e.g., "hook", "auth", "deploy"). If relevant entries are found, surface them: past decisions, rejected approaches, and known constraints from prior sessions save investigation time and prevent repeating mistakes.
+**Step 3 — Adjust based on hit count:**
+- **0 hits on all keywords** → fall back to `project-map.md` Critical Constraints. Relevant history may have been promoted there instead of staying in the log. If still nothing, proceed without history.
+- **1–10 hits** → read them. Surface past decisions, rejected approaches, and constraints.
+- **>10 hits on one keyword** → narrow with a second term: `grep -i "<kw1>" session-log.md | grep -i "<kw2>" | tail -20`
+
+**Step 4 — Surface what matters.** If relevant entries are found, state them explicitly before proceeding: what was decided, what was rejected, what constraints apply. Don't silently absorb them — make them visible so the user can confirm or override.
 
 ### When saving state (explicit invocation)
 
@@ -65,7 +75,13 @@ Use 2-3 keywords (e.g., "hook", "auth", "deploy"). If relevant entries are found
    - `Evidence`
    - `Open Issues`
 
-3. Append a `[saved]` entry to `session-log.md`:
+3. **Check for superseded entries before appending.** Grep `session-log.md` for 2-3 keywords from the current decision:
+   ```bash
+   grep -i "<keyword>" session-log.md
+   ```
+   Read any matching `[saved]` entries and ask: does the new decision *directly contradict* an old one? If yes, append `[superseded by YYYY-MM-DD]` to the old entry's header line — do not delete it. If the old entry is merely related but not contradicted, leave it unchanged. This is a judgment call, not a mechanical keyword match.
+
+4. Append a `[saved]` entry to `session-log.md`:
 
 **What belongs here vs state.md:**
 - `session-log.md [saved]`: permanent decisions, anti-patterns to avoid, carry-forward open items

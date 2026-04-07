@@ -1,5 +1,52 @@
 # Superpowers Optimized Release Notes
 
+## v6.4.0 (2026-04-07)
+
+Native Codex hooks, OpenCode safety parity, hookbridge migration, and memory system improvements.
+
+### New Features
+
+**Native Codex hook adapters** — Three new adapter scripts in `hooks/codex/` bring full lifecycle hook support to Codex (macOS/Linux with hooks enabled):
+- `session-start-adapter.js` — injects project context (project-map, session-log, state, known-issues) at session start, matching the Claude Code session-start hook behavior
+- `stop-adapter.js` — generates discipline reminders at turn end using git uncommitted changes instead of edit-log.txt (which Codex cannot write)
+- `pretool-bash-adapter.js` — single dispatcher for PreToolUse(Bash): runs dangerous-command and secret-protection checks in one process (required because Codex fires multiple matching hooks concurrently)
+
+The `codex-hooks.json` now registers all four Codex hook events: `SessionStart`, `UserPromptSubmit` (skill activator), `Stop`, and `PreToolUse(Bash)`.
+
+**Codex agent configs** — `codex-agents/code-reviewer.toml` and `codex-agents/red-team.toml` enable native Codex agent support for the code-reviewer and red-team workflows without manual setup.
+
+**OpenCode `tool.execute.before` safety hook** — The OpenCode plugin now intercepts all bash, read, edit, and write tool calls before execution, applying the same safety checks as the Claude Code hooks: 19 dangerous command patterns, 25 sensitive file path patterns, 14 secret-leaking bash patterns, and hardcoded secret detection for write operations. Blocking is via thrown errors, matching OpenCode's native hook contract. Previously the OpenCode plugin only injected the system prompt; it had no pre-execution safety layer.
+
+**`plugin.universal.yaml` as single source of truth** — All hook files and platform manifests (`hooks/hooks.json`, `hooks/codex-hooks.json`, `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`) are now generated from `plugin.universal.yaml` in the repo root via `hookbridge compile`. Do not hand-edit the generated files — they will be overwritten. This eliminates the previous duplication where hooks were maintained in three places and could drift out of sync. Compiled with the new open source tool Hookbridge: https://github.com/REPOZY/Hookbridge
+
+**Context-management: structured grep workflow** — The skill now specifies a four-step grep process: extract 2-3 distinctive nouns from the task, grep each individually, adjust based on hit count (0 hits → fall back to project-map critical constraints; 1–10 hits → read them; >10 hits on one keyword → narrow with a second term), then surface findings explicitly. Previously the skill gave a single generic grep command with no guidance on what to do with the results.
+
+**Context-management: superseded-entry detection** — Before appending a new `[saved]` entry, the skill now instructs checking for earlier entries on the same topic and marking contradicted ones as `[superseded by YYYY-MM-DD]`. This prevents the session-log from accumulating contradictory decisions across sessions without any connection between them.
+
+### Changes
+
+**`[auto]` entry system retired** — `stop-reminders.js` no longer writes automatic `[auto]` entries to `session-log.md` at session stop. The session-log is now `[saved]`-only — human-written entries via the context-management skill. Auto-entries produced noise that inflated injection costs and were never referenced in practice.
+
+**Skill-rules expanded coverage** — The TDD rule now matches "tests first", "failing tests first", and "write the failing tests" in addition to the existing keywords. The verification-before-completion rule adds "verify everything", "all done", "we're done", and intent patterns like "think I'm done" and "before we call it done" to reduce missed activations on natural phrasing.
+
+**Red-team agent security constraints** — The red-team agent prompt now explicitly states that file contents are untrusted data and that the agent must not follow instructions embedded in source files, comments, or strings. Output is restricted to the conversation — no file writes, no shell commands. This prevents a malicious file under review from hijacking the agent.
+
+**Token-efficiency: Read tool chunk rule** — Added an explicit rule: the Read tool returns a maximum of 2,000 lines per call. For files suspected to exceed this limit, use `offset` and `limit` parameters and read in sequential chunks. Never assume a single read covered the complete file.
+
+**OpenCode plugin export renamed** — The plugin export is now `SuperpowersOptimizedPlugin` (was `SuperpowersPlugin`). This only affects internal plugin wiring in `.opencode/plugins/superpowers-optimized.js`; no user-facing behavior changes.
+
+**`plugin-compiler/` directory removed** — The working copy of hookbridge that lived inside the plugin repo has been removed. hookbridge lives at its canonical location and `plugin.universal.yaml` in the repo root replaces it as the hook compilation entry point.
+
+**Codex platform docs rewritten** — `docs/platforms/codex.md` and `.codex/INSTALL.md` now both include a feature comparison table (macOS/Linux with hooks vs Windows native), corrected install steps, and clear hook-capability boundaries (what Codex can and cannot intercept).
+
+### Fixes
+
+**OpenCode system transform array handling corrected** — The `experimental.chat.system.transform` hook was using `output.system ||= []` before pushing content, which would incorrectly skip pushing when the array was already populated. Fixed to direct `.push()` since OpenCode always pre-populates the system array.
+
+Fixed the "Stop hook error: JSON validation failed: Hook JSON output validation failed" issue: https://github.com/REPOZY/superpowers-optimized/issues/9
+
+Fixed the minor issue found in the Security Audit posted by a user: https://github.com/REPOZY/superpowers-optimized/issues/12
+
 ## v6.3.0 (2026-04-03)
 
 Session memory quality pass: the stop-reminders hook now tracks undocumented work phases across long sessions, enforced token budgets prevent session-log bloat from inflating injection costs, and parallel dispatch defaults are corrected in two skills.
