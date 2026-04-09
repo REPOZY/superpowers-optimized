@@ -2,7 +2,7 @@
 /**
  * Unit tests — hooks/codex/stop-adapter.js
  *
- * Tests loop-guard behavior, systemMessage output shape, and reminder
+ * Tests loop-guard behavior, continuation-prompt output shape, and reminder
  * logic. Uses a temporary git repo to simulate changed files.
  *
  * Run: node tests/codex/test-stop-adapter.js
@@ -117,15 +117,16 @@ test('Clean repo (no changes) → returns {}', () => {
 
 console.log('\nTDD reminder');
 
-test('Source file modified, no test file → systemMessage with TDD reminder', () => {
+test('Source file modified, no test file → block reason with TDD reminder', () => {
   const dir = makeTempRepo();
   try {
     fs.writeFileSync(path.join(dir, 'index.js'), 'console.log("hello")');
     // Don't stage — git diff --name-only picks up unstaged changes too
     const result = runAdapter({ stop_hook_active: false }, dir);
-    assert.ok(result.systemMessage, `Expected systemMessage, got: ${JSON.stringify(result)}`);
-    assert.ok(result.systemMessage.toLowerCase().includes('tdd'),
-      `Expected TDD mention in: ${result.systemMessage}`);
+    assert.strictEqual(result.decision, 'block', `Expected decision=block, got: ${JSON.stringify(result)}`);
+    assert.ok(result.reason, `Expected reason, got: ${JSON.stringify(result)}`);
+    assert.ok(result.reason.toLowerCase().includes('tdd'),
+      `Expected TDD mention in: ${result.reason}`);
   } finally { cleanup(dir); }
 });
 
@@ -136,9 +137,9 @@ test('Source file + test file both modified → no TDD reminder', () => {
     fs.writeFileSync(path.join(dir, 'index.test.js'), 'test("x", () => {})');
     const result = runAdapter({ stop_hook_active: false }, dir);
     // May have other reminders (commit count) but not TDD
-    if (result.systemMessage) {
-      assert.ok(!result.systemMessage.toLowerCase().includes('tdd reminder'),
-        `Unexpected TDD reminder: ${result.systemMessage}`);
+    if (result.reason) {
+      assert.ok(!result.reason.toLowerCase().includes('tdd reminder'),
+        `Unexpected TDD reminder: ${result.reason}`);
     }
   } finally { cleanup(dir); }
 });
@@ -147,16 +148,17 @@ test('Source file + test file both modified → no TDD reminder', () => {
 
 console.log('\nCommit reminder');
 
-test('5+ uncommitted files → systemMessage with commit reminder', () => {
+test('5+ uncommitted files → block reason with commit reminder', () => {
   const dir = makeTempRepo();
   try {
     for (let i = 0; i < 6; i++) {
       fs.writeFileSync(path.join(dir, `file${i}.js`), `// ${i}`);
     }
     const result = runAdapter({ stop_hook_active: false }, dir);
-    assert.ok(result.systemMessage, `Expected systemMessage`);
-    assert.ok(result.systemMessage.toLowerCase().includes('commit'),
-      `Expected commit reminder in: ${result.systemMessage}`);
+    assert.strictEqual(result.decision, 'block', `Expected decision=block, got: ${JSON.stringify(result)}`);
+    assert.ok(result.reason, 'Expected reason');
+    assert.ok(result.reason.toLowerCase().includes('commit'),
+      `Expected commit reminder in: ${result.reason}`);
   } finally { cleanup(dir); }
 });
 
@@ -167,9 +169,9 @@ test('4 uncommitted files → no commit reminder', () => {
       fs.writeFileSync(path.join(dir, `file${i}.js`), `// ${i}`);
     }
     const result = runAdapter({ stop_hook_active: false }, dir);
-    if (result.systemMessage) {
-      assert.ok(!result.systemMessage.toLowerCase().includes('commit reminder'),
-        `Unexpected commit reminder with only 4 files: ${result.systemMessage}`);
+    if (result.reason) {
+      assert.ok(!result.reason.toLowerCase().includes('commit reminder'),
+        `Unexpected commit reminder with only 4 files: ${result.reason}`);
     }
   } finally { cleanup(dir); }
 });
@@ -178,15 +180,16 @@ test('4 uncommitted files → no commit reminder', () => {
 
 console.log('\nDecision log reminder');
 
-test('SKILL.md modified (uncommitted) → systemMessage with decision log reminder', () => {
+test('SKILL.md modified (uncommitted) → block reason with decision log reminder', () => {
   const dir = makeTempRepo();
   try {
     fs.mkdirSync(path.join(dir, 'skills', 'my-skill'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'skills', 'my-skill', 'SKILL.md'), '---\nname: test\n---\n# test');
     const result = runAdapter({ stop_hook_active: false }, dir);
-    assert.ok(result.systemMessage, `Expected systemMessage`);
-    assert.ok(result.systemMessage.toLowerCase().includes('decision log'),
-      `Expected decision log reminder in: ${result.systemMessage}`);
+    assert.strictEqual(result.decision, 'block', `Expected decision=block, got: ${JSON.stringify(result)}`);
+    assert.ok(result.reason, 'Expected reason');
+    assert.ok(result.reason.toLowerCase().includes('decision log'),
+      `Expected decision log reminder in: ${result.reason}`);
   } finally { cleanup(dir); }
 });
 
@@ -202,9 +205,10 @@ test('SKILL.md modified for project that already has session-log [saved] → sti
     fs.mkdirSync(path.join(dir, 'skills', 'test'), { recursive: true });
     fs.writeFileSync(path.join(dir, 'skills', 'test', 'SKILL.md'), '---\nname: test\n---');
     const result = runAdapter({ stop_hook_active: false }, dir);
-    assert.ok(result.systemMessage, `Expected systemMessage even with prior [saved] entry`);
-    assert.ok(result.systemMessage.toLowerCase().includes('decision log'),
-      `Expected decision log reminder: ${result.systemMessage}`);
+    assert.strictEqual(result.decision, 'block', `Expected decision=block, got: ${JSON.stringify(result)}`);
+    assert.ok(result.reason, `Expected reason even with prior [saved] entry`);
+    assert.ok(result.reason.toLowerCase().includes('decision log'),
+      `Expected decision log reminder: ${result.reason}`);
   } finally { cleanup(dir); }
 });
 
@@ -212,17 +216,20 @@ test('SKILL.md modified for project that already has session-log [saved] → sti
 
 console.log('\nOutput shape');
 
-test('When reminders present: output has systemMessage (string), no other hook fields', () => {
+test('When reminders present: output uses block reason, not Stop hookSpecificOutput fields', () => {
   const dir = makeTempRepo();
   try {
     fs.writeFileSync(path.join(dir, 'index.js'), 'x');
     const result = runAdapter({ stop_hook_active: false }, dir);
-    if (result.systemMessage) {
-      assert.strictEqual(typeof result.systemMessage, 'string');
+    if (result.reason) {
+      assert.strictEqual(result.decision, 'block');
+      assert.strictEqual(typeof result.reason, 'string');
       assert.ok(!result.hookSpecificOutput,
         'Should not use hookSpecificOutput shape for Stop event');
       assert.ok(!result.additionalContext,
         'Should not use additionalContext for Stop event');
+      assert.ok(!result.systemMessage,
+        'Should not use systemMessage for Stop continuation path');
     }
   } finally { cleanup(dir); }
 });

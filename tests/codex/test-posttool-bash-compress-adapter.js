@@ -37,7 +37,13 @@ function isAllowed(result) {
 
 function isBlocked(result) {
   assert.strictEqual(result.decision, 'block', `Expected decision=block, got: ${JSON.stringify(result)}`);
+  assert.strictEqual(result.continue, false, `Expected continue=false, got: ${JSON.stringify(result)}`);
   assert.ok(typeof result.reason === 'string' && result.reason.length > 0, 'Expected non-empty reason');
+  assert.deepStrictEqual(result.hookSpecificOutput?.hookEventName, 'PostToolUse',
+    `Expected PostToolUse hookSpecificOutput, got: ${JSON.stringify(result)}`);
+  assert.ok(typeof result.hookSpecificOutput?.additionalContext === 'string' &&
+    result.hookSpecificOutput.additionalContext.length > 0,
+  'Expected PostToolUse additionalContext');
 }
 
 console.log('\nNon-Bash / fail-open');
@@ -69,6 +75,14 @@ test('NEVER_COMPRESS command → allow', () => {
     tool_name: 'Bash',
     tool_input: { command: 'cat README.md' },
     tool_response: { stdout: longLines('file', 80), stderr: '', exit_code: 0 },
+  }));
+});
+
+test('User-filtered command with pipe → allow', () => {
+  isAllowed(evaluatePayload({
+    tool_name: 'Bash',
+    tool_input: { command: 'find . -type f | sort' },
+    tool_response: { stdout: longLines('./src/file.ts', 120), stderr: '', exit_code: 0 },
   }));
 });
 
