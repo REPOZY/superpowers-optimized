@@ -254,6 +254,10 @@ fi
 # without relying on Claude following the entry sequence instruction to read it.
 # ≤200 lines: inject full content. >200 lines: inject Critical Constraints and
 # Hot Files only (highest-value sections), with a note pointing to the full file.
+#
+# Staleness check: extracts the git hash from the map header and compares it to
+# the current HEAD. If they differ, injects a <project-map-stale> warning so the
+# AI sees it immediately — no AI compliance with entry sequence step 6 required.
 project_map_content=""
 if [ -f "project-map.md" ]; then
     line_count=$(wc -l < "project-map.md" 2>/dev/null || echo "0")
@@ -272,6 +276,13 @@ ${project_map_raw}"
     fi
     if [ -n "$project_map_raw" ]; then
         project_map_content="\n\n<project-map>\n${project_map_raw}\n</project-map>"
+    fi
+
+    # Staleness check — compare map header hash to current git HEAD
+    map_hash=$(grep -oE 'Git: [a-f0-9]+' "project-map.md" 2>/dev/null | head -1 | awk '{print $2}' || echo "")
+    current_hash=$(git rev-parse --short HEAD 2>/dev/null || echo "")
+    if [ -n "$map_hash" ] && [ -n "$current_hash" ] && [ "$map_hash" != "$current_hash" ]; then
+        project_map_content="${project_map_content}\n\n<project-map-stale>project-map.md is stale — map records Git: ${map_hash} but current HEAD is ${current_hash}. Run the staleness update (using-superpowers entry sequence step 6) before making any recommendations about project structure or file locations.</project-map-stale>"
     fi
 fi
 

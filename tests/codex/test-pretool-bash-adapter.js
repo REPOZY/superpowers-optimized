@@ -11,28 +11,15 @@
 
 'use strict';
 
-const { spawnSync } = require('child_process');
-const path = require('path');
 const assert = require('assert');
 
-const ADAPTER = path.resolve(__dirname, '../../hooks/codex/pretool-bash-adapter.js');
+const { evaluatePayload } = require('../../hooks/codex/pretool-bash-adapter');
 
 let passed = 0;
 let failed = 0;
 
 function run(label, payload) {
-  const result = spawnSync(process.execPath, [ADAPTER], {
-    input: JSON.stringify(payload),
-    encoding: 'utf8',
-    timeout: 5000,
-  });
-  let stdout = '{}';
-  try { stdout = result.stdout.trim() || '{}'; } catch {}
-  let parsed = {};
-  try { parsed = JSON.parse(stdout); } catch {
-    console.error(`  PARSE ERROR in "${label}": stdout was: ${stdout}`);
-  }
-  return parsed;
+  return evaluatePayload(payload);
 }
 
 function test(label, payload, assertFn) {
@@ -53,15 +40,17 @@ function test(label, payload, assertFn) {
 function isAllowed(result) {
   // Allow = empty object OR no permissionDecision field
   assert.ok(
-    !result.permissionDecision || result.permissionDecision === 'allow',
+    !result.hookSpecificOutput?.permissionDecision || result.hookSpecificOutput.permissionDecision === 'allow',
     `Expected allow but got: ${JSON.stringify(result)}`
   );
 }
 
 function isBlocked(result) {
-  assert.strictEqual(result.permissionDecision, 'deny',
+  assert.strictEqual(result.hookSpecificOutput?.permissionDecision, 'deny',
     `Expected deny but got: ${JSON.stringify(result)}`);
-  assert.ok(result.permissionDecisionReason, 'Expected a permissionDecisionReason');
+  assert.ok(result.hookSpecificOutput?.permissionDecisionReason, 'Expected a permissionDecisionReason');
+  assert.strictEqual(result.hookSpecificOutput?.hookEventName, 'PreToolUse',
+    `Expected PreToolUse hookEventName, got: ${JSON.stringify(result)}`);
 }
 
 // ── Non-Bash tool: always allow ───────────────────────────────────────────────
@@ -105,6 +94,16 @@ test('cat README.md → allow', {
   tool_name: 'Bash',
   tool_input: { command: 'cat README.md' },
 }, isAllowed);
+
+test('sed to read .env → blocked (sed bypass)', {
+  tool_name: 'Bash',
+  tool_input: { command: "sed -n '1,200p' .env" },
+}, isBlocked);
+
+test('awk to read .env → blocked (awk bypass)', {
+  tool_name: 'Bash',
+  tool_input: { command: "awk '{print}' .env" },
+}, isBlocked);
 
 // NOTE: .env.example allowlist only applies to Read/Edit/Write tool file-path checks,
 // NOT to bash commands. The protect-secrets bash regex \.env\b matches .env.example

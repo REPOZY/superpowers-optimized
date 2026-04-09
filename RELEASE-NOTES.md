@@ -1,5 +1,27 @@
 # Superpowers Optimized Release Notes
 
+## v6.5.0 (2026-04-09)
+
+Codex parity hardening: the plugin now follows the current Codex hook contract more closely, adds reactive Bash smart-compress on Codex, and tightens install/update guidance so complete Codex installs are easier to get right.
+
+### New Features
+
+**Codex `PostToolUse(Bash)` smart-compress** — Codex sessions can now replace noisy Bash output after execution with a compressed summary using the same compression rules already used by the Claude-side Bash compressor. Large `find`/`ls` output and long passing test runs can be collapsed to concise summaries with explicit `[smart-compress]` and `[compressed: X->Y lines | type]` markers, reducing context waste without hiding failures.
+
+### Changes
+
+**Codex hook set expanded to five native hooks** — The Codex build now wires `SessionStart`, `UserPromptSubmit`, `PreToolUse(Bash)`, `PostToolUse(Bash)`, and `Stop` through dedicated Codex adapters. This keeps the Codex path aligned with the current official hook model while still acknowledging the remaining platform limits versus Claude Code.
+
+**Codex install/update docs now define a complete install** — The Codex docs now treat skills, custom agents, and macOS/Linux lifecycle hooks as the standard install on supported platforms, include a clean reinstall fallback for stale or inconsistent local installs, and call out `codex-cli 0.118.0+` as the minimum tested version for live hook behavior.
+
+**Compiler/reporting language is now precise about Codex parity** — Generated loss reports and the Codex-facing docs now say only what they actually prove: native compilation for hooks targeted to Codex, not full Claude parity. This removes misleading wording that could imply unsupported Claude-only hook surfaces also existed on Codex.
+
+### Fixes
+
+**Codex hook output/registry compatibility hardened** — The Codex-generated hook registry now uses the current top-level `hooks` shape, the plugin manifest no longer carries the stale Codex `hooks` field, and the Codex-specific adapters now emit the output shapes expected by the current Codex docs. This addresses the class of failures where Codex would silently ignore hooks or reject invalid hook output.
+
+**Codex Bash safety checks close more real shell read paths** — The Codex Bash safety path now catches additional `.env` read patterns such as `sed` and `awk`, reducing the chance that a secret file read slips past Codex's Bash-only interception surface.
+
 ## v6.4.0 (2026-04-07)
 
 Native Codex hooks, OpenCode safety parity, hookbridge migration, and memory system improvements.
@@ -13,7 +35,7 @@ Native Codex hooks, OpenCode safety parity, hookbridge migration, and memory sys
 
 The `codex-hooks.json` now registers all four Codex hook events: `SessionStart`, `UserPromptSubmit` (skill activator), `Stop`, and `PreToolUse(Bash)`.
 
-**Codex agent configs** — `codex-agents/code-reviewer.toml` and `codex-agents/red-team.toml` enable native Codex agent support for the code-reviewer and red-team workflows without manual setup.
+**Codex agent configs** — `codex-agents/code-reviewer.toml` and `codex-agents/red-team.toml` enable native Codex agent support for the code-reviewer and red-team workflows, but Codex still requires manual placement in `~/.codex/agents/` because plugin manifests cannot bundle TOML agents.
 
 **OpenCode `tool.execute.before` safety hook** — The OpenCode plugin now intercepts all bash, read, edit, and write tool calls before execution, applying the same safety checks as the Claude Code hooks: 19 dangerous command patterns, 25 sensitive file path patterns, 14 secret-leaking bash patterns, and hardcoded secret detection for write operations. Blocking is via thrown errors, matching OpenCode's native hook contract. Previously the OpenCode plugin only injected the system prompt; it had no pre-execution safety layer.
 

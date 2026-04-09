@@ -20,7 +20,7 @@ Core operating standard for all sessions. Apply permanently from activation.
 
 1. Batch all independent tool calls in a single response — never serialize calls that can run in parallel
 2. Do not re-read a file already read this session unless it was modified since
-3. Grep for the relevant section before reading an entire file
+3. Match read scope to task type: use Grep to locate specific known content (a function, a config value, an error handler); read complete files when the task requires understanding what a file covers (scope assessment, gap analysis, systemic recommendations). Partial reads cannot prove absence.
 4. Use Glob instead of Bash `ls` or `find`
 5. Do not verify existence of a path already confirmed earlier in the session
 6. The Read tool returns a maximum of 2,000 lines per call. For files you have reason to believe exceed 2,000 lines, use `offset` and `limit` parameters to read in sequential chunks. Never assume a single read covered the complete file.

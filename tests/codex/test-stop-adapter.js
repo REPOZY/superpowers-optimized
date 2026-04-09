@@ -11,13 +11,13 @@
 
 'use strict';
 
-const { spawnSync, execSync } = require('child_process');
-const path = require('path');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
+const path = require('path');
 const assert = require('assert');
 
-const ADAPTER = path.resolve(__dirname, '../../hooks/codex/stop-adapter.js');
+const { evaluatePayload } = require('../../hooks/codex/stop-adapter');
 
 let passed = 0;
 let failed = 0;
@@ -25,15 +25,7 @@ let failed = 0;
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function runAdapter(payload, cwd) {
-  const result = spawnSync(process.execPath, [ADAPTER], {
-    input: JSON.stringify({ cwd, ...payload }),
-    encoding: 'utf8',
-    timeout: 8000,
-    cwd,
-  });
-  let parsed = {};
-  try { parsed = JSON.parse((result.stdout || '').trim() || '{}'); } catch {}
-  return parsed;
+  return evaluatePayload({ cwd, ...payload });
 }
 
 function test(label, fn) {
