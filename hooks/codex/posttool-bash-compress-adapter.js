@@ -184,7 +184,12 @@ function evaluatePayload(data) {
 
   return {
     decision: 'block',
+    continue: false,
     reason: replacement,
+    hookSpecificOutput: {
+      hookEventName: 'PostToolUse',
+      additionalContext: replacement,
+    },
   };
 }
 

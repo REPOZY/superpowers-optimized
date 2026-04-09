@@ -3,7 +3,8 @@
  * Codex Stop Adapter
  *
  * Runs when a Codex turn ends. Generates lightweight discipline reminders
- * surfaced as a systemMessage (shown as a UI warning — non-blocking).
+ * surfaced as a one-time continuation prompt. This matches the current
+ * Codex contract more reliably than a silent Stop-only systemMessage.
  */
 
 'use strict';
@@ -144,6 +145,14 @@ function generateReminders(cwd, changedFiles) {
   return reminders;
 }
 
+function buildContinuationReason(reminders) {
+  return [
+    'Superpowers reminders before you stop:',
+    ...reminders.map((reminder, index) => `${index + 1}. ${reminder}`),
+    'Tell the user these reminders briefly before ending the turn.',
+  ].join('\n');
+}
+
 function evaluatePayload(data) {
   if (!data || typeof data !== 'object') return {};
   if (data.stop_hook_active === true) return {};
@@ -157,10 +166,8 @@ function evaluatePayload(data) {
   if (reminders.length === 0) return {};
 
   return {
-    systemMessage: [
-      'Superpowers reminders:',
-      ...reminders.map((reminder, index) => `${index + 1}. ${reminder}`),
-    ].join('\n'),
+    decision: 'block',
+    reason: buildContinuationReason(reminders),
   };
 }
 
@@ -177,6 +184,7 @@ if (require.main === module) {
   main();
 } else {
   module.exports = {
+    buildContinuationReason,
     evaluatePayload,
     generateReminders,
     getUncommittedFiles,

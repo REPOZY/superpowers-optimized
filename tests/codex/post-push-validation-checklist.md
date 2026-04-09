@@ -63,7 +63,7 @@ Expected:
 ### UserPromptSubmit adapter
 
 ```bash
-bash -lc 'source ~/.nvm/nvm.sh && printf "{\"prompt\":\"debug this stack trace\",\"cwd\":\"'$PWD'\"}\n" | node ~/.codex/superpowers-optimized/hooks/codex/user-prompt-submit-adapter.js'
+bash -lc 'source ~/.nvm/nvm.sh && printf "{\"prompt\":\"debug this stack trace from the API and identify the root cause before proposing a fix\",\"cwd\":\"'$PWD'\"}\n" | node ~/.codex/superpowers-optimized/hooks/codex/user-prompt-submit-adapter.js'
 ```
 
 Expected:
@@ -95,7 +95,7 @@ bash -lc 'source ~/.nvm/nvm.sh && printf "{\"cwd\":\"/tmp/sp-test-stop\",\"stop_
 Expected:
 
 - Valid JSON or `{}`
-- When reminder conditions are met, output uses top-level `systemMessage`
+- When reminder conditions are met, output uses top-level `decision = "block"` plus `reason`
 - No `hookSpecificOutput` for `Stop`
 
 ## Live Hook Tests Against The Actual Installed Home
@@ -221,14 +221,16 @@ Pass criteria:
 Fixture:
 
 - run a safe but noisy Bash command that matches an existing compression rule
-- good candidates: a large `find`, large `ls`, or a long passing test run
+- good candidates: `find . -type f`, a large plain `ls`, or a long passing test run
+- do not use user-filtered commands like `find . -type f | sort`; those are intentionally on `NEVER_COMPRESS` and should fail open
 
 Pass criteria:
 
 - command still runs
-- Codex receives the hook-provided compressed replacement instead of the full raw Bash output
+- Codex receives the hook-provided compressed replacement at the model layer
 - replacement includes the `[smart-compress]` marker and `[compressed: X->Y lines | type]`
 - commands on the `NEVER_COMPRESS` list still pass through raw
+- In `codex exec --json`, `command_execution.aggregated_output` may still record the original raw Bash output even when the hook replacement was used. Judge pass/fail from the final model-visible response and the hook capture, not the raw execution event alone.
 
 ## Group 4: Stop
 
@@ -243,7 +245,7 @@ Fixture:
 Pass criteria:
 
 - Stop reminder appears visibly in the live Codex session
-- reminder uses `systemMessage`, not `hookSpecificOutput`
+- reminder is surfaced via a continuation block (`decision = "block"` + `reason`)
 
 ### T4.2 Commit reminder
 
