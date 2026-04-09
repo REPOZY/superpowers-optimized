@@ -20,6 +20,10 @@ Codex parity hardening: the plugin now follows the current Codex hook contract m
 
 **Codex hook output/registry compatibility hardened** — The Codex-generated hook registry now uses the current top-level `hooks` shape, the plugin manifest no longer carries the stale Codex `hooks` field, and the Codex-specific adapters now emit the output shapes expected by the current Codex docs. This addresses the class of failures where Codex would silently ignore hooks or reject invalid hook output.
 
+**Codex `Stop` and `PostToolUse(Bash)` are now validated live, not just by unit tests** — The Codex `Stop` adapter now uses the continuation-block path (`decision: "block"` + `reason`) that Codex actually surfaces at turn end, and the reactive Codex `PostToolUse(Bash)` smart-compress path has been proven live on `codex-cli 0.118.0` for compressible commands such as `find . -type f`. This closes the earlier uncertainty where the adapters looked correct locally but had not yet been confirmed against the real Codex runtime.
+
+**Codex JSON transcript interpretation is now documented correctly** — In `codex exec --json`, the `command_execution.aggregated_output` field can still show the original raw Bash output even when the model was actually continued from the hook-provided compressed replacement. The Codex test checklist and troubleshooting guidance now treat the final model-visible response and captured hook output as the source of truth for `PostToolUse(Bash)` verification.
+
 **Codex Bash safety checks close more real shell read paths** — The Codex Bash safety path now catches additional `.env` read patterns such as `sed` and `awk`, reducing the chance that a secret file read slips past Codex's Bash-only interception surface.
 
 ## v6.4.0 (2026-04-07)
