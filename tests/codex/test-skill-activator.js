@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit tests — hooks/skill-activator.js (used as Codex UserPromptSubmit handler)
+ * Unit tests — hooks/codex/user-prompt-submit-adapter.js
  *
  * Verifies:
  *   - Correct Codex payload field: `prompt` (not `userPrompt`)
@@ -15,11 +15,9 @@
 
 'use strict';
 
-const { spawnSync } = require('child_process');
-const path = require('path');
 const assert = require('assert');
 
-const ACTIVATOR = path.resolve(__dirname, '../../hooks/skill-activator.js');
+const { evaluatePayload } = require('../../hooks/codex/user-prompt-submit-adapter');
 
 let passed = 0;
 let failed = 0;
@@ -27,14 +25,7 @@ let failed = 0;
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function runActivator(payload) {
-  const result = spawnSync(process.execPath, [ACTIVATOR], {
-    input: JSON.stringify(payload),
-    encoding: 'utf8',
-    timeout: 5000,
-  });
-  let parsed = {};
-  try { parsed = JSON.parse((result.stdout || '').trim() || '{}'); } catch {}
-  return parsed;
+  return evaluatePayload(payload);
 }
 
 function test(label, fn) {

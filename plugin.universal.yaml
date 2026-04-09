@@ -4,7 +4,7 @@
 
 meta:
   name: superpowers-optimized
-  version: "6.4.0"
+  version: "6.5.0"
   description: "Workflow skills and hooks for Claude Code and Codex"
   author: "Jesse Vincent, forked by REPOZY"
   homepage: "https://github.com/REPOZY/superpowers-optimized"
@@ -37,10 +37,15 @@ hooks:
 
   # --- UserPromptSubmit ---
 
-  # Shared: skill activator (same script, both platforms)
+  # Claude Code: shared skill activator
   - event: UserPromptSubmit
     command: "node {PLUGIN_ROOT}/hooks/skill-activator.js"
-    platforms: [claude-code, codex]
+    platforms: [claude-code]
+
+  # Codex: dedicated prompt adapter
+  - event: UserPromptSubmit
+    command: "node {PLUGIN_ROOT}/hooks/codex/user-prompt-submit-adapter.js"
+    platforms: [codex]
 
   # --- PostToolUse ---
 
@@ -55,6 +60,12 @@ hooks:
     matcher: "Skill"
     command: "node {PLUGIN_ROOT}/hooks/track-session-stats.js"
     platforms: [claude-code]
+
+  # Codex: reactive Bash output compression
+  - event: PostToolUse
+    matcher: "Bash"
+    command: "node {PLUGIN_ROOT}/hooks/codex/posttool-bash-compress-adapter.js"
+    platforms: [codex]
 
   # --- Stop ---
 
@@ -112,6 +123,7 @@ extensions:
 
   codex:
     install_path: "$HOME/.codex/{meta.name}"
+    legacy_install_paths: ["$HOME/.codex/superpowers"]
     description: "Structured workflow skills for Codex — systematic debugging, TDD, brainstorming, code review, and 30+ expert workflows. Skills work on all platforms. Lifecycle hooks (routing, safety, reminders) require separate setup on macOS/Linux."
     display_name: "Superpowers Optimized"
     short_description: "30+ expert workflow skills — debugging, TDD, code review, brainstorming, and more"

@@ -13,13 +13,17 @@ Guide for using Superpowers Optimized with OpenAI Codex CLI.
 | Startup context injection (project map, state, known issues) | ✅ with hooks | ❌ |
 | Proactive skill routing on every prompt | ✅ with hooks | ❌ |
 | Dangerous Bash command blocking | ✅ with hooks | ❌ |
-| Stop-time discipline reminders | ✅ with hooks | ❌ |
+| Stop-time discipline reminders | ⚠️ implemented; revalidate live after install/update | ❌ |
 | Custom agents (code-reviewer, red-team) | ✅ manual install | ✅ manual install |
-| Bash command compression | ❌ (Codex limitation) | ❌ |
+| Bash command compression | ✅ reactive `PostToolUse(Bash)` smart-compress | ❌ |
 | Read/Edit/Write interception | ❌ (Codex limitation) | ❌ |
 | Subagent leakage guard | ❌ (Codex limitation) | ❌ |
 
 **Skills work on all platforms including Windows. Lifecycle hooks require macOS or Linux with hooks enabled.**
+
+**Important:** The standard install for this plugin should be the complete install for the current platform. That means skills + custom agents everywhere, plus lifecycle hooks on macOS/Linux. Skipping the custom agent files should be treated as a fallback or constrained setup, not the default install path.
+
+**Minimum tested Codex CLI for live hooks:** `codex-cli 0.118.0`. Older Codex builds may silently ignore the current top-level `hooks` registry shape.
 
 ---
 
@@ -60,11 +64,25 @@ New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.agents\skills"
 cmd /c mklink /J "$env:USERPROFILE\.agents\skills\superpowers" "$env:USERPROFILE\.codex\superpowers-optimized\skills"
 ```
 
-### Step 3 — Restart Codex
+### Step 3 — Install custom agents
 
-Quit and relaunch. Skills are discovered at startup.
+Install the native Codex `code-reviewer` and `red-team` agents:
 
-### Step 4 — (Optional, macOS/Linux only) Enable lifecycle hooks
+**macOS / Linux:**
+```bash
+mkdir -p ~/.codex/agents
+cp ~/.codex/superpowers-optimized/codex-agents/*.toml ~/.codex/agents/
+```
+
+**Windows (PowerShell):**
+```powershell
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.codex\agents"
+Copy-Item "$env:USERPROFILE\.codex\superpowers-optimized\codex-agents\*.toml" "$env:USERPROFILE\.codex\agents\"
+```
+
+These agents are part of the standard Codex install for this plugin. If you skip this step, the install is intentionally incomplete.
+
+### Step 4 — (macOS/Linux only) Enable lifecycle hooks
 
 Hooks add startup context injection. Hooks are disabled on Windows native — skip this step on Windows.
 
@@ -78,7 +96,41 @@ codex_hooks = true
 ```bash
 ln -s ~/.codex/superpowers-optimized/hooks/codex-hooks.json ~/.codex/hooks.json
 ```
-If `~/.codex/hooks.json` already exists, merge the `SessionStart` entry from `codex-hooks.json` into your existing file instead of replacing it.
+If `~/.codex/hooks.json` already exists, merge this plugin's Codex entries from the top-level `hooks` object in `codex-hooks.json` into your existing file instead of replacing it.
+
+### Step 5 — Restart Codex
+
+Quit and relaunch. Skills, hooks, and custom agents are discovered at startup.
+
+### Step 6 — Verify the complete install
+
+**macOS / Linux:**
+```bash
+ls -la ~/.agents/skills/superpowers
+ls -la ~/.codex/agents/code-reviewer.toml ~/.codex/agents/red-team.toml
+```
+
+**Windows (PowerShell):**
+```powershell
+Get-Item "$env:USERPROFILE\.agents\skills\superpowers"
+Get-Item "$env:USERPROFILE\.codex\agents\code-reviewer.toml","$env:USERPROFILE\.codex\agents\red-team.toml"
+```
+
+**macOS/Linux hooks:**
+
+```bash
+grep -n "codex_hooks" ~/.codex/config.toml
+test -f ~/.codex/hooks.json && echo "hooks.json present"
+grep -n '"hooks"' ~/.codex/hooks.json
+```
+
+Also confirm:
+
+```bash
+codex --version
+```
+
+Use `0.118.0` or newer before trusting live hook behavior.
 
 ---
 
@@ -94,7 +146,16 @@ The `using-superpowers` skill is discovered automatically and enforces workflow 
 
 ### Lifecycle hooks (macOS/Linux only)
 
-When hooks are enabled, the SessionStart hook injects project context (project map, state, known issues) into the session at startup. Additional hooks for prompt routing, safety, and reminders are in development (Phase 1).
+When hooks are enabled, Codex uses the Codex-specific hook subset shipped by this plugin: `SessionStart` for context injection, `UserPromptSubmit` for routing, `PreToolUse(Bash)` for safety checks, `PostToolUse(Bash)` for reactive smart-compress of noisy shell output, and `Stop` for discipline reminders.
+
+Verified live on `codex-cli 0.118.0` in a temp Codex home:
+- `SessionStart`
+- `UserPromptSubmit`
+- `PreToolUse(Bash)`
+
+`Stop` is implemented in the correct Codex output shape, but visible live reminder surfacing should still be revalidated after install/update in the actual installed environment.
+
+Codex still cannot match Claude Code's full hook surface. There is no Codex parity today for `PostToolUse(Edit|Write|Skill)`, `SubagentStop`, `Read/Edit/Write` interception, or Claude's pre-execution Bash rewrite path. The Codex `PostToolUse(Bash)` smart-compress hook is reactive: it replaces verbose Bash output after execution, which improves context usage but is not the same mechanism as Claude's `PreToolUse` command rewrite.
 
 ---
 
@@ -117,10 +178,20 @@ ls -la ~/.agents/skills/superpowers   # macOS/Linux
 Get-Item "$env:USERPROFILE\.agents\skills\superpowers"   # Windows
 ```
 
+**Check custom agents are installed:**
+```bash
+ls -la ~/.codex/agents/code-reviewer.toml ~/.codex/agents/red-team.toml   # macOS/Linux
+```
+```powershell
+Get-Item "$env:USERPROFILE\.codex\agents\code-reviewer.toml","$env:USERPROFILE\.codex\agents\red-team.toml"   # Windows
+```
+
 **Check hooks (if you enabled them):**
 ```bash
 grep -n "codex_hooks" ~/.codex/config.toml
 test -f ~/.codex/hooks.json && echo "hooks.json present"
+grep -n '"hooks"' ~/.codex/hooks.json
+codex --version
 ```
 
 ---
@@ -129,9 +200,57 @@ test -f ~/.codex/hooks.json && echo "hooks.json present"
 
 ```bash
 cd ~/.codex/superpowers-optimized && git pull
+cp ~/.codex/superpowers-optimized/codex-agents/*.toml ~/.codex/agents/
 ```
 
-Skills update instantly through the symlink.
+Skills and hooks update from the clone automatically. Custom agents are copied files, so re-copy them after pulling updates.
+
+After updating hooks, restart Codex and rerun the live smoke checks against the actual installed home. `Stop` reminder visibility is the main behavior still worth revalidating.
+
+### Clean reinstall fallback
+
+Use a clean reinstall instead of the standard update flow when:
+
+- the installed clone is dirty or diverged
+- the install path changed
+- hooks still behave inconsistently after update
+- custom agent files are stale or missing
+- you want a pristine known-good install and are fine losing local changes inside the installed clone
+
+**Warning:** this removes the installed clone and any local changes inside `~/.codex/superpowers-optimized`.
+
+**macOS / Linux:**
+```bash
+rm -f ~/.agents/skills/superpowers
+rm -f ~/.codex/agents/code-reviewer.toml ~/.codex/agents/red-team.toml
+test -L ~/.codex/hooks.json && rm ~/.codex/hooks.json
+rm -rf ~/.codex/superpowers-optimized
+
+git clone https://github.com/REPOZY/superpowers-optimized.git ~/.codex/superpowers-optimized
+mkdir -p ~/.agents/skills ~/.codex/agents
+ln -s ~/.codex/superpowers-optimized/skills ~/.agents/skills/superpowers
+cp ~/.codex/superpowers-optimized/codex-agents/*.toml ~/.codex/agents/
+ln -s ~/.codex/superpowers-optimized/hooks/codex-hooks.json ~/.codex/hooks.json
+```
+
+**Windows (PowerShell):**
+```powershell
+cmd /c rmdir "$env:USERPROFILE\.agents\skills\superpowers"
+Remove-Item -Force "$env:USERPROFILE\.codex\agents\code-reviewer.toml","$env:USERPROFILE\.codex\agents\red-team.toml" -ErrorAction SilentlyContinue
+Remove-Item -Force "$env:USERPROFILE\.codex\hooks.json" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$env:USERPROFILE\.codex\superpowers-optimized"
+
+git clone https://github.com/REPOZY/superpowers-optimized.git "$env:USERPROFILE\.codex\superpowers-optimized"
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.agents\skills","$env:USERPROFILE\.codex\agents" | Out-Null
+cmd /c mklink /J "$env:USERPROFILE\.agents\skills\superpowers" "$env:USERPROFILE\.codex\superpowers-optimized\skills"
+Copy-Item "$env:USERPROFILE\.codex\superpowers-optimized\codex-agents\*.toml" "$env:USERPROFILE\.codex\agents\"
+```
+
+After a clean reinstall:
+
+1. On macOS/Linux, confirm `codex_hooks = true` is still set in `~/.codex/config.toml`
+2. Restart Codex
+3. On macOS/Linux, re-run the live hook smoke checks against the actual installed home
 
 ---
 
@@ -140,12 +259,15 @@ Skills update instantly through the symlink.
 **macOS / Linux:**
 ```bash
 rm ~/.agents/skills/superpowers
+rm -f ~/.codex/agents/code-reviewer.toml ~/.codex/agents/red-team.toml
+test -L ~/.codex/hooks.json && rm ~/.codex/hooks.json
 rm -rf ~/.codex/superpowers-optimized   # optional: delete the clone
 ```
 
 **Windows (PowerShell):**
 ```powershell
 cmd /c rmdir "$env:USERPROFILE\.agents\skills\superpowers"
+Remove-Item -Force "$env:USERPROFILE\.codex\agents\code-reviewer.toml","$env:USERPROFILE\.codex\agents\red-team.toml" -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force "$env:USERPROFILE\.codex\superpowers-optimized"
 ```
 
@@ -165,9 +287,11 @@ Junctions normally work without special permissions. If creation fails, run Powe
 
 ### Hooks not running (macOS/Linux)
 
-1. Confirm `codex_hooks = true` is set in `~/.codex/config.toml`
-2. Confirm `~/.codex/hooks.json` exists and points to `session-start`
-3. Hooks are experimental — check the Codex changelog for status changes
+1. Confirm `codex --version` is `0.118.0` or newer
+2. Confirm `codex_hooks = true` is set in `~/.codex/config.toml`
+3. Confirm `~/.codex/hooks.json` exists and includes this plugin's Codex hook entries under a top-level `hooks` object
+4. Restart Codex after any hook-file change
+5. If hooks still do not fire, inspect the installed `~/.codex/superpowers-optimized/hooks/codex-hooks.json` and validate the JSON syntax
 
 ### Hooks on Windows
 

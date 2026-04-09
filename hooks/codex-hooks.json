@@ -1,44 +1,57 @@
 {
-  "SessionStart": [
-    {
-      "matcher": "startup|resume",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "if [ -f \"$HOME/.codex/superpowers-optimized/hooks/codex/session-start-adapter.js\" ]; then node \"$HOME/.codex/superpowers-optimized/hooks/codex/session-start-adapter.js\"; elif [ -f \"$HOME/.codex/superpowers/hooks/codex/session-start-adapter.js\" ]; then node \"$HOME/.codex/superpowers/hooks/codex/session-start-adapter.js\"; else echo '{}'; fi"
-        }
-      ]
-    }
-  ],
-  "UserPromptSubmit": [
-    {
-      "hooks": [
-        {
-          "type": "command",
-          "command": "if [ -f \"$HOME/.codex/superpowers-optimized/hooks/skill-activator.js\" ]; then node \"$HOME/.codex/superpowers-optimized/hooks/skill-activator.js\"; elif [ -f \"$HOME/.codex/superpowers/hooks/skill-activator.js\" ]; then node \"$HOME/.codex/superpowers/hooks/skill-activator.js\"; else echo '{}'; fi"
-        }
-      ]
-    }
-  ],
-  "Stop": [
-    {
-      "hooks": [
-        {
-          "type": "command",
-          "command": "if [ -f \"$HOME/.codex/superpowers-optimized/hooks/codex/stop-adapter.js\" ]; then node \"$HOME/.codex/superpowers-optimized/hooks/codex/stop-adapter.js\"; elif [ -f \"$HOME/.codex/superpowers/hooks/codex/stop-adapter.js\" ]; then node \"$HOME/.codex/superpowers/hooks/codex/stop-adapter.js\"; else echo '{}'; fi"
-        }
-      ]
-    }
-  ],
-  "PreToolUse": [
-    {
-      "matcher": "Bash",
-      "hooks": [
-        {
-          "type": "command",
-          "command": "if [ -f \"$HOME/.codex/superpowers-optimized/hooks/codex/pretool-bash-adapter.js\" ]; then node \"$HOME/.codex/superpowers-optimized/hooks/codex/pretool-bash-adapter.js\"; elif [ -f \"$HOME/.codex/superpowers/hooks/codex/pretool-bash-adapter.js\" ]; then node \"$HOME/.codex/superpowers/hooks/codex/pretool-bash-adapter.js\"; else echo '{}'; fi"
-        }
-      ]
-    }
-  ]
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'adapter=\"hooks/codex/session-start-adapter.js\"; if ! command -v node >/dev/null 2>&1 && [ -s \"$HOME/.nvm/nvm.sh\" ]; then . \"$HOME/.nvm/nvm.sh\"; fi; if ! command -v node >/dev/null 2>&1; then echo \"{}\"; exit 0; fi; plugin_root=\"\"; for dir in \"$HOME/.codex/superpowers-optimized\" \"$HOME/.codex/superpowers\"; do if [ -f \"$dir/$adapter\" ]; then plugin_root=\"$dir\"; break; fi; done; if [ -z \"$plugin_root\" ] && [ -L \"$HOME/.codex/hooks.json\" ]; then hooks_target=$(readlink \"$HOME/.codex/hooks.json\" 2>/dev/null || printf \"\"); if [ -n \"$hooks_target\" ]; then candidate=$(dirname \"$(dirname \"$hooks_target\")\"); if [ -f \"$candidate/$adapter\" ]; then plugin_root=\"$candidate\"; fi; fi; fi; if [ -z \"$plugin_root\" ] && [ -d \"$HOME/.codex/plugins/cache\" ]; then adapter_path=$(find \"$HOME/.codex/plugins/cache\" -path \"*/$adapter\" -print -quit 2>/dev/null); if [ -n \"$adapter_path\" ]; then plugin_root=$(dirname \"$(dirname \"$(dirname \"$adapter_path\")\")\"); fi; fi; if [ -n \"$plugin_root\" ]; then node \"$plugin_root/$adapter\"; else echo \"{}\"; fi'"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'adapter=\"hooks/codex/user-prompt-submit-adapter.js\"; if ! command -v node >/dev/null 2>&1 && [ -s \"$HOME/.nvm/nvm.sh\" ]; then . \"$HOME/.nvm/nvm.sh\"; fi; if ! command -v node >/dev/null 2>&1; then echo \"{}\"; exit 0; fi; plugin_root=\"\"; for dir in \"$HOME/.codex/superpowers-optimized\" \"$HOME/.codex/superpowers\"; do if [ -f \"$dir/$adapter\" ]; then plugin_root=\"$dir\"; break; fi; done; if [ -z \"$plugin_root\" ] && [ -L \"$HOME/.codex/hooks.json\" ]; then hooks_target=$(readlink \"$HOME/.codex/hooks.json\" 2>/dev/null || printf \"\"); if [ -n \"$hooks_target\" ]; then candidate=$(dirname \"$(dirname \"$hooks_target\")\"); if [ -f \"$candidate/$adapter\" ]; then plugin_root=\"$candidate\"; fi; fi; fi; if [ -z \"$plugin_root\" ] && [ -d \"$HOME/.codex/plugins/cache\" ]; then adapter_path=$(find \"$HOME/.codex/plugins/cache\" -path \"*/$adapter\" -print -quit 2>/dev/null); if [ -n \"$adapter_path\" ]; then plugin_root=$(dirname \"$(dirname \"$(dirname \"$adapter_path\")\")\"); fi; fi; if [ -n \"$plugin_root\" ]; then node \"$plugin_root/$adapter\"; else echo \"{}\"; fi'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'adapter=\"hooks/codex/posttool-bash-compress-adapter.js\"; if ! command -v node >/dev/null 2>&1 && [ -s \"$HOME/.nvm/nvm.sh\" ]; then . \"$HOME/.nvm/nvm.sh\"; fi; if ! command -v node >/dev/null 2>&1; then echo \"{}\"; exit 0; fi; plugin_root=\"\"; for dir in \"$HOME/.codex/superpowers-optimized\" \"$HOME/.codex/superpowers\"; do if [ -f \"$dir/$adapter\" ]; then plugin_root=\"$dir\"; break; fi; done; if [ -z \"$plugin_root\" ] && [ -L \"$HOME/.codex/hooks.json\" ]; then hooks_target=$(readlink \"$HOME/.codex/hooks.json\" 2>/dev/null || printf \"\"); if [ -n \"$hooks_target\" ]; then candidate=$(dirname \"$(dirname \"$hooks_target\")\"); if [ -f \"$candidate/$adapter\" ]; then plugin_root=\"$candidate\"; fi; fi; fi; if [ -z \"$plugin_root\" ] && [ -d \"$HOME/.codex/plugins/cache\" ]; then adapter_path=$(find \"$HOME/.codex/plugins/cache\" -path \"*/$adapter\" -print -quit 2>/dev/null); if [ -n \"$adapter_path\" ]; then plugin_root=$(dirname \"$(dirname \"$(dirname \"$adapter_path\")\")\"); fi; fi; if [ -n \"$plugin_root\" ]; then node \"$plugin_root/$adapter\"; else echo \"{}\"; fi'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'adapter=\"hooks/codex/stop-adapter.js\"; if ! command -v node >/dev/null 2>&1 && [ -s \"$HOME/.nvm/nvm.sh\" ]; then . \"$HOME/.nvm/nvm.sh\"; fi; if ! command -v node >/dev/null 2>&1; then echo \"{}\"; exit 0; fi; plugin_root=\"\"; for dir in \"$HOME/.codex/superpowers-optimized\" \"$HOME/.codex/superpowers\"; do if [ -f \"$dir/$adapter\" ]; then plugin_root=\"$dir\"; break; fi; done; if [ -z \"$plugin_root\" ] && [ -L \"$HOME/.codex/hooks.json\" ]; then hooks_target=$(readlink \"$HOME/.codex/hooks.json\" 2>/dev/null || printf \"\"); if [ -n \"$hooks_target\" ]; then candidate=$(dirname \"$(dirname \"$hooks_target\")\"); if [ -f \"$candidate/$adapter\" ]; then plugin_root=\"$candidate\"; fi; fi; fi; if [ -z \"$plugin_root\" ] && [ -d \"$HOME/.codex/plugins/cache\" ]; then adapter_path=$(find \"$HOME/.codex/plugins/cache\" -path \"*/$adapter\" -print -quit 2>/dev/null); if [ -n \"$adapter_path\" ]; then plugin_root=$(dirname \"$(dirname \"$(dirname \"$adapter_path\")\")\"); fi; fi; if [ -n \"$plugin_root\" ]; then node \"$plugin_root/$adapter\"; else echo \"{}\"; fi'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'adapter=\"hooks/codex/pretool-bash-adapter.js\"; if ! command -v node >/dev/null 2>&1 && [ -s \"$HOME/.nvm/nvm.sh\" ]; then . \"$HOME/.nvm/nvm.sh\"; fi; if ! command -v node >/dev/null 2>&1; then echo \"{}\"; exit 0; fi; plugin_root=\"\"; for dir in \"$HOME/.codex/superpowers-optimized\" \"$HOME/.codex/superpowers\"; do if [ -f \"$dir/$adapter\" ]; then plugin_root=\"$dir\"; break; fi; done; if [ -z \"$plugin_root\" ] && [ -L \"$HOME/.codex/hooks.json\" ]; then hooks_target=$(readlink \"$HOME/.codex/hooks.json\" 2>/dev/null || printf \"\"); if [ -n \"$hooks_target\" ]; then candidate=$(dirname \"$(dirname \"$hooks_target\")\"); if [ -f \"$candidate/$adapter\" ]; then plugin_root=\"$candidate\"; fi; fi; fi; if [ -z \"$plugin_root\" ] && [ -d \"$HOME/.codex/plugins/cache\" ]; then adapter_path=$(find \"$HOME/.codex/plugins/cache\" -path \"*/$adapter\" -print -quit 2>/dev/null); if [ -n \"$adapter_path\" ]; then plugin_root=$(dirname \"$(dirname \"$(dirname \"$adapter_path\")\")\"); fi; fi; if [ -n \"$plugin_root\" ]; then node \"$plugin_root/$adapter\"; else echo \"{}\"; fi'"
+          }
+        ]
+      }
+    ]
+  }
 }
