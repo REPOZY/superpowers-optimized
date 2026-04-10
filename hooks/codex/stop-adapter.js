@@ -18,6 +18,8 @@ const { readJsonStdin } = require('./utils');
 const TEST_PATTERNS = [
   /\.test\.[jt]sx?$/, /\.spec\.[jt]sx?$/, /_test\.(go|py|rb)$/,
   /test_[^/]+\.py$/, /Tests?\.[^/]+$/, /__tests__\//,
+  /(?:^|[/\\])test[-_][^/\\]+\.[jt]sx?$/i,
+  /[/\\]tests?[/\\]/i,
 ];
 const SOURCE_PATTERNS = [/\.(js|jsx|ts|tsx|py|rb|go|rs|java|cs|cpp|c|h|hpp|swift|kt|scala|php)$/];
 const CONFIG_PATTERNS = [

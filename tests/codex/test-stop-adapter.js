@@ -144,6 +144,20 @@ test('Source file + test file both modified → no TDD reminder', () => {
   } finally { cleanup(dir); }
 });
 
+test('Source file + tests/codex/test-*.js file modified → no TDD reminder', () => {
+  const dir = makeTempRepo();
+  try {
+    fs.mkdirSync(path.join(dir, 'tests', 'codex'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'index.js'), 'console.log("hello")');
+    fs.writeFileSync(path.join(dir, 'tests', 'codex', 'test-stop-reminders.js'), '// regression');
+    const result = runAdapter({ stop_hook_active: false }, dir);
+    if (result.reason) {
+      assert.ok(!result.reason.toLowerCase().includes('tdd reminder'),
+        `Unexpected TDD reminder with test-*.js naming: ${result.reason}`);
+    }
+  } finally { cleanup(dir); }
+});
+
 // ── Commit reminder ───────────────────────────────────────────────────────────
 
 console.log('\nCommit reminder');
