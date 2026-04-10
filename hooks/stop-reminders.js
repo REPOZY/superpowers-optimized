@@ -10,8 +10,9 @@
  * infinite loops (Stop hook returning content causes Claude to resume).
  *
  * Input:  stdin JSON with { session_id, cwd, ... }
- * Output: stdout JSON with decision/reason continuation payload, or {}
- * to let Claude stop. Stop hooks must not emit hookSpecificOutput.
+ * Output: stdout JSON with decision/reason continuation payload (only when
+ * actionable reminders exist), or {} to let Claude stop normally.
+ * Uses decision+reason rather than hookSpecificOutput for broader version compat.
  */
 
 const fs = require('fs');
@@ -304,7 +305,8 @@ async function main() {
 
 /**
  * Build Claude Stop hook response object from input payload.
- * Uses decision+reason continuation contract (no Stop hookSpecificOutput).
+ * Only blocks Claude's stop when actionable reminders exist (TDD, commit,
+ * decision log, session-log size). Informational stats alone do not block.
  */
 function evaluatePayload(data) {
   if (!data || typeof data !== 'object') return {};
@@ -336,6 +338,12 @@ function evaluatePayload(data) {
   if (sizeWarning) reminders.push(sizeWarning);
 
   if (reminders.length === 0) return {};
+
+  // Stats-only sessions don't warrant blocking Claude's stop.
+  // Only block when there are actionable reminders that need Claude's attention.
+  // The stats summary is informational — it doesn't require a response from Claude.
+  const hasActionableReminders = reminders.some(r => !r.startsWith('Session summary:'));
+  if (!hasActionableReminders) return {};
 
   // Set guard BEFORE outputting — prevents re-entry
   setGuard();
