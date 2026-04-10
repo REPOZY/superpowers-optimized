@@ -251,6 +251,36 @@ function isSignificantSession(edits) {
 }
 
 /**
+ * Check if state.md exists in cwd and has been overtaken by recent source-file
+ * edits — a signal that active task state may have drifted since last save.
+ * Returns a reminder string if stale, null otherwise.
+ *
+ * Threshold: state.md older than at least 2 source-file edits that occurred
+ * after it was last written. Config-only edits are excluded (noise).
+ */
+function checkStateMdStaleness(cwd, recentEdits) {
+  try {
+    const stateMdPath = path.join(cwd, 'state.md');
+    if (!fs.existsSync(stateMdPath)) return null;
+
+    const stateMtime = fs.statSync(stateMdPath).mtimeMs;
+    const editsAfterState = recentEdits.filter(e =>
+      new Date(e.timestamp).getTime() > stateMtime && isSourceFile(e.filePath)
+    );
+
+    if (editsAfterState.length >= 2) {
+      return (
+        'State.md sync: state.md was written before recent code changes in this session. ' +
+        'If progress was made on the active task, update state.md via the context-management skill.'
+      );
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Check the last 2 [saved] entries in session-log.md and warn if they
  * exceed the token budget. Hard cap is 250 tokens (~1000 chars) per entry.
  * Returns a warning string if over budget, null otherwise.
@@ -333,6 +363,10 @@ function evaluatePayload(data) {
     );
   }
 
+  // state.md staleness: warn if state.md exists but source files changed after it was written
+  const stateStaleness = checkStateMdStaleness(cwd, edits);
+  if (stateStaleness) reminders.push(stateStaleness);
+
   // Session-log size guard: warn if last 2 [saved] entries exceed token budget
   const sizeWarning = checkSessionLogSize(cwd);
   if (sizeWarning) reminders.push(sizeWarning);
@@ -365,6 +399,7 @@ if (require.main === module) {
 } else {
   module.exports = {
     checkSessionLogSize,
+    checkStateMdStaleness,
     evaluatePayload,
     generateReminders,
     getEditsAfter,
