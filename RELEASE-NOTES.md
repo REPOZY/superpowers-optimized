@@ -1,5 +1,15 @@
 # Superpowers Optimized Release Notes
 
+## v6.5.1 (2026-04-10)
+
+Patch release focused on Stop-hook correctness and reminder signal quality.
+
+### Fixes
+
+**Claude Code `Stop` hook output contract corrected** — `hooks/stop-reminders.js` previously emitted `hookSpecificOutput` with `hookEventName: "Stop"`, which Claude rejects on Stop events with JSON validation errors. The Stop reminder path now emits a schema-valid continuation payload (`decision: "block"` + `reason`) and keeps `{}` for no-op cases. A regression suite (`tests/codex/test-stop-reminders.js`) now enforces this output shape.
+
+**Stop-hook TDD reminders now recognize `test-*.js` under `tests/`** — Both Stop reminder implementations now classify repository-style test filenames such as `tests/codex/test-stop-reminders.js` as tests, preventing false-positive “source changed without tests” reminders when test files use `test-*.js` naming instead of `*.test.js`.
+
 ## v6.5.0 (2026-04-09)
 
 Codex parity hardening: the plugin now follows the current Codex hook contract more closely, adds reactive Bash smart-compress on Codex, and tightens install/update guidance so complete Codex installs are easier to get right.

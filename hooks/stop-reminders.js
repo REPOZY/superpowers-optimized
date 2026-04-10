@@ -10,7 +10,8 @@
  * infinite loops (Stop hook returning content causes Claude to resume).
  *
  * Input:  stdin JSON with { session_id, cwd, ... }
- * Output: stdout JSON with additionalContext, or {} to let Claude stop
+ * Output: stdout JSON with decision/reason continuation payload, or {}
+ * to let Claude stop. Stop hooks must not emit hookSpecificOutput.
  */
 
 const fs = require('fs');
@@ -64,6 +65,8 @@ const TEST_PATTERNS = [
   /Tests?\.[^/]+$/,
   /\.test$/,
   /__tests__\//,
+  /(?:^|[/\\])test[-_][^/\\]+\.[jt]sx?$/i,
+  /[/\\]tests?[/\\]/i,
 ];
 
 // Common source file patterns (non-test, non-config)
@@ -293,66 +296,75 @@ async function main() {
 
   try {
     const data = JSON.parse(input);
-    const cwd = data.cwd || process.cwd();
-
-    const edits = getRecentEdits();
-
-    // File-based guard prevents infinite loop for reminder injection
-    if (!shouldFire()) {
-      process.stdout.write('{}');
-      return;
-    }
-
-    const reminders = generateReminders(edits);
-
-    // Decision-log reminder: significant files modified since the last [saved] entry.
-    // Using "since last saved" (not "last 30 min") means long sessions with multiple
-    // work phases keep getting reminded until each phase is explicitly documented.
-    const lastSavedTime = getLastSavedEntryTime();
-    const editsSinceLastSaved = getEditsAfter(lastSavedTime);
-    if (isSignificantSession(editsSinceLastSaved)) {
-      reminders.push(
-        'Decision log: This session modified core skill/hook/config files. ' +
-        'Before stopping, invoke context-management via the Skill tool to write a [saved] entry ' +
-        'capturing decisions, rationale, and rejected approaches. ' +
-        'Future sessions start with zero context — this is the only way to preserve the "why".'
-      );
-    }
-
-    // Session-log size guard: warn if last 2 [saved] entries exceed token budget
-    const sizeWarning = checkSessionLogSize(cwd);
-    if (sizeWarning) {
-      reminders.push(sizeWarning);
-    }
-
-    if (reminders.length === 0) {
-      process.stdout.write('{}');
-      return;
-    }
-
-    // Set guard BEFORE outputting — prevents re-entry
-    setGuard();
-
-    // Return reminders as additional context
-    const context = [
-      '<stop-hook-reminders>',
-      ...reminders,
-      '</stop-hook-reminders>',
-    ].join('\n');
-
-    process.stdout.write(JSON.stringify({
-      hookSpecificOutput: {
-        hookEventName: 'Stop',
-        additionalContext: context,
-      },
-    }));
+    process.stdout.write(JSON.stringify(evaluatePayload(data)));
   } catch {
     process.stdout.write('{}');
   }
 }
 
+/**
+ * Build Claude Stop hook response object from input payload.
+ * Uses decision+reason continuation contract (no Stop hookSpecificOutput).
+ */
+function evaluatePayload(data) {
+  if (!data || typeof data !== 'object') return {};
+
+  const cwd = data.cwd || process.cwd();
+  const edits = getRecentEdits();
+
+  // File-based guard prevents infinite loop for reminder injection
+  if (!shouldFire()) return {};
+
+  const reminders = generateReminders(edits);
+
+  // Decision-log reminder: significant files modified since the last [saved] entry.
+  // Using "since last saved" (not "last 30 min") means long sessions with multiple
+  // work phases keep getting reminded until each phase is explicitly documented.
+  const lastSavedTime = getLastSavedEntryTime();
+  const editsSinceLastSaved = getEditsAfter(lastSavedTime);
+  if (isSignificantSession(editsSinceLastSaved)) {
+    reminders.push(
+      'Decision log: This session modified core skill/hook/config files. ' +
+      'Before stopping, invoke context-management via the Skill tool to write a [saved] entry ' +
+      'capturing decisions, rationale, and rejected approaches. ' +
+      'Future sessions start with zero context — this is the only way to preserve the "why".'
+    );
+  }
+
+  // Session-log size guard: warn if last 2 [saved] entries exceed token budget
+  const sizeWarning = checkSessionLogSize(cwd);
+  if (sizeWarning) reminders.push(sizeWarning);
+
+  if (reminders.length === 0) return {};
+
+  // Set guard BEFORE outputting — prevents re-entry
+  setGuard();
+
+  const context = [
+    '<stop-hook-reminders>',
+    ...reminders,
+    '</stop-hook-reminders>',
+  ].join('\n');
+
+  return {
+    decision: 'block',
+    reason: context,
+  };
+}
+
 if (require.main === module) {
   main();
 } else {
-  module.exports = { generateReminders, getRecentEdits, getLastSavedEntryTime, getEditsAfter, checkSessionLogSize, isTestFile, isSourceFile, shouldFire, setGuard };
+  module.exports = {
+    checkSessionLogSize,
+    evaluatePayload,
+    generateReminders,
+    getEditsAfter,
+    getLastSavedEntryTime,
+    getRecentEdits,
+    isSourceFile,
+    isTestFile,
+    setGuard,
+    shouldFire,
+  };
 }
