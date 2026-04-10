@@ -72,7 +72,7 @@ digraph sdd_process {
 - If spec fails, return to implementer and re-review.
 - Run code-quality review.
 - If quality fails, return to implementer and re-review.
-- Mark task complete.
+- Mark task complete: update the task’s checkbox in plan.md from `- [ ]` to `- [x]`. If `state.md` exists with a plan status section, update it to reflect the completed task.
    - For complex or high-risk tasks, validate the approach against requirements and consider simpler alternatives before or after the implementer’s work.
    - For tasks centered on frontend/UI, apply `frontend-design` standards to guide structure, styling, and accessibility.
 4. Run final whole-branch review.
@@ -88,7 +88,8 @@ When tasks are independent and touch disjoint files, dispatch them as a wave —
 2. Dispatch all implementers in a **single message** with multiple parallel Agent tool calls. Do not stagger across multiple messages.
 3. Review each task with the same two-stage gate.
 4. Run integration verification after the wave completes.
-5. Proceed to the next wave.
+5. Update all completed task checkboxes in plan.md (`- [ ]` → `- [x]`) and sync state.md if present.
+6. Proceed to the next wave.
 
 If any overlap or shared-state risk exists within a wave, move the conflicting task to the next sequential wave.
 
