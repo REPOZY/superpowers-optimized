@@ -4,7 +4,7 @@
 
 meta:
   name: superpowers-optimized
-  version: "6.5.1"
+  version: "6.5.2"
   description: "Workflow skills and hooks for Claude Code and Codex"
   author: "Jesse Vincent, forked by REPOZY"
   homepage: "https://github.com/REPOZY/superpowers-optimized"

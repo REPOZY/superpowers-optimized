@@ -63,9 +63,10 @@ const MAX_LINES = 500;
 
 /**
  * Append an entry to the edit log.
- * Format: ISO-timestamp | tool | file_path
+ * Format: ISO-timestamp | session_id | tool | file_path
+ * (Legacy format without session_id is still accepted on read)
  */
-function logEdit(tool, filePath, cwd) {
+function logEdit(tool, filePath, cwd, sessionId) {
   try {
     if (!fs.existsSync(LOG_DIR)) {
       fs.mkdirSync(LOG_DIR, { recursive: true });
@@ -77,7 +78,8 @@ function logEdit(tool, filePath, cwd) {
       resolved = path.resolve(cwd, filePath);
     }
 
-    const entry = `${new Date().toISOString()} | ${tool} | ${resolved}\n`;
+    const sid = sessionId || '';
+    const entry = `${new Date().toISOString()} | ${sid} | ${tool} | ${resolved}\n`;
     fs.appendFileSync(EDIT_LOG, entry);
 
     // Auto-add AI workspace artifacts to .gitignore on first write
@@ -111,6 +113,7 @@ function rotateIfNeeded() {
 /**
  * Read the edit log and return entries from the current session.
  * Used by stop-reminders to check what files were changed.
+ * Supports both the legacy 3-field format and new 4-field format with session_id.
  */
 function getRecentEdits(withinMinutes = 60) {
   try {
@@ -124,10 +127,21 @@ function getRecentEdits(withinMinutes = 60) {
       .map(line => {
         const parts = line.split(' | ');
         if (parts.length < 3) return null;
+        if (parts.length >= 4) {
+          // New format: timestamp | session_id | tool | filePath
+          return {
+            timestamp: parts[0],
+            sessionId: parts[1] || null,
+            tool: parts[2],
+            filePath: parts.slice(3).join(' | '),
+          };
+        }
+        // Legacy format: timestamp | tool | filePath
         return {
           timestamp: parts[0],
+          sessionId: null,
           tool: parts[1],
-          filePath: parts.slice(2).join(' | '), // Handle paths with |
+          filePath: parts.slice(2).join(' | '),
         };
       })
       .filter(entry => entry && new Date(entry.timestamp) > cutoff);
@@ -142,7 +156,7 @@ async function main() {
 
   try {
     const data = JSON.parse(input);
-    const { tool_name, tool_input, cwd } = data;
+    const { tool_name, tool_input, cwd, session_id } = data;
 
     // Only track Edit and Write operations
     if (tool_name !== 'Edit' && tool_name !== 'Write') {
@@ -152,7 +166,7 @@ async function main() {
 
     const filePath = tool_input?.file_path;
     if (filePath) {
-      logEdit(tool_name, filePath, cwd);
+      logEdit(tool_name, filePath, cwd, session_id);
 
       // Track when a [saved] entry is written to session-log.md so that
       // stop-reminders can ask "any significant edits since last [saved]?"

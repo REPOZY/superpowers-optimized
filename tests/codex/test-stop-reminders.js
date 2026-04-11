@@ -66,8 +66,10 @@ function loadHookWithHome(homeDir) {
   return hook;
 }
 
+const TEST_SESSION_ID = 'test-session-abc123';
+
 function writeRecentEdit(logDir, filePath) {
-  const line = `${new Date().toISOString()} | Edit | ${filePath}\n`;
+  const line = `${new Date().toISOString()} | ${TEST_SESSION_ID} | Edit | ${filePath}\n`;
   fs.writeFileSync(path.join(logDir, 'edit-log.txt'), line, 'utf8');
 }
 
@@ -90,7 +92,7 @@ test('When reminders exist: emits decision+reason, not Stop hookSpecificOutput',
     writeRecentEdit(logDir, 'src/index.js');
     const { evaluatePayload } = loadHookWithHome(homeDir);
 
-    const result = evaluatePayload({ cwd: cwdDir });
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
 
     assert.strictEqual(result.decision, 'block',
       `Expected decision=block, got: ${JSON.stringify(result)}`);
@@ -112,7 +114,7 @@ test('Active guard suppresses reminder output', () => {
     fs.writeFileSync(path.join(logDir, 'stop-hook-fired.lock'), new Date().toISOString(), 'utf8');
     const { evaluatePayload } = loadHookWithHome(homeDir);
 
-    const result = evaluatePayload({ cwd: cwdDir });
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
     assert.deepStrictEqual(result, {},
       `Expected empty output while guard is active, got: ${JSON.stringify(result)}`);
   } finally {
@@ -124,9 +126,64 @@ test('No reminders available emits {}', () => {
   const { homeDir, cwdDir } = makeTempDirs();
   try {
     const { evaluatePayload } = loadHookWithHome(homeDir);
-    const result = evaluatePayload({ cwd: cwdDir });
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
     assert.deepStrictEqual(result, {},
       `Expected empty output without reminders, got: ${JSON.stringify(result)}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Stats-only session (skill invocations but no edits) emits {} — does not block', () => {
+  // Regression test for v6.5.1 bug: stats summary alone must NOT trigger decision:block.
+  // The user reported "Stop hook error: <stop-hook-reminders> Session summary: 6min,
+  // 1 skill invocations [executing-plans (1x)]" after every stop — caused by the stop
+  // hook blocking even when the only reminder was the informational stats summary.
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    // Write a session-stats.json simulating a session with 1 skill call, no edits
+    const statsFile = path.join(logDir, 'session-stats.json');
+    fs.writeFileSync(statsFile, JSON.stringify({
+      startedAt: new Date(Date.now() - 6 * 60 * 1000).toISOString(), // 6 min ago
+      skillInvocations: { 'superpowers-optimized:executing-plans': 1 },
+      totalSkillCalls: 1,
+      hookBlocks: 0,
+      filesEdited: 0,
+      verificationsRun: 0,
+    }), 'utf8');
+    // No edit-log entries for this session (no edits made)
+
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+
+    assert.deepStrictEqual(result, {},
+      `Stats-only session must emit {}, got: ${JSON.stringify(result)}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Commit reminder suppressed when all session edits are committed (git clean)', () => {
+  // Regression test for post-v6.5.2 fix: commit reminder must check actual git status,
+  // not session edit count. A session that edited 5+ files but committed them all
+  // must NOT emit a commit reminder.
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    // Simulate 6 session edits so the edit-count threshold (>=5) is crossed
+    const editLog = path.join(logDir, 'edit-log.txt');
+    const lines = ['a.js','b.js','c.js','d.js','e.js','f.js'].map(f =>
+      `${new Date().toISOString()} | ${TEST_SESSION_ID} | Edit | /project/${f}\n`
+    ).join('');
+    fs.writeFileSync(editLog, lines, 'utf8');
+
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    // cwdDir is a temp dir with no git repo → getUncommittedCount returns 0 → no commit reminder
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+
+    // May block for TDD reminder (source files, no tests), but must NOT mention "Commit reminder"
+    const reason = result.reason || '';
+    assert.ok(!reason.includes('Commit reminder'),
+      `Commit reminder must not fire when git reports no uncommitted changes, got: ${reason}`);
   } finally {
     cleanup(homeDir, cwdDir);
   }

@@ -17,6 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 const LOG_DIR = path.join(
   process.env.HOME || process.env.USERPROFILE || '.',
@@ -104,9 +105,46 @@ function isSourceFile(filePath) {
 }
 
 /**
- * Read recent edits from the edit log (last 30 minutes).
+ * Parse a raw log line into an entry object.
+ * Supports both legacy 3-field format and new 4-field format with session_id.
  */
-function getRecentEdits() {
+function parseLogLine(line) {
+  const parts = line.split(' | ');
+  if (parts.length < 3) return null;
+  if (parts.length >= 4) {
+    // New format: timestamp | session_id | tool | filePath
+    return {
+      timestamp: parts[0],
+      sessionId: parts[1] || null,
+      tool: parts[2],
+      filePath: parts.slice(3).join(' | '),
+    };
+  }
+  // Legacy format: timestamp | tool | filePath
+  return {
+    timestamp: parts[0],
+    sessionId: null,
+    tool: parts[1],
+    filePath: parts.slice(2).join(' | '),
+  };
+}
+
+/**
+ * Return true if an entry matches the given sessionId filter.
+ * When sessionId is provided: only entries with a matching sessionId pass.
+ * When sessionId is null/undefined: legacy entries (no sessionId) pass.
+ */
+function matchesSession(entry, sessionId) {
+  if (sessionId) {
+    return entry.sessionId === sessionId;
+  }
+  return entry.sessionId === null;
+}
+
+/**
+ * Read recent edits from the edit log (last 30 minutes), filtered to the current session.
+ */
+function getRecentEdits(sessionId) {
   try {
     if (!fs.existsSync(EDIT_LOG)) return [];
 
@@ -115,16 +153,12 @@ function getRecentEdits() {
     const cutoff = new Date(Date.now() - 30 * 60 * 1000);
 
     return lines
-      .map(line => {
-        const parts = line.split(' | ');
-        if (parts.length < 3) return null;
-        return {
-          timestamp: parts[0],
-          tool: parts[1],
-          filePath: parts.slice(2).join(' | '),
-        };
-      })
-      .filter(entry => entry && new Date(entry.timestamp) > cutoff);
+      .map(parseLogLine)
+      .filter(entry =>
+        entry &&
+        new Date(entry.timestamp) > cutoff &&
+        matchesSession(entry, sessionId)
+      );
   } catch {
     return [];
   }
@@ -145,21 +179,17 @@ function getLastSavedEntryTime() {
 }
 
 /**
- * Return all edit log entries after the given timestamp.
- * If timestamp is null, returns all entries (i.e. no [saved] baseline exists).
+ * Return all edit log entries after the given timestamp, filtered to the current session.
+ * If timestamp is null, returns all session entries (i.e. no [saved] baseline exists).
  */
-function getEditsAfter(timestamp) {
+function getEditsAfter(timestamp, sessionId) {
   try {
     if (!fs.existsSync(EDIT_LOG)) return [];
     const cutoff = timestamp || new Date(0);
     return fs.readFileSync(EDIT_LOG, 'utf8')
       .split('\n').filter(Boolean)
-      .map(line => {
-        const parts = line.split(' | ');
-        if (parts.length < 3) return null;
-        return { timestamp: parts[0], tool: parts[1], filePath: parts.slice(2).join(' | ') };
-      })
-      .filter(e => e && new Date(e.timestamp) > cutoff);
+      .map(parseLogLine)
+      .filter(e => e && new Date(e.timestamp) > cutoff && matchesSession(e, sessionId));
   } catch {
     return [];
   }
@@ -196,7 +226,22 @@ function formatStatsSummary(stats) {
  * Generate contextual reminders based on edit history and session stats.
  * Returns array of reminder strings.
  */
-function generateReminders(edits) {
+function getUncommittedCount(cwd) {
+  try {
+    const result = spawnSync('git', ['status', '--porcelain'], {
+      cwd: cwd || process.cwd(),
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    if (result.status !== 0 || result.error) return 0;
+    const lines = (result.stdout || '').split('\n').filter(l => l.trim().length > 0);
+    return lines.length;
+  } catch {
+    return 0;
+  }
+}
+
+function generateReminders(edits, cwd) {
   const reminders = [];
 
   // Session stats summary (always include if available)
@@ -221,12 +266,16 @@ function generateReminders(edits) {
     );
   }
 
-  // Commit reminder: many files changed
+  // Commit reminder: check actual uncommitted changes via git, not just session edits.
+  // Using edit-log count was wrong — it fired even after a commit was made mid-session.
   if (editedPaths.length >= 5) {
-    reminders.push(
-      `Commit reminder: ${editedPaths.length} files modified in this session. ` +
-      `Consider committing incremental progress to avoid losing work.`
-    );
+    const uncommittedCount = getUncommittedCount(cwd);
+    if (uncommittedCount >= 5) {
+      reminders.push(
+        `Commit reminder: ${uncommittedCount} files with uncommitted changes. ` +
+        `Consider committing incremental progress to avoid losing work.`
+      );
+    }
   }
 
   return reminders;
@@ -342,18 +391,19 @@ function evaluatePayload(data) {
   if (!data || typeof data !== 'object') return {};
 
   const cwd = data.cwd || process.cwd();
-  const edits = getRecentEdits();
+  const sessionId = data.session_id || null;
+  const edits = getRecentEdits(sessionId);
 
   // File-based guard prevents infinite loop for reminder injection
   if (!shouldFire()) return {};
 
-  const reminders = generateReminders(edits);
+  const reminders = generateReminders(edits, cwd);
 
   // Decision-log reminder: significant files modified since the last [saved] entry.
   // Using "since last saved" (not "last 30 min") means long sessions with multiple
   // work phases keep getting reminded until each phase is explicitly documented.
   const lastSavedTime = getLastSavedEntryTime();
-  const editsSinceLastSaved = getEditsAfter(lastSavedTime);
+  const editsSinceLastSaved = getEditsAfter(lastSavedTime, sessionId);
   if (isSignificantSession(editsSinceLastSaved)) {
     reminders.push(
       'Decision log: This session modified core skill/hook/config files. ' +
@@ -407,6 +457,8 @@ if (require.main === module) {
     getRecentEdits,
     isSourceFile,
     isTestFile,
+    matchesSession,
+    parseLogLine,
     setGuard,
     shouldFire,
   };
