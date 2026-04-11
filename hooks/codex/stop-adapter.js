@@ -9,6 +9,7 @@
 
 'use strict';
 
+const crypto = require('crypto');
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -41,6 +42,8 @@ const SIG_PATTERNS = [
 const isTestFile = f => TEST_PATTERNS.some(p => p.test(f));
 const isSourceFile = f => SOURCE_PATTERNS.some(p => p.test(f)) && !CONFIG_PATTERNS.some(p => p.test(f));
 const isSignificantFile = f => SIG_PATTERNS.some(p => p.test(f));
+const REMINDER_CACHE_FILE = 'superpowers-stop-reminder-cache.json';
+const REMINDER_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function runGit(cmd, cwd) {
   try {
@@ -62,6 +65,84 @@ function getUncommittedFiles(cwd) {
   const untracked = runGit('git ls-files --others --exclude-standard', cwd);
   const combined = [staged, unstaged, untracked].filter(Boolean).join('\n');
   return [...new Set(combined.split('\n').filter(Boolean))];
+}
+
+function resolveGitDirPath(cwd, gitDirOutput) {
+  if (!gitDirOutput) return null;
+  return path.isAbsolute(gitDirOutput) ? gitDirOutput : path.resolve(cwd, gitDirOutput);
+}
+
+function getReminderCachePath(cwd, gitDirOutput) {
+  const gitDirPath = resolveGitDirPath(cwd, gitDirOutput);
+  if (!gitDirPath) return null;
+  return path.join(gitDirPath, REMINDER_CACHE_FILE);
+}
+
+function loadReminderCache(cachePath) {
+  try {
+    if (!cachePath || !fs.existsSync(cachePath)) return {};
+    const parsed = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveReminderCache(cachePath, cache) {
+  try {
+    if (!cachePath) return;
+    fs.mkdirSync(path.dirname(cachePath), { recursive: true });
+    fs.writeFileSync(cachePath, JSON.stringify(cache), 'utf8');
+  } catch {
+    // Never block Stop hook on cache write failures
+  }
+}
+
+function getSessionScopeKey(data, cwd) {
+  const resolvedCwd = path.resolve(cwd);
+  const sessionId = typeof data?.session_id === 'string' ? data.session_id.trim() : '';
+  if (sessionId) return `session:${sessionId}:cwd:${resolvedCwd}`;
+
+  // If session_id is missing, fall back to a daily cwd-scoped bucket so users
+  // still get at most one duplicate reminder per day for unchanged state.
+  const day = new Date().toISOString().slice(0, 10);
+  return `cwd:${resolvedCwd}:day:${day}`;
+}
+
+function buildReminderSignature(reminders) {
+  const body = reminders.join('\n');
+  return crypto.createHash('sha1').update(body).digest('hex');
+}
+
+function pruneOldReminderCacheEntries(cache, nowMs) {
+  const result = {};
+  for (const [key, value] of Object.entries(cache || {})) {
+    if (!value || typeof value !== 'object') continue;
+    const ts = new Date(value.updatedAt || 0).getTime();
+    if (!ts || Number.isNaN(ts)) continue;
+    if ((nowMs - ts) > REMINDER_CACHE_MAX_AGE_MS) continue;
+    if (typeof value.signature !== 'string' || value.signature.length === 0) continue;
+    result[key] = value;
+  }
+  return result;
+}
+
+function shouldEmitReminders(data, cwd, gitDirOutput, reminders) {
+  if (!Array.isArray(reminders) || reminders.length === 0) return false;
+
+  const cachePath = getReminderCachePath(cwd, gitDirOutput);
+  const now = new Date().toISOString();
+  const nowMs = Date.now();
+  const scopeKey = getSessionScopeKey(data, cwd);
+  const signature = buildReminderSignature(reminders);
+
+  const cache = pruneOldReminderCacheEntries(loadReminderCache(cachePath), nowMs);
+  const prior = cache[scopeKey];
+  if (prior && prior.signature === signature) return false;
+
+  cache[scopeKey] = { signature, updatedAt: now };
+  saveReminderCache(cachePath, cache);
+  return true;
 }
 
 function readFileSafe(filePath) {
@@ -160,12 +241,13 @@ function evaluatePayload(data) {
   if (data.stop_hook_active === true) return {};
 
   const cwd = data.cwd || process.cwd();
-  const gitDir = runGit('git rev-parse --git-dir', cwd);
-  if (!gitDir) return {};
+  const gitDirOutput = runGit('git rev-parse --git-dir', cwd);
+  if (!gitDirOutput) return {};
 
   const changedFiles = getUncommittedFiles(cwd);
   const reminders = generateReminders(cwd, changedFiles);
   if (reminders.length === 0) return {};
+  if (!shouldEmitReminders(data, cwd, gitDirOutput, reminders)) return {};
 
   return {
     decision: 'block',
@@ -187,12 +269,17 @@ if (require.main === module) {
 } else {
   module.exports = {
     buildContinuationReason,
+    buildReminderSignature,
     evaluatePayload,
     generateReminders,
     getUncommittedFiles,
+    getSessionScopeKey,
     isSignificantFile,
     isSourceFile,
     isTestFile,
     main,
+    pruneOldReminderCacheEntries,
+    resolveGitDirPath,
+    shouldEmitReminders,
   };
 }
