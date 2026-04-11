@@ -1,5 +1,21 @@
 # Superpowers Optimized Release Notes
 
+## v6.5.2 (2026-04-11)
+
+Stop hook reliability, session isolation, and subagent plan tracking improvements.
+
+### Fixes
+
+**Stats-only sessions no longer trigger stop-hook blocking** — In v6.5.1, the stop hook would emit `decision: "block"` even when the only available reminder was the informational session-stats summary (e.g., "6 min, 1 skill invocation"). Users saw "Stop hook error: Session summary: ..." after every turn in light sessions. The hook now checks for actionable reminders before blocking; stats-only sessions return `{}` silently.
+
+**Edit log is now session-aware — no cross-session contamination** — The shared `~/.claude/hooks-logs/edit-log.txt` used a 3-field format (`timestamp | tool | path`) with no session identifier. Test sessions running via `claude -p` saw edits from the interactive session, triggering false-positive TDD and decision-log reminders inside headless test runs. The log format is now 4-field (`timestamp | session_id | tool | path`) and `stop-reminders.js` filters entries by the current session id, so each session only sees its own edits.
+
+**Plan checkboxes now enforced after subagent-driven development** — The subagent-driven-development skill previously marked tasks complete without updating the `- [ ]` checkboxes in `plan.md`. The task-complete instruction now explicitly requires changing `- [ ]` to `- [x]` in `plan.md` and syncing `state.md` if present, matching the intent of the plan-tracking system.
+
+**State.md staleness detection added to stop hook** — The stop hook now detects when `state.md` exists and contains plan status that appears out of date relative to recent edits (modified source files with no corresponding state update). Users see a targeted reminder to update `state.md` rather than silently leaving it stale across sessions.
+
+**Context-management resets the decision-log reminder marker** — After saving context, the skill now writes a timestamp to `~/.claude/hooks-logs/last-saved-entry.txt`. The stop hook uses this marker to suppress the "update your decision log" reminder immediately after a context-management save, preventing redundant reminders in the same turn.
+
 ## v6.5.1 (2026-04-10)
 
 Patch release focused on Stop-hook correctness and reminder signal quality.
