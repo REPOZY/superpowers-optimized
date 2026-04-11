@@ -248,6 +248,57 @@ test('When reminders present: output uses block reason, not Stop hookSpecificOut
   } finally { cleanup(dir); }
 });
 
+// ── Reminder dedupe (Codex UX) ───────────────────────────────────────────────
+
+console.log('\nReminder dedupe');
+
+test('Same reminder state in same session is emitted once', () => {
+  const dir = makeTempRepo();
+  try {
+    fs.writeFileSync(path.join(dir, 'index.js'), 'console.log("hello")');
+
+    const first = runAdapter({ stop_hook_active: false, session_id: 'sess-1' }, dir);
+    assert.strictEqual(first.decision, 'block', `Expected first reminder block, got: ${JSON.stringify(first)}`);
+
+    const second = runAdapter({ stop_hook_active: false, session_id: 'sess-1' }, dir);
+    assert.deepStrictEqual(second, {},
+      `Expected duplicate reminder suppression, got: ${JSON.stringify(second)}`);
+  } finally { cleanup(dir); }
+});
+
+test('Reminder re-emits in same session when underlying state changes', () => {
+  const dir = makeTempRepo();
+  try {
+    fs.writeFileSync(path.join(dir, 'index.js'), 'console.log("hello")');
+    const first = runAdapter({ stop_hook_active: false, session_id: 'sess-2' }, dir);
+    assert.strictEqual(first.decision, 'block', `Expected first reminder block, got: ${JSON.stringify(first)}`);
+
+    const second = runAdapter({ stop_hook_active: false, session_id: 'sess-2' }, dir);
+    assert.deepStrictEqual(second, {},
+      `Expected duplicate reminder suppression, got: ${JSON.stringify(second)}`);
+
+    // New dirty file changes reminder payload (source file count increases).
+    fs.writeFileSync(path.join(dir, 'another.js'), 'console.log("changed")');
+    const third = runAdapter({ stop_hook_active: false, session_id: 'sess-2' }, dir);
+    assert.strictEqual(third.decision, 'block',
+      `Expected reminder to re-emit after state change, got: ${JSON.stringify(third)}`);
+  } finally { cleanup(dir); }
+});
+
+test('Same reminder state without session_id is emitted once per cwd/day', () => {
+  const dir = makeTempRepo();
+  try {
+    fs.writeFileSync(path.join(dir, 'index.js'), 'console.log("hello")');
+
+    const first = runAdapter({ stop_hook_active: false }, dir);
+    assert.strictEqual(first.decision, 'block', `Expected first reminder block, got: ${JSON.stringify(first)}`);
+
+    const second = runAdapter({ stop_hook_active: false }, dir);
+    assert.deepStrictEqual(second, {},
+      `Expected duplicate reminder suppression without session_id, got: ${JSON.stringify(second)}`);
+  } finally { cleanup(dir); }
+});
+
 // ── Result ────────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(50)}`);
