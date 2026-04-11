@@ -106,7 +106,13 @@ Rejected: <what NOT to try, one line each — the anti-pattern knowledge>
 Open: <carry-forward items only>
 ```
 
-4. In a new session, read `state.md` first to restore task context, then grep `session-log.md` for relevant history.
+5. After appending the `[saved]` entry, update the stop-hook marker so the decision-log reminder resets:
+   ```bash
+   node -e "require('fs').writeFileSync(require('path').join(process.env.HOME||process.env.USERPROFILE||'.', '.claude','hooks-logs','last-saved-entry.txt'), new Date().toISOString())"
+   ```
+   This prevents the stop hook from re-firing the decision-log reminder on every subsequent stop in the same session.
+
+6. In a new session, read `state.md` first to restore task context, then grep `session-log.md` for relevant history.
 
 ## session-log.md Format and Maintenance
 
