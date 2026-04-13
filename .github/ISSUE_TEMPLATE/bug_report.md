@@ -7,49 +7,37 @@ assignees: ''
 
 ---
 
-<!--
-BEFORE FILING: Search open AND closed issues. The Windows SessionStart
-hook alone has been reported 29 times. If your issue already exists,
-add a comment or reaction to the existing one instead.
--->
+---
+Name: Bug Report
+About: Create a report to help us improve
+Title: "[Bug] "
+Labels: bug
+Assignees: ''
 
-- [ ] I searched existing issues and this is not a duplicate
+---
+
+## Description
+A clear and concise description of the problem.
+
+## Steps to Reproduce
+1. 
+2. 
+3. 
+
+## Expected Behavior
+What should have happened?
+
+## Actual Behavior
+What actually happened?
 
 ## Environment
+- OS: 
+- Browser / Runtime version: 
+- Project version / Commit: 
+- Other relevant details:
 
-| Field | Value |
-|-------|-------|
-| Superpowers version | |
-| Harness (Claude Code, Cursor, etc.) | |
-| Harness version | |
-| Model | |
-| OS + shell | |
+## Additional Context
+Add any other context, screenshots, or logs about the problem here.
 
-## Is this a Superpowers issue or a platform issue?
-<!-- Superpowers is a plugin. Some reported "bugs" are actually issues
-     in the underlying platform or model. If you're not sure, try
-     reproducing without Superpowers installed.
-
-     If the problem persists without Superpowers, file the issue with
-     your platform instead. -->
-
-- [ ] I confirmed this issue does not occur without Superpowers installed
-
-## What happened?
-<!-- Be specific. "It doesn't work" is not a bug report. -->
-
-## Steps to reproduce
-1.
-2.
-3.
-
-## Expected behavior
-<!-- What should have happened? -->
-
-## Actual behavior
-<!-- What happened instead? -->
-
-## Debug log or conversation transcript
-<!-- A debug log or conversation transcript showing the issue is the
-     single most helpful thing you can include. Without one, we're
-     guessing. Screenshots of error output are also useful. -->
+## Possible Solution (optional)
+If you have any suggestions on how to fix this issue, please describe them.
