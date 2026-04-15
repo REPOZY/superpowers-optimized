@@ -46,7 +46,8 @@ Detect merge base (`main`/`master` or repo default) and confirm if unclear.
   - **What changed** — one-paragraph summary of the change set
   - **Why** — the motivation or problem this solves (link to plan doc if one exists)
   - **How to verify** — exact commands or steps a reviewer can run to confirm the change works
-  - **Notable decisions** — any trade-offs made, alternatives rejected, or non-obvious choices
+  - **Notable decisions** — any trade-offs made, alternatives rejected, or non-obvious choices.
+    If `session-log.md` has `[saved]` entries written during this branch's lifetime, extract the Decisions and Rejected bullets from the most recent entry and include them here. This ensures PR reviewers see the "why" without needing to read the log.
 - Keep worktree by default (remove only if user asks)
 
 ### Option 3

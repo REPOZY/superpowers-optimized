@@ -79,6 +79,11 @@ Technical execution includes code edits, debugging, planning, review, test statu
    - **If they confirm:** run `git init --quiet` directly (do not ask again — the user just confirmed), then invoke `context-management` for map generation only. Return to step 3 when done. Note: `context-snapshot.json` will not be created in this session — the context-engine hook already ran at session start before git existed. It will be created on the next session start, provided the session is opened from this project's root directory. If no commits exist yet it will be mostly empty; it populates fully after the first commit.
    - **If they decline:** proceed to step 3.
 
+   **Step 2b — Existing project memory check** (runs only when step 2 did NOT fire):
+   If the user's request is non-trivial (not micro) AND `project-map.md` does not exist AND the project has 10+ files:
+   - Mention once (do not block): *"Note: this project has no project-map.md. I'll work fine without it, but if you want faster orientation in future sessions, I can generate one after this task. Just say 'map this project'."*
+   - Do not repeat this notice in subsequent tasks within the same session.
+
 3. Classify the task as **micro**, **lightweight**, or **full** (see Complexity Classification below).
 4. If resuming work from a prior session, read `state.md` if it exists. Before ending any session where significant decisions were made (design choices, rejected approaches, non-obvious constraints discovered), invoke `context-management` to write a `[saved]` entry — even if the work is complete. This is the only mechanism that preserves the "why" across sessions.
 5. If `known-issues.md` exists at the project root, read it to avoid rediscovering known error→solution mappings.
@@ -160,6 +165,9 @@ digraph planmode_intercept {
 - Independent parallel tasks outside of plan execution: `dispatching-parallel-agents`
 - Cross-session state persistence: `context-management`
 - Known issue tracking / save recurring fixes: `error-recovery`
+- Code restructuring without behavior change: `refactoring` (lock behavior with tests, then restructure incrementally)
+- Performance issues (slow, high memory/CPU, latency): `performance-investigation` (measure → profile → fix → re-measure)
+- Dependency updates, security vulnerabilities, migrations: `dependency-management` (audit → assess impact → update incrementally → verify)
 - UI/frontend implementation: apply `frontend-design` standards
 - CLAUDE.md / AGENTS.md creation or update: `claude-md-creator` (applies at any complexity level — never implement directly)
 - *(Internal skills — not directly routed):* `self-consistency-reasoner` is invoked internally by `systematic-debugging` and `verification-before-completion`; do not invoke it directly. `token-efficiency` is always-on and invoked at step 1 of the Entry Sequence.

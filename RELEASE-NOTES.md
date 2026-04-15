@@ -1,5 +1,43 @@
 # Superpowers Optimized Release Notes
 
+## v6.6.0 (2026-04-15)
+
+Full-stack audit: 3 new skills, smarter cross-session memory, scope gates across 6 skills, and expanded hook coverage.
+
+### New Features
+
+**Refactoring skill** — Enforces behavior-locking tests before any structural change and incremental verification after each move. Four phases: lock current behavior with characterization tests, define the refactoring boundary, make one structural change at a time with tests green after each, then audit for stale references. Includes guidance on writing characterization tests for side-effectful code and detecting test runners automatically.
+
+**Performance Investigation skill** — Measure-first methodology for performance work. Requires a quantitative baseline before any optimization, profiling to identify the actual bottleneck (not the guessed one), a hypothesis with predicted improvement, and re-measurement after every change. Profiling tool recommendations are CLI-friendly so the AI can read output directly; GUI-only tools prompt the user to share results.
+
+**Dependency Management skill** — Structured incremental updates with verification at each step. Covers the full lifecycle: audit outdated packages, assess impact from changelogs, update one dependency at a time with test/build/smoke verification, and handle security vulnerabilities as a special case. Includes lockfile merge conflict resolution, version pinning strategy, and monorepo coordination guidance.
+
+**Weighted memory scoring** — The skill-activator hook now ranks session-log and known-issues matches using a weighted score (70% keyword density + 30% recency) instead of flat boolean matching. More relevant entries surface first.
+
+**Per-project watermark** — The context-engine hook now creates a per-project watermark file (md5 hash of cwd) so multiple projects sharing the same machine don't overwrite each other's session-start state.
+
+**Cross-session diff base** — When a valid watermark exists from a previous session, the context-engine uses it as the git diff base instead of HEAD~1. This means the "what changed" snapshot reflects changes since your last session, not just the last commit.
+
+**Blast radius import filtering** — The context-engine's blast radius analysis now applies a secondary filter checking for actual import/require/from references, reducing false positives from files that happen to contain the same basename but don't actually depend on the changed file.
+
+### Changes
+
+**6 scope gates added to existing skills** — frontend-design checks for an existing design system before generating a new one; TDD bootstraps test infrastructure before writing the first test; finishing-branch pulls decisions from session-log into PR descriptions; using-superpowers has a soft gate for existing projects without memory files; deliberation has a loop guard preventing infinite deliberation-premise-check cycles; context-management clarifies state.md vs plan.md roles.
+
+**Subagent guard expanded** — The action verb pattern now catches activate/trigger/execute/launch/spawn/start in addition to the original invoke/use/run/call verbs. Also detects Skill tool invocation patterns (`Skill("superpowers..."`, `skill: "brainstorming"`).
+
+**Stop-reminders pattern coverage widened** — The isSignificantSession check now detects edits to specs/*.md, plans/*.md, and plugin.universal.yaml in addition to SKILL.md, hooks/*.js, and CLAUDE.md.
+
+**Session-log hard cap raised** — The per-entry hard cap was raised from 1000 to 1500 characters (~375 tokens) to accommodate multi-subsystem sessions that legitimately need more space.
+
+**Session-start awk parser fix** — The parser that extracts recent [saved] entries now correctly flushes the previous block when encountering consecutive [saved] entries. Previously, consecutive entries without non-[saved] content between them would silently drop the earlier entry.
+
+### Fixes
+
+**Systematic-debugging post-fix improvement** — After resolving a bug, the skill now suggests promoting permanent discoveries to project-map.md Critical Constraints, ensuring hard-won architectural knowledge persists beyond the session-log.
+
+**3 new test suites** — Added dedicated test files for context-engine.js (16 tests), stop-reminders.js (14 tests), and subagent-guard.js (25 tests). Combined with the existing skill-activator tests (41), the plugin now has 96 unit tests covering all major hooks.
+
 ## v6.5.2 (2026-04-11)
 
 Stop hook reliability, session isolation, and subagent plan tracking improvements.

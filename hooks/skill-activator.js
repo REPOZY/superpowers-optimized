@@ -1,18 +1,27 @@
 #!/usr/bin/env node
 /**
- * UserPromptSubmit Hook — Proactive Skill Activation
+ * UserPromptSubmit Hook — Proactive Skill Activation + Memory Recall
  *
  * Analyzes the user's prompt before Claude processes it and injects
- * context about which superpowers-optimized skills are relevant.
- * This reinforces the using-superpowers routing system deterministically.
+ * two types of context:
+ *
+ * 1. Skill hints — which superpowers-optimized skills are relevant to
+ *    this prompt (reinforces using-superpowers routing deterministically).
+ *
+ * 2. Memory recall — relevant past decisions from session-log.md that
+ *    match keywords extracted from the prompt. Surfaces historical context
+ *    automatically at the moment it's needed, without requiring the AI to
+ *    remember to grep the log manually.
  *
  * Features:
- * - Micro-task detection: short, specific prompts skip skill routing entirely
+ * - Micro-task detection: short, specific prompts skip both features entirely
  * - Confidence threshold: only suggests skills when match confidence is meaningful
+ * - Memory recall: keyword-based grep of session-log.md, ≤2 entries, deduped
  * - Smart routing: fewer false positives, zero overhead for simple tasks
  *
  * Input:  stdin JSON with { prompt, session_id, cwd, ... }
  * Output: stdout JSON with additionalContext suggesting relevant skills
+ *         and/or surfacing relevant past decisions
  */
 
 const fs = require('fs');
@@ -36,6 +45,29 @@ const PRIORITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 };
 
 // Minimum score threshold — matches below this are discarded as noise
 const CONFIDENCE_THRESHOLD = 2;
+
+// ── Memory recall constants ───────────────────────────────────────────────────
+const MAX_MEMORY_ENTRIES = 2;    // Never inject more than 2 matched entries
+const MIN_KEYWORD_LENGTH = 4;   // Skip tokens shorter than this
+const MAX_ENTRY_CHARS = 1500;   // Truncate oversized entries (~250 words / ~375 tokens)
+
+// Common English words that produce noisy false-positive matches
+const STOP_WORDS = new Set([
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'must', 'shall', 'can',
+  'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from', 'as',
+  'into', 'through', 'during', 'before', 'after', 'this', 'that',
+  'these', 'those', 'my', 'your', 'his', 'her', 'its', 'our', 'their',
+  'what', 'which', 'who', 'when', 'where', 'why', 'how',
+  'all', 'both', 'each', 'every', 'any', 'some', 'not', 'only',
+  'than', 'too', 'very', 'just', 'now', 'also', 'but', 'and', 'or',
+  'if', 'then', 'so', 'let', 'get', 'got', 'go', 'make', 'know',
+  'think', 'see', 'look', 'use', 'using', 'used', 'like', 'want',
+  'need', 'please', 'here', 'there', 'about', 'more', 'other', 'new',
+  'good', 'right', 'well', 'really', 'actually', 'already', 'still',
+  'even', 'back', 'thing', 'things', 'way', 'work', 'works', 'worked',
+]);
 
 /**
  * Detect micro-tasks that should skip skill routing entirely.
@@ -154,6 +186,187 @@ function buildContext(matches) {
   ].join('\n');
 }
 
+// ── Memory recall ─────────────────────────────────────────────────────────────
+
+/**
+ * Extract distinctive keywords from a prompt for session-log searching.
+ * Strips stop words, punctuation (preserving hyphens), and short tokens.
+ * Returns a deduplicated array of lowercase keyword strings.
+ */
+function extractKeywords(prompt) {
+  if (!prompt || typeof prompt !== 'string') return [];
+
+  const tokens = prompt
+    .toLowerCase()
+    // Remove punctuation except hyphens (preserves compound terms like "session-log")
+    .replace(/[^\w\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(t => t.length >= MIN_KEYWORD_LENGTH && !STOP_WORDS.has(t));
+
+  return [...new Set(tokens)];
+}
+
+/**
+ * Search session-log.md for [saved] entries matching the given keywords.
+ * Skips [superseded] entries. Returns up to MAX_MEMORY_ENTRIES matches,
+ * most recent first. Each entry is trimmed to MAX_ENTRY_CHARS.
+ *
+ * A match requires at least 1 keyword hit in the entry text.
+ * (Threshold is low because keywords are already filtered for distinctiveness.)
+ */
+function searchSessionLog(cwd, keywords) {
+  if (!keywords || keywords.length === 0) return [];
+
+  const logPath = path.join(cwd, 'session-log.md');
+  let content;
+  try {
+    content = fs.readFileSync(logPath, 'utf8');
+  } catch {
+    return []; // File absent — silent no-op
+  }
+
+  // Parse file into individual [saved] entries (preserve order: oldest first)
+  const entries = [];
+  let current = null;
+
+  for (const line of content.split('\n')) {
+    if (/^## .+\[saved\]/.test(line)) {
+      // Flush previous entry
+      if (current !== null) entries.push(current.trim());
+      // Skip superseded entries — they represent overturned decisions
+      if (/\[superseded/.test(line)) {
+        current = null;
+      } else {
+        current = line;
+      }
+    } else if (current !== null) {
+      current += '\n' + line;
+    }
+  }
+  // Flush last entry
+  if (current !== null) entries.push(current.trim());
+
+  if (entries.length === 0) return [];
+
+  // Weighted scoring: keyword density (70%) + recency (30%)
+  // Replaces flat boolean matching to reduce false positives and surface
+  // the most relevant entries, not just the most recent ones.
+  const scored = [];
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const entryLower = entry.toLowerCase();
+    const hits = keywords.filter(kw => entryLower.includes(kw)).length;
+    if (hits === 0) continue;
+
+    const densityScore = hits / keywords.length;
+    const recencyScore = (i + 1) / entries.length;
+    const score = (densityScore * 0.7) + (recencyScore * 0.3);
+    scored.push({ entry, score });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, MAX_MEMORY_ENTRIES).map(s => {
+    return s.entry.length > MAX_ENTRY_CHARS
+      ? s.entry.slice(0, MAX_ENTRY_CHARS).trimEnd() + '\n*(entry truncated)*'
+      : s.entry;
+  });
+}
+
+/**
+ * Format matched session-log entries for injection as additional context.
+ */
+function buildMemoryContext(entries) {
+  if (!entries || entries.length === 0) return null;
+
+  return [
+    '<session-memory-recall>',
+    'Relevant past decisions matching this prompt (from session-log.md):',
+    '',
+    entries.join('\n\n'),
+    '',
+    '*(Full history searchable in session-log.md)*',
+    '</session-memory-recall>',
+  ].join('\n');
+}
+
+// ── Known-issues recall ───────────────────────────────────────────────────────
+
+/**
+ * Search known-issues.md for open (non-fixed) entries matching the given keywords.
+ * Fixed entries (## ~~...~~) are skipped. Returns up to MAX_MEMORY_ENTRIES matches,
+ * most recent first. Each entry is trimmed to MAX_ENTRY_CHARS.
+ */
+function searchKnownIssues(cwd, keywords) {
+  if (!keywords || keywords.length === 0) return [];
+
+  const filePath = path.join(cwd, 'known-issues.md');
+  let content;
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return []; // File absent — silent no-op
+  }
+
+  // Parse into open entries (skip fixed entries with ## ~~ header)
+  const entries = [];
+  let current = null;
+
+  for (const line of content.split('\n')) {
+    if (line.startsWith('## ')) {
+      if (current !== null) entries.push(current.trim());
+      // Fixed entries have strikethrough: ## ~~...~~
+      current = line.startsWith('## ~~') ? null : line;
+    } else if (current !== null) {
+      current += '\n' + line;
+    }
+  }
+  if (current !== null) entries.push(current.trim());
+
+  if (entries.length === 0) return [];
+
+  // Weighted scoring: keyword density (70%) + recency (30%)
+  const scored = [];
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const entryLower = entry.toLowerCase();
+    const hits = keywords.filter(kw => entryLower.includes(kw)).length;
+    if (hits === 0) continue;
+
+    const densityScore = hits / keywords.length;
+    const recencyScore = (i + 1) / entries.length;
+    const score = (densityScore * 0.7) + (recencyScore * 0.3);
+    scored.push({ entry, score });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, MAX_MEMORY_ENTRIES).map(s => {
+    return s.entry.length > MAX_ENTRY_CHARS
+      ? s.entry.slice(0, MAX_ENTRY_CHARS).trimEnd() + '\n*(entry truncated)*'
+      : s.entry;
+  });
+}
+
+/**
+ * Format matched known-issues entries for injection as additional context.
+ */
+function buildKnownIssuesContext(entries) {
+  if (!entries || entries.length === 0) return null;
+
+  return [
+    '<known-issues-recall>',
+    'Relevant known issues matching this prompt (from known-issues.md):',
+    '',
+    entries.join('\n\n'),
+    '',
+    '*(Full list in known-issues.md)*',
+    '</known-issues-recall>',
+  ].join('\n');
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
 async function main() {
   let input = '';
   for await (const chunk of process.stdin) input += chunk;
@@ -161,26 +374,38 @@ async function main() {
   try {
     const data = JSON.parse(input);
     const prompt = data.prompt || '';
+    const cwd = data.cwd || process.cwd();
 
-    // Micro-task fast path: skip routing entirely
+    // Micro-task fast path: skip all enrichment entirely
     if (isMicroTask(prompt)) {
       process.stdout.write('{}');
       return;
     }
 
+    // Run all pipelines independently
     const matches = matchSkills(prompt);
+    const keywords = extractKeywords(prompt);
+    const memoryEntries = searchSessionLog(cwd, keywords);
+    const knownIssueEntries = searchKnownIssues(cwd, keywords);
 
-    if (matches.length === 0) {
+    const skillContext = buildContext(matches);
+    const memoryContext = buildMemoryContext(memoryEntries);
+    const knownIssuesContext = buildKnownIssuesContext(knownIssueEntries);
+
+    // Nothing to inject
+    if (!skillContext && !memoryContext && !knownIssuesContext) {
       process.stdout.write('{}');
       return;
     }
 
-    const context = buildContext(matches);
+    // Combine: skill hint first (routing), known issues second (avoid known errors),
+    // memory last (historical context)
+    const combined = [skillContext, knownIssuesContext, memoryContext].filter(Boolean).join('\n\n');
 
     process.stdout.write(JSON.stringify({
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: context,
+        additionalContext: combined,
       },
     }));
   } catch {
@@ -191,5 +416,18 @@ async function main() {
 if (require.main === module) {
   main();
 } else {
-  module.exports = { matchSkills, buildContext, isMicroTask, RULES, CONFIDENCE_THRESHOLD };
+  module.exports = {
+    matchSkills,
+    buildContext,
+    isMicroTask,
+    extractKeywords,
+    searchSessionLog,
+    buildMemoryContext,
+    searchKnownIssues,
+    buildKnownIssuesContext,
+    RULES,
+    CONFIDENCE_THRESHOLD,
+    STOP_WORDS,
+    MAX_MEMORY_ENTRIES,
+  };
 }

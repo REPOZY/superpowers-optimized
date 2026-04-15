@@ -47,7 +47,11 @@ digraph executing_plans {
 4. If no concerns: create task tracking and proceed.
 
 ### Step 2: Set Up Workspace
-Ensure isolated workspace is ready (`using-git-worktrees`).
+If working on main/master branch AND the plan involves code changes:
+- Set up isolated workspace via `using-git-worktrees`.
+
+If already on a feature branch, or the plan is documentation/config only:
+- Skip worktree setup. Confirm with user that the current branch is appropriate.
 
 ### Step 3: Execute Tasks
 For each task:

@@ -8,7 +8,11 @@
 
 'use strict';
 
-const { buildContext, isMicroTask, matchSkills } = require('../skill-activator');
+const {
+  buildContext, isMicroTask, matchSkills,
+  extractKeywords, searchSessionLog, buildMemoryContext,
+  searchKnownIssues, buildKnownIssuesContext,
+} = require('../skill-activator');
 const { readJsonStdin } = require('./utils');
 
 function evaluatePayload(data) {
@@ -17,16 +21,25 @@ function evaluatePayload(data) {
   const prompt = typeof data.prompt === 'string' ? data.prompt : '';
   if (!prompt || isMicroTask(prompt)) return {};
 
-  const matches = matchSkills(prompt);
-  if (matches.length === 0) return {};
+  const cwd = typeof data.cwd === 'string' ? data.cwd : process.cwd();
 
-  const context = buildContext(matches);
-  if (!context) return {};
+  const matches = matchSkills(prompt);
+  const keywords = extractKeywords(prompt);
+  const memoryEntries = searchSessionLog(cwd, keywords);
+  const knownIssueEntries = searchKnownIssues(cwd, keywords);
+
+  const skillContext = buildContext(matches);
+  const memoryContext = buildMemoryContext(memoryEntries);
+  const knownIssuesContext = buildKnownIssuesContext(knownIssueEntries);
+
+  if (!skillContext && !memoryContext && !knownIssuesContext) return {};
+
+  const combined = [skillContext, knownIssuesContext, memoryContext].filter(Boolean).join('\n\n');
 
   return {
     hookSpecificOutput: {
       hookEventName: 'UserPromptSubmit',
-      additionalContext: context,
+      additionalContext: combined,
     },
   };
 }

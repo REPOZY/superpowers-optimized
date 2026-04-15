@@ -68,6 +68,12 @@ Check the hit count before reading results. This tells you whether to narrow or 
    - Verified facts/evidence
    - Open questions/risks
 
+   **state.md vs plan.md:**
+   - `plan.md` (or `docs/.../plans/*.md`): the authoritative task list with checkboxes. Owned by `executing-plans`. Updated as tasks complete.
+   - `state.md`: a session-boundary snapshot of *where you are* in the plan — current task, blockers, what's verified. It references the plan but does not duplicate the task list.
+   
+   If a plan exists, state.md should say "Executing plan at docs/.../plan.md, currently on Task 3" — not copy the full task list.
+
 2. Write `state.md` at the project root with concise sections:
    - `Current Goal`
    - `Decisions`
@@ -95,7 +101,15 @@ Check the hit count before reading results. This tells you whether to narrow or 
 - One-time confirmations ("file deleted", "folder removed")
 - Newly discovered permanent architectural constraints → add to `project-map.md` Critical Constraints instead
 
-**Token budget: target ≤150 tokens per entry. Hard cap 250. If you're going over, you're writing the wrong content.**
+**Hard limits per component — enforce while writing, not after:**
+- Goal: 1 line, ≤15 words
+- Decisions: ≤5 bullets for multi-subsystem sessions, ≤3 for single-topic. Each bullet: decision + one-sentence why, ≤25 words total. No prose, no rationale beyond the why.
+- Rejected: ≤3 bullets, ≤15 words each. What to avoid — not the full story of why it failed.
+- Open: ≤2 items, ≤12 words each.
+
+If a decision doesn't fit in 25 words, the explanation belongs in a design doc. Cut the explanation, not the decision.
+
+Total entry backstop: 250 words / 1500 chars. If exceeded, a bullet violated its limit — find it and cut it. Typical single-topic sessions should target ~120 words; the higher cap exists for multi-subsystem sessions that genuinely touched 5+ areas.
 
 ```markdown
 ## YYYY-MM-DD HH:MM [saved]

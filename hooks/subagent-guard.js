@@ -43,13 +43,18 @@ const SKILL_NAMES = [
   'using-git-worktrees',
   'premise-check',
   'red-team',
+  'refactoring',
+  'performance-investigation',
+  'dependency-management',
 ];
 
-const ACTION_VERB = '(?:invoking?|using|use|running?|called?|calling)\\s+(?:the\\s+)?';
+const ACTION_VERB = '(?:invoking?|using|use|running?|called?|calling|activat(?:e|ed|ing)|trigger(?:ing|ed)?|execut(?:e|ed|ing)|launch(?:ing|ed)?|spawn(?:ing|ed)?|start(?:ing|ed)?)\\s+(?:the\\s+)?';
 
 const VIOLATION_PATTERNS = [
   /Invoke the superpowers-optimized/i,
   /I'm using the .+ skill/i,
+  /Skill\s*\(\s*["']?superpowers/i,
+  /skill:\s*["']?(superpowers|using-superpowers|brainstorming|deliberation|systematic-debugging|test-driven-development|verification|executing-plans|writing-plans|context-management|frontend-design|refactoring|performance-investigation|dependency-management)/i,
   ...SKILL_NAMES.map(name => new RegExp(ACTION_VERB + name, 'i')),
 ];
 

@@ -229,6 +229,269 @@ test('Prompt with special regex characters → does not crash', () => {
   assert.ok(typeof result === 'object', 'Must handle regex chars without crashing');
 });
 
+// ── Memory recall (extractKeywords / searchSessionLog / buildMemoryContext) ───
+
+const os = require('os');
+const fs = require('fs');
+const path = require('path');
+const {
+  extractKeywords,
+  searchSessionLog,
+  buildMemoryContext,
+  MAX_MEMORY_ENTRIES,
+} = require('../../hooks/skill-activator');
+
+console.log('\nMemory recall — extractKeywords');
+
+test('Strips stop words', () => {
+  const kw = extractKeywords('what is the best way to fix this problem');
+  // 'what','is','the','best','way','to','fix'(3 chars),'this','problem'
+  // 'best' is not a stop word, len=4 → included. 'problem' included.
+  // 'what','is','the','to','this' are stop words. 'fix' is 3 chars < 4.
+  assert.ok(!kw.includes('the'), 'stop word "the" should be removed');
+  assert.ok(!kw.includes('what'), 'stop word "what" should be removed');
+  assert.ok(!kw.includes('fix'), '"fix" is 3 chars, below min length');
+});
+
+test('Keeps tokens >= 4 chars that are not stop words', () => {
+  const kw = extractKeywords('brainstorming skill hooks session');
+  assert.ok(kw.includes('brainstorming'), '"brainstorming" should be kept');
+  assert.ok(kw.includes('skill'), '"skill" should be kept');
+  assert.ok(kw.includes('hooks'), '"hooks" should be kept');
+  assert.ok(kw.includes('session'), '"session" should be kept');
+});
+
+test('Preserves hyphenated compound tokens', () => {
+  const kw = extractKeywords('check session-log memory recall');
+  assert.ok(kw.includes('session-log'), '"session-log" should be preserved as compound');
+});
+
+test('Deduplicates tokens', () => {
+  const kw = extractKeywords('hook hook hook session session');
+  assert.strictEqual(kw.filter(t => t === 'hook').length, 1, 'hook should appear once');
+  assert.strictEqual(kw.filter(t => t === 'session').length, 1, 'session should appear once');
+});
+
+test('Returns [] for empty input', () => {
+  assert.deepStrictEqual(extractKeywords(''), []);
+  assert.deepStrictEqual(extractKeywords(null), []);
+});
+
+console.log('\nMemory recall — searchSessionLog');
+
+function makeTmpLog(entries) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'slog-unit-'));
+  fs.writeFileSync(path.join(dir, 'session-log.md'), entries.join('\n'));
+  return dir;
+}
+
+test('Returns [] when session-log.md absent', () => {
+  const results = searchSessionLog('/nonexistent/path/xyz', ['hook']);
+  assert.deepStrictEqual(results, []);
+});
+
+test('Returns [] when no keywords provided', () => {
+  const dir = makeTmpLog(['## 2026-01-01 10:00 [saved]\nGoal: test\n']);
+  const results = searchSessionLog(dir, []);
+  fs.rmSync(dir, { recursive: true });
+  assert.deepStrictEqual(results, []);
+});
+
+test('Skips [superseded] entries', () => {
+  const dir = makeTmpLog([
+    '## 2026-01-01 10:00 [saved] [superseded by 2026-02-01]',
+    'Goal: old decision with keyword brainstorming',
+    '',
+    '## 2026-02-01 10:00 [saved]',
+    'Goal: new decision',
+    '',
+  ]);
+  const results = searchSessionLog(dir, ['brainstorming']);
+  fs.rmSync(dir, { recursive: true });
+  assert.strictEqual(results.length, 0, 'superseded entry should not be returned');
+});
+
+test('Returns most-recent match first', () => {
+  const dir = makeTmpLog([
+    '## 2025-01-01 10:00 [saved]',
+    'Goal: older entry with keyword brainstorming',
+    '',
+    '## 2026-04-01 10:00 [saved]',
+    'Goal: newer entry with keyword brainstorming',
+    '',
+  ]);
+  const results = searchSessionLog(dir, ['brainstorming']);
+  fs.rmSync(dir, { recursive: true });
+  assert.ok(results[0].includes('newer entry'), 'most-recent entry should be first');
+});
+
+test(`Returns at most ${MAX_MEMORY_ENTRIES} entries`, () => {
+  const entries = [];
+  for (let i = 1; i <= 5; i++) {
+    entries.push(`## 2026-01-0${i} 10:00 [saved]`, `Goal: entry ${i} with keyword brainstorming`, '');
+  }
+  const dir = makeTmpLog(entries);
+  const results = searchSessionLog(dir, ['brainstorming']);
+  fs.rmSync(dir, { recursive: true });
+  assert.ok(results.length <= MAX_MEMORY_ENTRIES,
+    `Should return at most ${MAX_MEMORY_ENTRIES}, got ${results.length}`);
+});
+
+console.log('\nMemory recall — buildMemoryContext');
+
+test('Returns null for empty entries array', () => {
+  assert.strictEqual(buildMemoryContext([]), null);
+  assert.strictEqual(buildMemoryContext(null), null);
+});
+
+test('Wraps entries in session-memory-recall tags', () => {
+  const ctx = buildMemoryContext(['## 2026-01-01 [saved]\nGoal: test']);
+  assert.ok(ctx.includes('<session-memory-recall>'), 'should open tag');
+  assert.ok(ctx.includes('</session-memory-recall>'), 'should close tag');
+});
+
+console.log('\nMemory recall — evaluatePayload integration');
+
+test('Memory-only: no skill match + session-log hit → returns memory context', () => {
+  const dir = makeTmpLog([
+    '## 2026-04-01 09:00 [saved]',
+    'Goal: condition-based waiting for flaky hooks',
+    '',
+  ]);
+  const result = evaluatePayload({
+    prompt: 'help me understand the condition-based waiting approach for hooks',
+    cwd: dir,
+  });
+  fs.rmSync(dir, { recursive: true });
+  const ctx = result.hookSpecificOutput?.additionalContext || '';
+  assert.ok(ctx.includes('session-memory-recall'), 'should inject memory context');
+});
+
+test('Both: skill match + session-log hit → skill hint precedes memory context', () => {
+  const dir = makeTmpLog([
+    '## 2026-04-01 09:00 [saved]',
+    'Goal: systematic debugging of hook failures',
+    '',
+  ]);
+  const result = evaluatePayload({
+    prompt: 'the test is failing with an error in my hook, help me debug this systematically',
+    cwd: dir,
+  });
+  fs.rmSync(dir, { recursive: true });
+  const ctx = result.hookSpecificOutput?.additionalContext || '';
+  assert.ok(ctx.includes('user-prompt-submit-hook'), 'should include skill hint');
+  assert.ok(ctx.includes('session-memory-recall'), 'should include memory recall');
+  assert.ok(
+    ctx.indexOf('user-prompt-submit-hook') < ctx.indexOf('session-memory-recall'),
+    'skill hint should precede memory recall'
+  );
+});
+
+// ── Known-issues recall ───────────────────────────────────────────────────────
+
+const { searchKnownIssues, buildKnownIssuesContext } = require('../../hooks/skill-activator');
+
+function makeTmpKnownIssues(content) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ki-unit-'));
+  fs.writeFileSync(path.join(dir, 'known-issues.md'), content);
+  return dir;
+}
+
+console.log('\nKnown-issues recall — searchKnownIssues');
+
+test('Returns [] when known-issues.md absent', () => {
+  assert.deepStrictEqual(searchKnownIssues('/nonexistent/xyz', ['hook']), []);
+});
+
+test('Returns [] when no keywords', () => {
+  const dir = makeTmpKnownIssues('## Open issue\nSome content about hooks\n');
+  const r = searchKnownIssues(dir, []);
+  fs.rmSync(dir, { recursive: true });
+  assert.deepStrictEqual(r, []);
+});
+
+test('Skips fixed entries (## ~~ strikethrough)', () => {
+  const dir = makeTmpKnownIssues([
+    '## ~~Fixed hook issue~~ ✅ Fixed',
+    'Error: hooks stopped working',
+    'Fix: updated to v6.5.1',
+    '',
+    '## Open hook performance issue',
+    'Hooks are slow on large repos',
+  ].join('\n'));
+  const r = searchKnownIssues(dir, ['hooks']);
+  fs.rmSync(dir, { recursive: true });
+  assert.strictEqual(r.length, 1, 'should return only the open entry');
+  assert.ok(r[0].includes('Open hook performance'), 'should be the open entry');
+});
+
+test('Matches open entries by keyword', () => {
+  const dir = makeTmpKnownIssues([
+    '## Codex hooks do not fire',
+    'Error: SessionStart missing. Root cause: old codex-cli version.',
+    '',
+    '## Unrelated issue about skill routing',
+    'Skills are not being matched correctly.',
+  ].join('\n'));
+  const r = searchKnownIssues(dir, ['codex', 'sessionstart']);
+  fs.rmSync(dir, { recursive: true });
+  assert.strictEqual(r.length, 1);
+  assert.ok(r[0].includes('Codex hooks'));
+});
+
+test('Returns most-recent match first', () => {
+  const dir = makeTmpKnownIssues([
+    '## Older hook issue',
+    'hooks problem from before',
+    '',
+    '## Newer hook issue',
+    'hooks problem more recent',
+  ].join('\n'));
+  const r = searchKnownIssues(dir, ['hooks']);
+  fs.rmSync(dir, { recursive: true });
+  assert.ok(r[0].includes('Newer hook issue'), 'most recent should be first');
+});
+
+console.log('\nKnown-issues recall — buildKnownIssuesContext');
+
+test('Returns null for empty entries', () => {
+  assert.strictEqual(buildKnownIssuesContext([]), null);
+  assert.strictEqual(buildKnownIssuesContext(null), null);
+});
+
+test('Wraps entries in known-issues-recall tags', () => {
+  const ctx = buildKnownIssuesContext(['## Issue\nSome problem']);
+  assert.ok(ctx.includes('<known-issues-recall>'));
+  assert.ok(ctx.includes('</known-issues-recall>'));
+});
+
+console.log('\nKnown-issues recall — evaluatePayload ordering');
+
+test('known-issues context appears between skill hint and memory context', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ki-order-'));
+  fs.writeFileSync(path.join(dir, 'known-issues.md'), [
+    '## Codex hooks not firing',
+    'Error: hooks ignored. Root cause: old codex version.',
+  ].join('\n'));
+  fs.writeFileSync(path.join(dir, 'session-log.md'), [
+    '## 2026-04-01 09:00 [saved]',
+    'Goal: systematic debugging of codex hook failures',
+  ].join('\n'));
+  const result = evaluatePayload({
+    prompt: 'I need to debug why my codex hooks are not firing in the test environment',
+    cwd: dir,
+  });
+  fs.rmSync(dir, { recursive: true });
+  const ctx = result.hookSpecificOutput?.additionalContext || '';
+  const kiIdx = ctx.indexOf('known-issues-recall');
+  const memIdx = ctx.indexOf('session-memory-recall');
+  if (kiIdx !== -1 && memIdx !== -1) {
+    assert.ok(kiIdx < memIdx, 'known-issues should precede memory context');
+  }
+  // At minimum one of the recall sections should appear
+  assert.ok(kiIdx !== -1 || memIdx !== -1, 'at least one recall section should appear');
+});
+
 // ── Result ────────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(50)}`);

@@ -293,7 +293,7 @@ fi
 session_log_content=""
 if [ -f "session-log.md" ]; then
     saved_raw=$(awk '
-        /^## .* \[saved\]/ { found=1; block="" }
+        /^## .* \[saved\]/ { if (found && block != "") saved_entries[++n] = block; found=1; block="" }
         found { block = block "\n" $0 }
         /^## / && !/\[saved\]/ && found && block != "" { saved_entries[++n] = block; found=0; block="" }
         END { if (found && block != "") saved_entries[++n] = block
@@ -307,21 +307,73 @@ if [ -f "session-log.md" ]; then
 fi
 
 # ── state.md injection ────────────────────────────────────────────────────────
-# If state.md exists, inject it in full — it means the last session ended with
-# work in progress and the AI must resume from it. Capped at 100 lines by design.
+# If state.md exists, inject it — but with a staleness gate so old or completed
+# task state never silently misleads with "resume from here" framing.
+#
+# Three-way logic:
+#   cleared  — "Current Goal" contains "no active task" → soft notice only
+#   stale    — state.md is 7+ days old AND commits exist after its mtime → warn
+#   active   — everything else → normal "ACTIVE TASK STATE" injection
 state_content=""
 if [ -f "state.md" ]; then
     state_raw=$(cat "state.md" 2>/dev/null || echo "")
     if [ -n "$state_raw" ]; then
-        state_content="\n\n<state>\n**ACTIVE TASK STATE — resume from here, do not start fresh:**\n${state_raw}\n</state>"
+        # Extract the Current Goal line (case-insensitive match on "no active task")
+        goal_line=$(grep -i "^Current Goal:" "state.md" 2>/dev/null | head -1 || echo "")
+
+        # Compute age of state.md in days
+        state_mtime=$(stat -c %Y "state.md" 2>/dev/null || stat -f %m "state.md" 2>/dev/null || echo 0)
+        now=$(date +%s)
+        state_age_days=$(( (now - state_mtime) / 86400 ))
+
+        # Check if any git commit is newer than state.md
+        last_commit_time=$(git log --format="%ct" -1 2>/dev/null || echo "0")
+
+        if echo "$goal_line" | grep -qi "no active task"; then
+            # Explicitly cleared — inject with soft framing so AI doesn't "resume"
+            state_content="\n\n<state>\n*(state.md exists but indicates no active task — review before treating as a resume point)*\n${state_raw}\n</state>"
+        elif [ "$state_age_days" -ge 7 ] && [ "$last_commit_time" -gt "$state_mtime" ]; then
+            # Stale: old + commits have landed since it was written
+            state_content="\n\n<state>\n**state.md may be stale** (written ${state_age_days} days ago; newer commits exist). Confirm the task is still active before resuming — do not treat this as a guaranteed resume point:\n${state_raw}\n</state>"
+        else
+            # Active: recent or no newer commits — normal injection
+            state_content="\n\n<state>\n**ACTIVE TASK STATE — resume from here, do not start fresh:**\n${state_raw}\n</state>"
+        fi
     fi
 fi
 
 # ── known-issues.md injection ─────────────────────────────────────────────────
-# If known-issues.md exists, inject it so the AI never re-debugs a known error.
+# Inject open (non-fixed) known issues so the AI never re-debugs a known error.
+# Fixed entries (## ~~...~~) are skipped — they are resolved.
+# Capped at the 5 most recent open entries to prevent the file growing into
+# unconditional noise. If more exist, a count note is appended. Full file is
+# always greppable via the UserPromptSubmit hook's keyword-recall feature.
 known_issues_content=""
 if [ -f "known-issues.md" ]; then
-    known_raw=$(cat "known-issues.md" 2>/dev/null || echo "")
+    known_raw=$(node -e "
+        try {
+            const lines = require('fs').readFileSync('known-issues.md','utf8').split('\n');
+            const entries = [];
+            let cur = null;
+            for (const line of lines) {
+                if (line.startsWith('## ')) {
+                    if (cur !== null) entries.push(cur.trim());
+                    cur = line.startsWith('## ~~') ? null : line;
+                } else if (cur !== null) {
+                    cur += '\n' + line;
+                }
+            }
+            if (cur !== null) entries.push(cur.trim());
+            const MAX = 5;
+            const total = entries.length;
+            if (total > 0) {
+                const shown = entries.slice(-MAX);
+                let out = shown.join('\n\n');
+                if (total > MAX) out += '\n\n*(+ ' + (total - MAX) + ' more open issues — see known-issues.md)*';
+                process.stdout.write(out);
+            }
+        } catch(e) {}
+    " 2>/dev/null || echo "")
     if [ -n "$known_raw" ]; then
         known_issues_content="\n\n<known-issues>\n${known_raw}\n</known-issues>"
     fi
@@ -330,7 +382,9 @@ fi
 # ── context-snapshot.json injection ───────────────────────────────────────────
 # Inject changed files + recent commits from context-snapshot.json so the AI
 # knows what changed since last session without reading the file manually.
-# Skip blast radius (too verbose) — just the actionable signals.
+# Also surfaces blast radius — dependents of changed files not already in the
+# changed set — so the AI knows which other files may need review. Capped at
+# 3 entries to stay concise. Only non-trivial blast radius lines are shown.
 context_snapshot_content=""
 if [ -f "context-snapshot.json" ]; then
     changed=$(node -e "
@@ -338,7 +392,24 @@ if [ -f "context-snapshot.json" ]; then
             const s = JSON.parse(require('fs').readFileSync('context-snapshot.json','utf8'));
             const files = (s.changed_files||[]).join(', ');
             const commits = (s.recent_commits||[]).slice(0,3).join('\n  ');
-            if (files) process.stdout.write('Changed since last commit: ' + files + '\nRecent commits:\n  ' + commits);
+            const changedSet = new Set(s.changed_files||[]);
+            const br = s.blast_radius || {};
+            const brLines = Object.entries(br)
+              .map(([f, deps]) => {
+                const newDeps = (deps||[]).filter(d => !changedSet.has(d));
+                return newDeps.length > 0 ? '  ' + f + ' \u2192 ' + newDeps.slice(0,3).join(', ') : null;
+              })
+              .filter(Boolean)
+              .slice(0,3);
+            const xsFiles = s.cross_session_files || [];
+            const xsCount = s.cross_session_commit_count || 0;
+            let out = '';
+            if (files) out += 'Changed since last commit: ' + files + '\nRecent commits:\n  ' + commits;
+            if (brLines.length > 0) out += '\nBlast radius (dependents to review):\n' + brLines.join('\n');
+            if (xsFiles.length > 0 && xsCount > 1) {
+                out += '\nChanged since last session (' + xsCount + ' commits): ' + xsFiles.join(', ');
+            }
+            if (out) process.stdout.write(out);
         } catch(e) {}
     " 2>/dev/null || echo "")
     if [ -n "$changed" ]; then

@@ -51,7 +51,7 @@ See [Installation](#installation) for install, update, and uninstall commands on
 ---
 
 > [!IMPORTANT]
-> **Compatibility Note:** This plugin includes a comprehensive workflow router and 21 specialized skills covering debugging, planning, code review, TDD, execution, and more.
+> **Compatibility Note:** This plugin includes a comprehensive workflow router and 24 specialized skills covering debugging, planning, code review, TDD, execution, and more.
 >
 > Other plugins or custom skills/agents in your `.claude/skills/` and `.claude/agents/` folders may interfere if they cover overlapping domains. Duplicate or competing skills can cause trigger conflicts, contradictory instructions, and unnecessary **context bloat/rot**, which will degrade the model's performance.
 >
@@ -100,7 +100,7 @@ User sends a prompt
 ┌─ skill-activator.js (UserPromptSubmit hook) ──────────────┐
 │  Is this a micro-task? ("fix typo on line 42")            │
 │    YES → {} (no routing, zero overhead)                   │
-│    NO  → Score against 15 skill rules                     │
+│    NO  → Score against 22 skill rules                     │
 │          Score < 2? → {} (weak match, skip)               │
 │          Score ≥ 2? → Inject skill suggestions            │
 └───────────────────────────────────────────────────────────┘
@@ -251,13 +251,13 @@ Generate once with "map this project". After that, the session-start hook inject
 _Generated: 2026-03-20 14:32 | Git: a4b9c2d_
 
 ## Directory Structure
-skills/ — 20 skills, each in skills/<name>/SKILL.md
-hooks/ — 9 hooks (JS) + hooks.json registry + skill-rules.json
+skills/ — 24 skills, each in skills/<name>/SKILL.md
+hooks/ — 10 hooks (JS) + hooks.json registry + skill-rules.json
 
 ## Key Files
 hooks/skill-activator.js — UserPromptSubmit: scores prompts against skill-rules.json,
   injects skill hints. Micro-task detection (≤8 words + patterns = skip routing).
-hooks/skill-rules.json — 18 rules: skill name, keywords, intentPatterns, priority.
+hooks/skill-rules.json — 22 rules: skill name, keywords, intentPatterns, priority.
 
 ## Critical Constraints
 - hooks.json uses \" not ' around ${CLAUDE_PLUGIN_ROOT} (single quotes break Linux)
@@ -312,7 +312,7 @@ Key facts: hooks.json requires \" not ' around ${CLAUDE_PLUGIN_ROOT} — single 
 Open: Monitor whether [saved] entries get used in practice; if not, consider folding key facts into project-map.md Critical Constraints instead
 ```
 
-Write an entry by invoking `context-management`. Grep-searchable. The AI surfaces relevant history at the start of any task that touches the same area.
+Write an entry by invoking `context-management`. Only the most recent entries are injected at session start — older entries are lookup-only, surfaced via keyword grep when a task touches the same area. **Entry size directly affects your per-session token cost** — the stop-hook monitors this and warns when entries exceed budget. Keep entries under 115 words.
 
 ### known-issues.md — Error memory
 
@@ -362,7 +362,7 @@ With this stack, sessions start with full context and zero re-discovery overhead
 ---
 
 
-## Skills Library (21 skills)
+## Skills Library (24 skills)
 
 ### Core Workflow
 - **using-superpowers** — Mandatory workflow router with 3-tier complexity classification (micro/lightweight/full) and instruction priority hierarchy
@@ -389,6 +389,11 @@ With this stack, sessions start with full context and zero re-discovery overhead
 - **verification-before-completion** — Evidence gate for completion claims with multi-path verification reasoning and configuration change verification
 - **self-consistency-reasoner** — Internal multi-path reasoning technique (Wang et al., ICLR 2023) embedded in debugging and verification
 
+### Code Health
+- **refactoring** — Behavior-locked structural changes: characterization tests before any move, one change at a time with tests green after each, per-category stale reference audit at completion
+- **performance-investigation** — Measure-first performance work: quantitative baseline, profiling to find the real bottleneck, hypothesis with predicted improvement, re-measurement after each fix
+- **dependency-management** — Incremental dependency updates with verification: audit, impact assessment, one-at-a-time upgrades, lockfile merge conflict resolution, security vulnerability fast-path
+
 ### Review & Integration
 - **requesting-code-review** — Structured code review with integrated security analysis (OWASP, auth flows, secrets handling, dependency vulnerabilities), adversarial red team dispatch, and ASI-guided iterative auto-fix pipeline for critical findings (fix one → re-check affected files only → re-prioritize → repeat)
 - **receiving-code-review** — Technical feedback handling with pushback rules and no-sycophancy enforcement
@@ -401,16 +406,16 @@ With this stack, sessions start with full context and zero re-discovery overhead
 ### Hooks (10 total)
 This is the full cross-platform hook inventory for the plugin. Claude Code gets the full set. Codex currently wires the smaller `SessionStart` / `UserPromptSubmit` / `PreToolUse(Bash)` / `PostToolUse(Bash)` / `Stop` subset through `hooks/codex/*`, subject to Codex platform limits.
 
-- **context-engine** (SessionStart) — Runs git commands on every session start and writes `context-snapshot.json`: changed files, blast radius (which other files reference each changed file), recent commits, and change stats. Zero dependencies. Silent no-op on non-git projects
+- **context-engine** (SessionStart) — Runs git commands on every session start and writes `context-snapshot.json`: changed files, blast radius (which other files reference each changed file, filtered to actual import/require references), recent commits, and change stats. Uses per-project watermarks (md5 of cwd) so multiple projects don't interfere, and cross-session diff base so "what changed" reflects changes since your last session, not just the last commit. Zero dependencies. Silent no-op on non-git projects
 - **session-start** (SessionStart) — Injects using-superpowers routing into every session; injects `project-map.md` content directly if it exists (full content ≤200 lines, Critical Constraints + Hot Files only above that); checks for available plugin update
-- **skill-activator** (UserPromptSubmit) — Micro-task detection + confidence-threshold skill matching
+- **skill-activator** (UserPromptSubmit) — Micro-task detection + confidence-threshold skill matching + weighted memory recall from session-log.md and known-issues.md (70% keyword density + 30% recency scoring)
 - **track-edits** (PostToolUse: Edit/Write) — Logs file changes for TDD reminders; auto-adds AI workspace artifacts (`project-map.md`, `session-log.md`, `state.md`) to `.gitignore` on first write
 - **track-session-stats** (PostToolUse: Skill) — Tracks skill invocations for progress visibility
 - **stop-reminders** (Stop) — Surfaces TDD reminders, commit nudges, and session summary after each response turn
 - **block-dangerous-commands** (PreToolUse: Bash) — 30+ patterns blocking destructive commands with 3-tier severity
 - **protect-secrets** (PreToolUse: Read/Edit/Write/Bash) — 50+ file patterns protecting sensitive files + 14 content patterns detecting hardcoded secrets (API keys, tokens, PEM blocks, connection strings) in source code with actionable env var guidance
 - **bash-compress-hook** (PreToolUse: Bash) — smart-compress: automatically removes noise from Bash output before it enters context. Covers 17 command types across two tiers: near-lossless summaries for install/push/pull commands (e.g. `npm install` → `ok, added 150 packages, in 12s`), and smart filtering for commands like `git status` (hint lines removed) and passing test runs (individual lines collapsed to summary). Hard safety rules: diffs, file reads, piped commands, `--verbose`/`--debug` output, and any failed command always pass through raw — no information loss on errors. Every filtered output gets a `[compressed: X->Y lines | type]` marker so Claude always knows compression occurred and can re-run if it needs more detail. If Claude does re-run the same command within 60 seconds, the hook automatically passes through the full uncompressed output on that second run. ~76% token savings on mixed sessions. Disable per-project with a `.sp-no-compress` file or globally with `SP_NO_COMPRESS=1`. See `docs/architecture/smart-compress.md` for full details
-- **subagent-guard** (SubagentStop) — Detects and blocks subagent skill leakage with automatic recovery
+- **subagent-guard** (SubagentStop) — Detects and blocks subagent skill leakage (12 action verbs + Skill tool invocation patterns) with automatic recovery
 
 ### Agents
 - **code-reviewer** — Senior code review agent with social accountability framing (merge decision and downstream fixes depend on review accuracy) and ASI-guided fix prioritization (single most impactful finding surfaced first)

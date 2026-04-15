@@ -295,6 +295,9 @@ function isSignificantSession(edits) {
     /skill-rules\.json$/,
     /CLAUDE\.md$/i,
     /agents[/\\][^/\\]+\.md$/i,
+    /[/\\]specs[/\\][^/\\]+\.md$/i,
+    /[/\\]plans[/\\][^/\\]+\.md$/i,
+    /plugin\.universal\.yaml$/,
   ];
   return edits.some(e => sigPatterns.some(p => p.test(e.filePath)));
 }
@@ -354,15 +357,15 @@ function checkSessionLogSize(cwd) {
     if (current) entries.push(current);
 
     const last2 = entries.slice(-2);
-    const HARD_CAP_CHARS = 1000; // ~250 tokens
+    const HARD_CAP_CHARS = 1500; // ~375 tokens — accommodates multi-subsystem sessions
     const over = last2.filter(e => e.chars > HARD_CAP_CHARS);
     if (over.length === 0) return null;
 
     const totalTokens = last2.reduce((s, e) => s + Math.round(e.chars / 4), 0);
     return (
       `Session-log size warning: last 2 [saved] entries inject ~${totalTokens} tokens per session ` +
-      `(target: <300). Entries over budget: ${over.map(e => e.header.trim()).join('; ')}. ` +
-      `Trim to: Goal / Decisions / Rejected / Open only. Hard cap 250 tokens per entry. ` +
+      `(target: <500). Entries over budget: ${over.map(e => e.header.trim()).join('; ')}. ` +
+      `Trim to: Goal / Decisions / Rejected / Open only. Hard cap 375 tokens per entry. ` +
       `Task checklists → state.md. Speculative analysis → design docs. Test results → delete.`
     );
   } catch {

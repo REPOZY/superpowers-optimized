@@ -189,6 +189,122 @@ test('Commit reminder suppressed when all session edits are committed (git clean
   }
 });
 
+// ── isSignificantSession pattern coverage ────────────────────────────────────
+
+console.log('\nisSignificantSession pattern coverage');
+
+test('Detects SKILL.md edits', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdit(logDir, 'skills/debugging/SKILL.md');
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+    const reason = result.reason || '';
+    assert.ok(reason.includes('Decision log'), `SKILL.md edit should trigger decision log: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Detects hooks/*.js edits', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdit(logDir, '/project/hooks/context-engine.js');
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+    const reason = result.reason || '';
+    assert.ok(reason.includes('Decision log'), `hooks/*.js edit should trigger decision log: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Detects specs/*.md edits (new pattern)', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdit(logDir, 'docs/superpowers-optimized/specs/test-spec.md');
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+    const reason = result.reason || '';
+    assert.ok(reason.includes('Decision log'), `specs/*.md edit should trigger decision log: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Detects plans/*.md edits (new pattern)', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdit(logDir, 'docs/superpowers-optimized/plans/test-plan.md');
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+    const reason = result.reason || '';
+    assert.ok(reason.includes('Decision log'), `plans/*.md edit should trigger decision log: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Detects plugin.universal.yaml edits (new pattern)', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdit(logDir, 'plugin.universal.yaml');
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+    const reason = result.reason || '';
+    assert.ok(reason.includes('Decision log'), `plugin.universal.yaml edit should trigger decision log: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Does NOT trigger for regular source file edits', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdit(logDir, 'src/app.js');
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+    const reason = result.reason || '';
+    assert.ok(!reason.includes('Decision log'), `Regular source file should NOT trigger decision log: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+// ── checkSessionLogSize hard cap ─────────────────────────────────────────────
+
+console.log('\ncheckSessionLogSize hard cap');
+
+test('Entry at 1200 chars does NOT trigger warning (cap is 1500)', () => {
+  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-cap-home-'));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-cap-'));
+  try {
+    // ~1200 chars: under old cap (1000) this would trigger, under new cap (1500) it should not
+    const content = '## 2026-04-15 [saved]\nGoal: Test\n' + 'Decisions:\n- ' + 'x'.repeat(1100) + '\n';
+    fs.writeFileSync(path.join(tmpDir, 'session-log.md'), content);
+    const hook = loadHookWithHome(homeDir);
+    const result = hook.checkSessionLogSize(tmpDir);
+    assert.strictEqual(result, null, `1200-char entry should NOT trigger at 1500 cap, got: ${result}`);
+  } finally {
+    cleanup(homeDir, tmpDir);
+  }
+});
+
+test('Entry at 1600 chars DOES trigger warning', () => {
+  const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-cap-home-'));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-cap-'));
+  try {
+    const content = '## 2026-04-15 [saved]\nGoal: Test\n' + 'x'.repeat(1600) + '\n';
+    fs.writeFileSync(path.join(tmpDir, 'session-log.md'), content);
+    const hook = loadHookWithHome(homeDir);
+    const result = hook.checkSessionLogSize(tmpDir);
+    assert.ok(result !== null, 'Expected warning for 1600-char entry');
+    assert.ok(result.includes('375 tokens'), `Warning should reference 375 token cap, got: ${result}`);
+  } finally {
+    cleanup(homeDir, tmpDir);
+  }
+});
+
 console.log(`\n${'─'.repeat(50)}`);
 console.log(`stop-reminders: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

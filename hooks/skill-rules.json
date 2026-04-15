@@ -137,6 +137,27 @@
       "priority": "medium",
       "keywords": ["init", "claude.md", "agents.md", "set up claude code", "create claude.md"],
       "intentPatterns": ["(create|update|write)\\s+claude\\.md", "set\\s+up\\s+claude\\s+code", "\\/init"]
+    },
+    {
+      "skill": "refactoring",
+      "type": "process",
+      "priority": "high",
+      "keywords": ["refactor", "restructure", "reorganize", "clean up", "extract", "inline", "simplify", "decouple", "modularize", "rename across", "move files", "split module", "consolidate"],
+      "intentPatterns": ["(refactor|restructure|reorganize|simplify|decouple|modularize)\\s+(this|the|my|our|a)", "clean\\s+up\\s+(this|the|my)", "extract\\s+(this|a|the)\\s+(into|to|as)", "inline\\s+(this|the)", "split\\s+(this|the)\\s+(module|file|class|component)", "move\\s+(these|the|this)\\s+files?", "rename\\s+.+\\s+across"]
+    },
+    {
+      "skill": "performance-investigation",
+      "type": "process",
+      "priority": "medium",
+      "keywords": ["slow", "performance", "optimize", "speed up", "latency", "throughput", "memory leak", "high cpu", "profiling", "benchmark", "bottleneck", "loading time", "response time"],
+      "intentPatterns": ["(why\\s+is|make)\\s+(this|it)\\s+(so\\s+)?slow", "speed\\s+(this|it)\\s+up", "make\\s+(this|it)\\s+faster", "reduce\\s+(memory|cpu|latency|load\\s+time)", "optimize\\s+(this|the|my)", "takes\\s+too\\s+long", "performance\\s+(issue|problem|degradation|regression)"]
+    },
+    {
+      "skill": "dependency-management",
+      "type": "process",
+      "priority": "medium",
+      "keywords": ["dependency", "dependencies", "upgrade packages", "npm update", "pip upgrade", "outdated", "vulnerability", "CVE", "security advisory", "breaking change", "migration guide", "peer dependency", "dependabot", "npm audit"],
+      "intentPatterns": ["update\\s+(the\\s+)?(dependencies|packages|deps)", "upgrade\\s+(to|packages|deps)", "(fix|resolve|address)\\s+(the\\s+)?(vulnerabilit|CVE|security\\s+advisory)", "npm\\s+(audit|outdated|update)", "pip\\s+(audit|install\\s+--upgrade)", "breaking\\s+change(s)?\\s+(in|from|after)", "migrate\\s+to\\s+(v?\\d|new\\s+version|latest)"]
     }
   ]
 }
