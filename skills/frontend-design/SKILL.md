@@ -13,6 +13,17 @@ description: >
 
 This skill transforms generic AI-generated UIs into production-grade, visually distinctive interfaces. It provides a design reasoning framework, industry-aware style selection, and concrete engineering standards.
 
+## Scope Gate — Before Anything Else
+
+1. Check: does the project already have a design system, component library, or style guide?
+   - Look for: `tailwind.config`, `theme.ts/js`, `tokens.json`, `design-system/`, `styles/`, existing component library (shadcn, MUI, Chakra, etc.)
+2. If YES (existing design system):
+   - Read and reference the existing system. Do NOT generate a new one.
+   - Skip to "Quality Standards" section — apply those standards within the existing design framework.
+   - Only generate new design tokens if the existing system has clear gaps for the requested feature.
+3. If NO (greenfield):
+   - Proceed with full Design System Generation below.
+
 ## Design System Generation
 
 Before writing any frontend code, walk through this reasoning framework. The goal is to make deliberate design decisions — not default to generic blue-and-white SaaS templates.

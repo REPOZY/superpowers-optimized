@@ -30,6 +30,19 @@ This is the hardest rule to follow and the most important. Every rationalization
 
 Repeat per behavior. Never skip VERIFY steps.
 
+## Test Infrastructure Check
+
+Before writing the first test, verify the project has a test runner:
+
+1. Check for test config: `jest.config.*`, `vitest.config.*`, `pytest.ini`, `pyproject.toml [tool.pytest]`, `go.mod`, `Cargo.toml`, `.rspec`, `phpunit.xml`
+2. Check for test script: `npm test`, `yarn test`, `make test`, or equivalent
+3. If no test infrastructure exists:
+   - Ask the user: "No test runner detected. Should I set up [recommended runner for this language/framework]?"
+   - If yes: install and configure the minimal test runner. Write one smoke test to confirm it works.
+   - If no: note that TDD requires a test runner and proceed only if the user provides an alternative.
+
+Do not skip this step — a "failing test" that fails because the runner doesn't exist teaches nothing.
+
 ## Right vs Wrong
 
 **Wrong — code first:**

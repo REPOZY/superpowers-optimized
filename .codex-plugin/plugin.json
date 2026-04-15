@@ -1,6 +1,6 @@
 {
   "name": "superpowers-optimized",
-  "version": "6.5.2",
+  "version": "6.6.0",
   "description": "Structured workflow skills for Codex — systematic debugging, TDD, brainstorming, code review, and 30+ expert workflows. Skills work on all platforms. Lifecycle hooks (routing, safety, reminders) require separate setup on macOS/Linux.",
   "author": {
     "name": "Jesse Vincent, forked by REPOZY"

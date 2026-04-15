@@ -125,9 +125,13 @@ If you catch yourself doing any of these, **restart from Phase 1**:
 - `defense-in-depth.md` — validation at every data layer
 - `condition-based-waiting.md` — replace timeouts with condition polling
 
-## Post-Fix: Update Known Issues
+## Post-Fix: Update Knowledge Base
 
-After resolving a bug that is likely to recur (environment-dependent, configuration, platform-specific, or external-state errors), offer to add the error→solution mapping to `known-issues.md` using the format defined in `error-recovery`.
+After resolving a bug:
+
+1. **Recurring error?** (environment-dependent, configuration, platform-specific, external-state) → offer to add the error→solution mapping to `known-issues.md` using the format defined in `error-recovery`.
+
+2. **Permanent constraint discovered?** (API limitation, platform behavior, library quirk that will never change) → offer to add it to `project-map.md` Critical Constraints section via `context-management`. These are facts every future session needs, not just error→fix mappings.
 
 ## Related Skills
 

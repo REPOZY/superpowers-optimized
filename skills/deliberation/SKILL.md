@@ -96,7 +96,12 @@ What it loses going right: [Downside of option B]
 [If the deliberation revealed that the original question was wrong, state the better question here]
 
 ### Next step
-[One of: "proceed to brainstorming with this framing", "return to user — the decision needs more information before proceeding", or "the reframe changes the scope — revisit premise-check before continuing"]
+[One of:
+- "proceed to brainstorming with this framing"
+- "return to user — the decision needs more information before proceeding"
+- "the reframe changes the scope — revisit premise-check before continuing"
+  *(Loop guard: if premise-check has already been invoked for this task, skip it and proceed directly to brainstorming. Never cycle between deliberation and premise-check more than once.)*
+]
 ```
 
 ## Rules

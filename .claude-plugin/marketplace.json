@@ -10,7 +10,7 @@
     {
       "name": "superpowers-optimized",
       "description": "Agentic development framework for Claude Code — disciplined workflow routing, TDD enforcement, safety hooks, systematic debugging, and code review",
-      "version": "6.5.2",
+      "version": "6.6.0",
       "source": "./",
       "author": {
         "name": "REPOZY"
