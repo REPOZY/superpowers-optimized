@@ -429,8 +429,6 @@ This is the full cross-platform hook inventory for the plugin. Claude Code gets 
 - **Complexity reduction** — Simplicity as primary goal
 - **Proportional overhead** — Micro-tasks skip everything, full tasks get the full pipeline
 
-Read more: [Superpowers for Claude Code](https://blog.fsck.com/2025/10/09/superpowers/)
-
 
 ---
 
