@@ -404,9 +404,32 @@ Run this verification gate before declaring any frontend work complete:
 
 ---
 
+## Framework & Version Awareness
+
+Before scaffolding any CSS framework, check the project's existing setup:
+
+1. **Existing project** — inspect `package.json` and CSS entry files to detect the current framework and major version. Use whatever version is already in use. Do not silently upgrade.
+2. **Greenfield project** — default to the latest stable major version of the chosen framework. State the version explicitly before writing any setup code ("Using Tailwind CSS v4.x").
+3. **Ambiguous version** — ask the user before writing setup code. Major version differences have breaking setup patterns.
+4. **Never mix major version patterns** — v3 config syntax + v4 CSS directives = broken build.
+
+### Tailwind CSS
+
+Read **`tailwind-v4.md`** before writing any Tailwind setup, config, or utility classes for:
+- Greenfield projects choosing Tailwind
+- Projects where the Tailwind version is unknown
+
+Training data is biased toward v3 patterns. `tailwind-v4.md` contains the correct v4 installation commands, `@theme` config syntax, renamed class scales, and new features that v3 training will get wrong.
+
+---
+
 ## When to Use in Superpowers
 
 - During `executing-plans` or `subagent-driven-development` when tasks involve UI/frontend
 - When the user cares about premium visual quality, brand alignment, or accessibility
 - Apply the Design System Generation framework before implementation begins
 - Recommend an appropriate stack guided by user constraints (e.g., Next.js + Tailwind + Radix, Svelte + skeleton UI, plain HTML + CSS for simple sites)
+
+## Supporting References
+
+- `tailwind-v4.md` — Tailwind CSS v4 installation, configuration, class name changes from v3, and new features. Read before any Tailwind work on greenfield or version-unknown projects.

@@ -12,6 +12,7 @@ const {
   buildContext, isMicroTask, matchSkills,
   extractKeywords, searchSessionLog, buildMemoryContext,
   searchKnownIssues, buildKnownIssuesContext,
+  isExecutionTrigger, getContextPressure, buildContextPressureBlock,
 } = require('../skill-activator');
 const { readJsonStdin } = require('./utils');
 
@@ -22,6 +23,20 @@ function evaluatePayload(data) {
   if (!prompt || isMicroTask(prompt)) return {};
 
   const cwd = typeof data.cwd === 'string' ? data.cwd : process.cwd();
+  const sessionId = typeof data.session_id === 'string' ? data.session_id : null;
+
+  // Context pressure gate: block plan execution when context ≥60%
+  if (isExecutionTrigger(prompt)) {
+    const pressure = getContextPressure(cwd, sessionId);
+    if (pressure && pressure.overThreshold) {
+      return {
+        hookSpecificOutput: {
+          hookEventName: 'UserPromptSubmit',
+          additionalContext: buildContextPressureBlock(pressure),
+        },
+      };
+    }
+  }
 
   const matches = matchSkills(prompt);
   const keywords = extractKeywords(prompt);

@@ -1,5 +1,33 @@
 # Superpowers Optimized Release Notes
 
+## v6.6.1 (2026-05-08)
+
+Context pressure gate, Tailwind v4 reference, plan-level security flag, stub scan, and cleaner docs paths.
+
+### New Features
+
+**Context pressure gate** — The skill-activator hook (and its Codex adapter) now reads the live session JSONL to estimate context window usage, and hard-blocks plan-execution prompts when the last assistant turn exceeded 60% of the 200K window. When triggered, the hook replaces all skill hints with a compact-first instruction telling the model to save state.md via context-management, run /compact, and resume from state.md. This prevents Auto Compact from firing mid-implementation and destroying file paths, variable names, and discovered facts at the worst possible moment. Pressure is computed from `input + cache_creation + cache_read` of the last assistant turn — that is the actual current context size, not a cumulative sum across turns.
+
+**Tailwind v4 reference (`skills/frontend-design/tailwind-v4.md`)** — A dedicated companion file with v4 install commands, `@theme` config syntax, renamed class scales, and new features. Frontend-design's training data is biased toward v3, which leads to broken setups when scaffolding for current Tailwind. The skill now routes to this file before any Tailwind work on greenfield or version-unknown projects.
+
+### Changes
+
+**Writing-plans: security flag per task** — Every task in a plan now carries a `Security flag: none | security` line. Setting it to `security` (for tasks handling auth, credentials, input validation, permissions, crypto, or data-access boundaries) triggers a pre-implementation security review before the implementer is dispatched. Catches the class of bug where security-relevant work ships without anyone explicitly checking it.
+
+**Writing-plans: scope-reduction scan** — Plan self-review now searches the plan for "v1", "basic", "simple", "for now", "placeholder", "initial version", and "minimal", and verifies each hit was explicitly sanctioned by the user. Catches quiet scope downgrades where the model promises less than what was asked for without flagging it.
+
+**Writing-plans: execution auto-selection** — Replaces the open "Which approach?" question with deterministic logic: ≥60% context or ≥5 tasks → subagent-driven; heavy inter-task state sharing → inline; default → subagent. The "Ready to execute" framing and explicit "Stop here" instruction give the user a real redirect window instead of the model chaining straight into execution.
+
+**Verification-before-completion: stub scan** — Implementation tasks now require a grep pass for `TODO`, `FIXME`, `placeholder`, and `NotImplementedError` (excluding test files) before any "done" claim. Any hit in a file the task created or modified blocks completion until the stub is removed or explicitly justified. Catches the common failure mode of declaring success while leaving stub code in production.
+
+**Frontend-design: framework & version awareness** — Before scaffolding any CSS framework, the skill now requires inspecting `package.json` and CSS entry files to detect the existing version (or stating the chosen version explicitly on greenfield). Mixing v3 config syntax with v4 CSS directives produces broken builds; this gate prevents that class of error.
+
+**Dependency-management trigger refinement** — Removed "version bump" from the dependency-management trigger keywords. It was overlapping with the dedicated `version-bump` skill, causing the wrong workflow to load on plain version-bump requests.
+
+**Cleaner docs output paths** — Brainstorming specs and writing-plans plans now save to `docs/specs/` and `docs/plans/` instead of `docs/superpowers-optimized/specs/` and `docs/superpowers-optimized/plans/`. The plugin name no longer surfaces in the folder structure of every project that uses these skills. CLAUDE.md, both skill files, both reviewer prompt templates, the autoimprove fixture, and all integration tests were updated. The `stop-reminders` decision-log detection was unaffected — its regex already matched any `specs/` or `plans/` parent folder rather than the plugin-namespaced one, so existing repos with the old path continue triggering reminders correctly.
+
+**Test coverage** — ~290 lines of new tests in `test-skill-activator.js` cover the context pressure gate: execution-trigger pattern matching, Windows/Unix `cwdToProjectDir` encoding, JSONL pressure parsing, threshold behavior, and the block message format.
+
 ## v6.6.0 (2026-04-15)
 
 Full-stack audit: 3 new skills, smarter cross-session memory, scope gates across 6 skills, and expanded hook coverage.

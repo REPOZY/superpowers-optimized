@@ -13,7 +13,7 @@ Create an implementation plan another agent can execute with minimal ambiguity.
 
 ## Output Path
 
-Save to `docs/superpowers-optimized/plans/YYYY-MM-DD-<feature-name>.md`.
+Save to `docs/plans/YYYY-MM-DD-<feature-name>.md`.
 - User preferences for plan location override this default.
 
 ## Plan Header
@@ -64,6 +64,8 @@ This structure informs the task decomposition. Each task should produce self-con
 - Create: `<path>`
 - Modify: `<path>`
 - Test: `<path>`
+
+**Security flag:** `none` *(set to `security` if this task handles auth, credentials, input validation, permissions, crypto, or data access boundaries — triggers pre-implementation security review before the implementer is dispatched)*
 
 **Does NOT cover:** *(required when this task adds a condition, gate, trigger, or any "when X do Y" logic — state the scenarios the condition excludes. If an excluded scenario should be covered, revise this task before implementing.)*
 
@@ -125,24 +127,35 @@ After writing the complete plan, look at the spec with fresh eyes and check the 
 
 **3. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug.
 
+**4. Scope-reduction scan:** Search the plan for: "v1", "basic", "simple", "for now", "placeholder", "initial version", "minimal". For each hit, verify it was explicitly sanctioned by the user — not a quiet scope downgrade from what was requested. Fix any that weren't.
+
 If you find issues, fix them inline. No need to re-review — just fix and move on. If you find a spec requirement with no task, add the task.
 
 ## Execution Handoff
 
-After saving the plan and completing self-review, offer execution choice:
+After saving the plan and completing self-review, auto-select the execution approach using the logic below, then output the ready message and **stop**. Do not invoke any execution skill until the user replies.
 
-**"Plan complete and saved to `docs/superpowers-optimized/plans/<filename>.md`. Two execution options:**
+### Selection Logic (evaluate in order)
 
-**1. Subagent-Driven (recommended)** — I dispatch a fresh subagent per task, review between tasks, fast iteration
+1. Current context window ≥ 60% full → **Subagent-Driven** (offload context pressure)
+2. Task count ≥ 5 → **Subagent-Driven** (fresh context per task)
+3. Tasks have heavy inter-task state sharing (each task depends on runtime state from the previous) → **Inline**
+4. Default → **Subagent-Driven**
 
-**2. Inline Execution** — Execute tasks in this session using executing-plans, with checkpoints
+### Ready Message
 
-**Which approach?"**
+```
+Plan saved to `docs/plans/<filename>.md`. Ready to execute with **[Subagent-Driven / Inline Execution]** (<N> tasks[, <one-word reason>]). Reply to start, or say "inline" / "subagent" to switch.
+```
 
-**If Subagent-Driven chosen:**
+**Stop here.** Do not invoke any execution skill until the user replies.
+
+### On User Reply
+
+**If Subagent-Driven:**
 - **REQUIRED SUB-SKILL:** Use superpowers-optimized:subagent-driven-development
 - Fresh subagent per task + two-stage review
 
-**If Inline Execution chosen:**
+**If Inline Execution:**
 - **REQUIRED SUB-SKILL:** Use superpowers-optimized:executing-plans
 - Continuous execution with checkpoints for review

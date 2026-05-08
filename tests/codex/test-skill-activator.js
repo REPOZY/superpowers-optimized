@@ -492,6 +492,297 @@ test('known-issues context appears between skill hint and memory context', () =>
   assert.ok(kiIdx !== -1 || memIdx !== -1, 'at least one recall section should appear');
 });
 
+// ── Context pressure gate ─────────────────────────────────────────────────────
+
+const {
+  isExecutionTrigger,
+  cwdToProjectDir,
+  getContextPressure,
+  buildContextPressureBlock,
+} = require('../../hooks/skill-activator');
+
+console.log('\nContext pressure gate — isExecutionTrigger');
+
+test('Recognises "execute the plan"', () => {
+  assert.strictEqual(isExecutionTrigger('execute the plan'), true);
+});
+test('Recognises "start building"', () => {
+  assert.strictEqual(isExecutionTrigger('start building the feature'), true);
+});
+test('Recognises "start implementing"', () => {
+  assert.strictEqual(isExecutionTrigger('let\'s start implementing'), true);
+});
+test('Recognises "follow the plan"', () => {
+  assert.strictEqual(isExecutionTrigger('follow the plan we wrote'), true);
+});
+test('Recognises "implement the plan"', () => {
+  assert.strictEqual(isExecutionTrigger('implement the plan now'), true);
+});
+test('Recognises "let\'s build"', () => {
+  assert.strictEqual(isExecutionTrigger('let\'s build this'), true);
+});
+test('Recognises "run the plan"', () => {
+  assert.strictEqual(isExecutionTrigger('run the plan'), true);
+});
+test('Recognises "begin implementing"', () => {
+  assert.strictEqual(isExecutionTrigger('begin implementing the auth module'), true);
+});
+test('Does NOT trigger on "what is the plan"', () => {
+  assert.strictEqual(isExecutionTrigger('what is the plan here?'), false);
+});
+test('Does NOT trigger on "fix this bug"', () => {
+  assert.strictEqual(isExecutionTrigger('fix this bug in auth.js'), false);
+});
+test('Does NOT trigger on "review the code"', () => {
+  assert.strictEqual(isExecutionTrigger('review the code before merging'), false);
+});
+test('Does NOT trigger on empty string', () => {
+  assert.strictEqual(isExecutionTrigger(''), false);
+});
+test('Does NOT trigger on null', () => {
+  assert.strictEqual(isExecutionTrigger(null), false);
+});
+
+console.log('\nContext pressure gate — cwdToProjectDir');
+
+test('Windows path with spaces encodes correctly', () => {
+  const result = cwdToProjectDir('C:\\Users\\Jane Doe\\Documents\\Github\\project');
+  assert.strictEqual(result, 'c--Users-Jane-Doe-Documents-Github-project');
+});
+test('Windows path without spaces encodes correctly', () => {
+  const result = cwdToProjectDir('C:\\Users\\user\\project');
+  assert.strictEqual(result, 'c--Users-user-project');
+});
+test('Lowercase drive letter for any uppercase drive', () => {
+  const result = cwdToProjectDir('D:\\work\\repo');
+  assert.ok(result.startsWith('d-'), `Expected d- prefix, got: ${result}`);
+});
+test('Unix path encodes correctly', () => {
+  const result = cwdToProjectDir('/home/user/projects/foo');
+  assert.strictEqual(result, '-home-user-projects-foo');
+});
+test('No trailing dashes', () => {
+  const result = cwdToProjectDir('C:\\project\\');
+  assert.ok(!result.endsWith('-'), `Should not end with dash, got: ${result}`);
+});
+test('Forward slashes treated same as backslashes', () => {
+  const win = cwdToProjectDir('C:\\Users\\user\\project');
+  const fwd = cwdToProjectDir('C:/Users/user/project');
+  assert.strictEqual(win, fwd, 'Forward and backslash paths should produce the same result');
+});
+
+console.log('\nContext pressure gate — getContextPressure');
+
+function makeJsonlSession(sessionId, projectDir, homeDir, turns) {
+  const projectPath = path.join(homeDir, '.claude', 'projects', projectDir);
+  fs.mkdirSync(projectPath, { recursive: true });
+  const jsonlPath = path.join(projectPath, sessionId + '.jsonl');
+  const lines = turns.map(t => JSON.stringify({
+    type: 'assistant',
+    message: { usage: t },
+    sessionId,
+    timestamp: new Date().toISOString(),
+  }));
+  fs.writeFileSync(jsonlPath, lines.join('\n'));
+  return jsonlPath;
+}
+
+test('Returns null when sessionId is missing', () => {
+  assert.strictEqual(getContextPressure(process.cwd(), null), null);
+  assert.strictEqual(getContextPressure(process.cwd(), undefined), null);
+});
+
+test('Returns null when JSONL file does not exist', () => {
+  const result = getContextPressure('/nonexistent/path/xyz', 'fake-session-id');
+  assert.strictEqual(result, null);
+});
+
+test('Returns correct percent for known token counts (below threshold)', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-unit-'));
+  const cwd = path.join(tmpHome, 'myproject');
+  const projDir = cwdToProjectDir(cwd);
+  const sessionId = 'test-below-' + Date.now();
+  // Last turn: 40K total input (20% of 200K)
+  makeJsonlSession(sessionId, projDir, tmpHome, [
+    { input_tokens: 5, cache_creation_input_tokens: 20000, cache_read_input_tokens: 0, output_tokens: 100 },
+    { input_tokens: 3, cache_creation_input_tokens: 500, cache_read_input_tokens: 39500, output_tokens: 200 },
+  ]);
+  const orig = { up: process.env.USERPROFILE, home: process.env.HOME };
+  process.env.USERPROFILE = tmpHome;
+  process.env.HOME = tmpHome;
+  const result = getContextPressure(cwd, sessionId);
+  process.env.USERPROFILE = orig.up;
+  process.env.HOME = orig.home;
+  fs.rmSync(tmpHome, { recursive: true });
+
+  assert.ok(result !== null, 'Should return a result');
+  assert.strictEqual(result.overThreshold, false, 'Should be below threshold');
+  assert.ok(result.percent < 60, `Expected <60%, got ${result.percent}%`);
+});
+
+test('Returns overThreshold=true for ≥60% context (120K tokens)', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-unit-'));
+  const cwd = path.join(tmpHome, 'myproject');
+  const projDir = cwdToProjectDir(cwd);
+  const sessionId = 'test-above-' + Date.now();
+  // Last turn: 125K total input (62.5% of 200K) → over threshold
+  makeJsonlSession(sessionId, projDir, tmpHome, [
+    { input_tokens: 5, cache_creation_input_tokens: 100000, cache_read_input_tokens: 25000, output_tokens: 2000 },
+  ]);
+  const orig = { up: process.env.USERPROFILE, home: process.env.HOME };
+  process.env.USERPROFILE = tmpHome;
+  process.env.HOME = tmpHome;
+  const result = getContextPressure(cwd, sessionId);
+  process.env.USERPROFILE = orig.up;
+  process.env.HOME = orig.home;
+  fs.rmSync(tmpHome, { recursive: true });
+
+  assert.ok(result !== null, 'Should return a result');
+  assert.strictEqual(result.overThreshold, true, 'Should be over threshold');
+  assert.ok(result.percent >= 60, `Expected ≥60%, got ${result.percent}%`);
+  assert.strictEqual(result.inputK, 125, `Expected 125K, got ${result.inputK}K`);
+});
+
+test('Uses LAST assistant turn, not first', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-unit-'));
+  const cwd = path.join(tmpHome, 'myproject');
+  const projDir = cwdToProjectDir(cwd);
+  const sessionId = 'test-last-' + Date.now();
+  // First turn: tiny. Last turn: over threshold.
+  makeJsonlSession(sessionId, projDir, tmpHome, [
+    { input_tokens: 3, cache_creation_input_tokens: 1000, cache_read_input_tokens: 0, output_tokens: 50 },
+    { input_tokens: 5, cache_creation_input_tokens: 100000, cache_read_input_tokens: 25000, output_tokens: 2000 },
+  ]);
+  const orig = { up: process.env.USERPROFILE, home: process.env.HOME };
+  process.env.USERPROFILE = tmpHome;
+  process.env.HOME = tmpHome;
+  const result = getContextPressure(cwd, sessionId);
+  process.env.USERPROFILE = orig.up;
+  process.env.HOME = orig.home;
+  fs.rmSync(tmpHome, { recursive: true });
+
+  assert.ok(result !== null, 'Should return a result');
+  assert.strictEqual(result.overThreshold, true, 'Last turn is over threshold');
+});
+
+test('Skips non-assistant lines without crashing', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-unit-'));
+  const cwd = path.join(tmpHome, 'myproject');
+  const projDir = cwdToProjectDir(cwd);
+  const sessionId = 'test-mixed-' + Date.now();
+  const projectPath = path.join(tmpHome, '.claude', 'projects', projDir);
+  fs.mkdirSync(projectPath, { recursive: true });
+  const lines = [
+    JSON.stringify({ type: 'user', message: { content: 'hello' }, sessionId }),
+    'not valid json at all',
+    JSON.stringify({ type: 'assistant', message: { usage: { input_tokens: 3, cache_creation_input_tokens: 500, cache_read_input_tokens: 0, output_tokens: 50 } }, sessionId }),
+  ];
+  fs.writeFileSync(path.join(projectPath, sessionId + '.jsonl'), lines.join('\n'));
+  const orig = { up: process.env.USERPROFILE, home: process.env.HOME };
+  process.env.USERPROFILE = tmpHome;
+  process.env.HOME = tmpHome;
+  let threw = false;
+  try { getContextPressure(cwd, sessionId); } catch { threw = true; }
+  process.env.USERPROFILE = orig.up;
+  process.env.HOME = orig.home;
+  fs.rmSync(tmpHome, { recursive: true });
+  assert.strictEqual(threw, false, 'Should not throw on mixed/invalid lines');
+});
+
+console.log('\nContext pressure gate — buildContextPressureBlock');
+
+test('Contains opening and closing context-pressure-gate tags', () => {
+  const block = buildContextPressureBlock({ inputK: 125, percent: 62 });
+  assert.ok(block.includes('<context-pressure-gate>'), 'Missing opening tag');
+  assert.ok(block.includes('</context-pressure-gate>'), 'Missing closing tag');
+});
+test('Interpolates inputK correctly', () => {
+  const block = buildContextPressureBlock({ inputK: 142, percent: 71 });
+  assert.ok(block.includes('142K'), `Expected 142K in block, got: ${block.slice(0, 200)}`);
+});
+test('Interpolates percent correctly', () => {
+  const block = buildContextPressureBlock({ inputK: 142, percent: 71 });
+  assert.ok(block.includes('71%'), `Expected 71% in block, got: ${block.slice(0, 200)}`);
+});
+test('Contains all 4 required action steps', () => {
+  const block = buildContextPressureBlock({ inputK: 100, percent: 60 });
+  assert.ok(block.includes('1.'), 'Missing step 1');
+  assert.ok(block.includes('2.'), 'Missing step 2');
+  assert.ok(block.includes('3.'), 'Missing step 3');
+  assert.ok(block.includes('4.'), 'Missing step 4');
+});
+test('References /compact in step 3', () => {
+  const block = buildContextPressureBlock({ inputK: 100, percent: 60 });
+  assert.ok(block.includes('/compact'), 'Step 3 should reference /compact');
+});
+test('References state.md in step 1', () => {
+  const block = buildContextPressureBlock({ inputK: 100, percent: 60 });
+  assert.ok(block.includes('state.md'), 'Step 1 should reference state.md');
+});
+
+console.log('\nContext pressure gate — evaluatePayload integration');
+
+test('Execution trigger + high pressure → returns pressure block, not skill hints', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-int-'));
+  const cwd = path.join(tmpHome, 'myproject');
+  const projDir = cwdToProjectDir(cwd);
+  const sessionId = 'test-int-' + Date.now();
+  makeJsonlSession(sessionId, projDir, tmpHome, [
+    { input_tokens: 5, cache_creation_input_tokens: 100000, cache_read_input_tokens: 25000, output_tokens: 2000 },
+  ]);
+  const orig = { up: process.env.USERPROFILE, home: process.env.HOME };
+  process.env.USERPROFILE = tmpHome;
+  process.env.HOME = tmpHome;
+  const result = evaluatePayload({ prompt: 'execute the plan', session_id: sessionId, cwd });
+  process.env.USERPROFILE = orig.up;
+  process.env.HOME = orig.home;
+  fs.rmSync(tmpHome, { recursive: true });
+
+  const ctx = result.hookSpecificOutput?.additionalContext || '';
+  assert.ok(ctx.includes('context-pressure-gate'), 'Should return pressure block');
+  assert.ok(!ctx.includes('user-prompt-submit-hook'), 'Should NOT include skill hints when gate fires');
+});
+
+test('Execution trigger + low pressure → returns skill hints, not pressure block', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-int2-'));
+  const cwd = path.join(tmpHome, 'myproject');
+  const projDir = cwdToProjectDir(cwd);
+  const sessionId = 'test-int2-' + Date.now();
+  makeJsonlSession(sessionId, projDir, tmpHome, [
+    { input_tokens: 3, cache_creation_input_tokens: 500, cache_read_input_tokens: 5000, output_tokens: 100 },
+  ]);
+  const orig = { up: process.env.USERPROFILE, home: process.env.HOME };
+  process.env.USERPROFILE = tmpHome;
+  process.env.HOME = tmpHome;
+  const result = evaluatePayload({ prompt: 'execute the plan and start building the feature', session_id: sessionId, cwd });
+  process.env.USERPROFILE = orig.up;
+  process.env.HOME = orig.home;
+  fs.rmSync(tmpHome, { recursive: true });
+
+  const ctx = result.hookSpecificOutput?.additionalContext || '';
+  assert.ok(!ctx.includes('context-pressure-gate'), 'Should NOT return pressure block at low pressure');
+});
+
+test('Non-execution prompt + high pressure → no pressure block', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-int3-'));
+  const cwd = path.join(tmpHome, 'myproject');
+  const projDir = cwdToProjectDir(cwd);
+  const sessionId = 'test-int3-' + Date.now();
+  makeJsonlSession(sessionId, projDir, tmpHome, [
+    { input_tokens: 5, cache_creation_input_tokens: 100000, cache_read_input_tokens: 25000, output_tokens: 2000 },
+  ]);
+  const orig = { up: process.env.USERPROFILE, home: process.env.HOME };
+  process.env.USERPROFILE = tmpHome;
+  process.env.HOME = tmpHome;
+  const result = evaluatePayload({ prompt: 'fix this bug in the auth middleware', session_id: sessionId, cwd });
+  process.env.USERPROFILE = orig.up;
+  process.env.HOME = orig.home;
+  fs.rmSync(tmpHome, { recursive: true });
+
+  const ctx = result.hookSpecificOutput?.additionalContext || '';
+  assert.ok(!ctx.includes('context-pressure-gate'), 'Non-execution prompt should never get pressure block');
+});
+
 // ── Result ────────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(50)}`);

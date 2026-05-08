@@ -255,8 +255,7 @@ skills/ — 24 skills, each in skills/<name>/SKILL.md
 hooks/ — 10 hooks (JS) + hooks.json registry + skill-rules.json
 
 ## Key Files
-hooks/skill-activator.js — UserPromptSubmit: scores prompts against skill-rules.json,
-  injects skill hints. Micro-task detection (≤8 words + patterns = skip routing).
+hooks/skill-activator.js — UserPromptSubmit: context pressure gate (blocks plan execution at ≥60% context, reads session JSONL); skill hints via skill-rules.json; memory recall from session-log.md + known-issues.md. Micro-task detection skips all enrichment.
 hooks/skill-rules.json — 22 rules: skill name, keywords, intentPatterns, priority.
 
 ## Critical Constraints
@@ -408,7 +407,7 @@ This is the full cross-platform hook inventory for the plugin. Claude Code gets 
 
 - **context-engine** (SessionStart) — Runs git commands on every session start and writes `context-snapshot.json`: changed files, blast radius (which other files reference each changed file, filtered to actual import/require references), recent commits, and change stats. Uses per-project watermarks (md5 of cwd) so multiple projects don't interfere, and cross-session diff base so "what changed" reflects changes since your last session, not just the last commit. Zero dependencies. Silent no-op on non-git projects
 - **session-start** (SessionStart) — Injects using-superpowers routing into every session; injects `project-map.md` content directly if it exists (full content ≤200 lines, Critical Constraints + Hot Files only above that); checks for available plugin update
-- **skill-activator** (UserPromptSubmit) — Micro-task detection + confidence-threshold skill matching + weighted memory recall from session-log.md and known-issues.md (70% keyword density + 30% recency scoring)
+- **skill-activator** (UserPromptSubmit) — Context pressure gate: reads session JSONL, blocks plan-execution triggers when context ≥60% of 200K window (fires compact-first instruction instead of skill hints). Also: micro-task detection + confidence-threshold skill matching + weighted memory recall from session-log.md and known-issues.md (70% keyword density + 30% recency scoring)
 - **track-edits** (PostToolUse: Edit/Write) — Logs file changes for TDD reminders; auto-adds AI workspace artifacts (`project-map.md`, `session-log.md`, `state.md`) to `.gitignore` on first write
 - **track-session-stats** (PostToolUse: Skill) — Tracks skill invocations for progress visibility
 - **stop-reminders** (Stop) — Surfaces TDD reminders, commit nudges, and session summary after each response turn

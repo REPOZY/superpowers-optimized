@@ -365,6 +365,129 @@ function buildKnownIssuesContext(entries) {
   ].join('\n');
 }
 
+// ── Context pressure gate ─────────────────────────────────────────────────────
+
+/**
+ * Patterns that indicate the user is about to start plan execution
+ * or heavy implementation work.
+ */
+const EXECUTION_TRIGGER_PATTERNS = [
+  /\bexecute\s+(the\s+)?plan\b/i,
+  /\bstart\s+build(ing)?\b/i,
+  /\bstart\s+implement(ing|ation)?\b/i,
+  /\bfollow\s+(the\s+)?plan\b/i,
+  /\bimplement\s+(the\s+)?plan\b/i,
+  /\blet'?s\s+(build|implement|execute)\b/i,
+  /\brun\s+(the\s+)?plan\b/i,
+  /\bbegin\s+implement(ing|ation)?\b/i,
+  /\bbegin\s+(the\s+)?plan\b/i,
+];
+
+const CONTEXT_WINDOW_SIZE = 200000; // Sonnet 4.6 context window tokens
+const CONTEXT_PRESSURE_THRESHOLD = 0.60; // Hard block at 60%
+
+/**
+ * Returns true if the prompt is triggering plan execution or heavy implementation.
+ */
+function isExecutionTrigger(prompt) {
+  if (!prompt || typeof prompt !== 'string') return false;
+  return EXECUTION_TRIGGER_PATTERNS.some(p => p.test(prompt));
+}
+
+/**
+ * Convert a filesystem cwd path to the Claude Code project directory name.
+ * Examples:
+ *   Windows: "C:\Users\Jane Doe\..." → "c--Users-Jane-Doe-..."
+ *   Unix:    "/home/user/projects/foo"    → "home-user-projects-foo"
+ */
+function cwdToProjectDir(cwd) {
+  return cwd
+    .replace(/^([A-Za-z]):/, (_, d) => d.toLowerCase() + '-') // C: → c-
+    .replace(/[/\\]/g, '-')  // path separators → -
+    .replace(/\s/g, '-')     // spaces → -
+    .replace(/-+$/, '');     // trim trailing dashes
+}
+
+/**
+ * Read the current session JSONL and return context pressure info.
+ * Uses the last assistant turn's total input tokens as the context size estimate —
+ * this is the most accurate indicator of how much context window is currently occupied.
+ * Returns null if the JSONL can't be read or has no usable data.
+ */
+function getContextPressure(cwd, sessionId) {
+  if (!sessionId) return null;
+
+  const projectDir = cwdToProjectDir(cwd);
+  const homeDir = process.env.USERPROFILE || process.env.HOME || '';
+  const jsonlPath = path.join(homeDir, '.claude', 'projects', projectDir, sessionId + '.jsonl');
+
+  let content;
+  try {
+    content = fs.readFileSync(jsonlPath, 'utf8');
+  } catch {
+    return null; // File absent or unreadable — silent no-op
+  }
+
+  // Use the last assistant turn's input total as context size.
+  // input + cache_creation + cache_read = total tokens in context window for that turn.
+  // Later turns always have more context, so the last value is the current state.
+  let lastInputTotal = 0;
+
+  for (const line of content.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const obj = JSON.parse(line);
+      if (obj.type === 'assistant' && obj.message && obj.message.usage) {
+        const u = obj.message.usage;
+        const turnInput = (u.input_tokens || 0)
+          + (u.cache_creation_input_tokens || 0)
+          + (u.cache_read_input_tokens || 0);
+        if (turnInput > 0) lastInputTotal = turnInput;
+      }
+    } catch {
+      // Skip malformed lines
+    }
+  }
+
+  if (lastInputTotal === 0) return null;
+
+  const ratio = lastInputTotal / CONTEXT_WINDOW_SIZE;
+  return {
+    inputK: Math.round(lastInputTotal / 1000),
+    percent: Math.round(ratio * 100),
+    overThreshold: ratio >= CONTEXT_PRESSURE_THRESHOLD,
+  };
+}
+
+/**
+ * Build the hard block message injected when context pressure ≥60%.
+ * Returned as additionalContext — Claude sees this instead of skill hints.
+ */
+function buildContextPressureBlock(pressure) {
+  return [
+    '<context-pressure-gate>',
+    `STOP — Do not start implementation yet.`,
+    ``,
+    `Context window: ~${pressure.inputK}K tokens consumed (${pressure.percent}% of 200K limit).`,
+    `Starting implementation at ≥60% risks Auto Compact firing mid-task, destroying`,
+    `variable names, file paths, and discovered facts at the worst possible moment.`,
+    ``,
+    `Required actions before proceeding:`,
+    `1. Invoke the context-management skill to write state.md. Include:`,
+    `   - Path to the plan file`,
+    `   - Starting task number (e.g. "Task 1 — fresh start")`,
+    `   - Any research-phase facts (exact file paths, variable names, non-obvious`,
+    `     constraints) that the plan references but does not spell out explicitly.`,
+    `2. Tell the user: "Context is at ${pressure.percent}%. Saving state and compacting`,
+    `   before implementation — this prevents Auto Compact firing mid-task."`,
+    `3. Run /compact.`,
+    `4. After compaction, read state.md and resume with executing-plans.`,
+    ``,
+    `Do NOT begin implementation without completing steps 1–3.`,
+    `</context-pressure-gate>`,
+  ].join('\n');
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -375,11 +498,28 @@ async function main() {
     const data = JSON.parse(input);
     const prompt = data.prompt || '';
     const cwd = data.cwd || process.cwd();
+    const sessionId = data.session_id || null;
 
     // Micro-task fast path: skip all enrichment entirely
     if (isMicroTask(prompt)) {
       process.stdout.write('{}');
       return;
+    }
+
+    // Context pressure gate: if the user is about to start implementation and
+    // the context window is ≥60% full, block and require compact-first.
+    // Returns early — pressure block replaces all other hints when it fires.
+    if (isExecutionTrigger(prompt)) {
+      const pressure = getContextPressure(cwd, sessionId);
+      if (pressure && pressure.overThreshold) {
+        process.stdout.write(JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: 'UserPromptSubmit',
+            additionalContext: buildContextPressureBlock(pressure),
+          },
+        }));
+        return;
+      }
     }
 
     // Run all pipelines independently
@@ -425,9 +565,15 @@ if (require.main === module) {
     buildMemoryContext,
     searchKnownIssues,
     buildKnownIssuesContext,
+    isExecutionTrigger,
+    cwdToProjectDir,
+    getContextPressure,
+    buildContextPressureBlock,
     RULES,
     CONFIDENCE_THRESHOLD,
     STOP_WORDS,
     MAX_MEMORY_ENTRIES,
+    CONTEXT_WINDOW_SIZE,
+    CONTEXT_PRESSURE_THRESHOLD,
   };
 }

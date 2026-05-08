@@ -222,7 +222,7 @@ test('Detects hooks/*.js edits', () => {
 test('Detects specs/*.md edits (new pattern)', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
-    writeRecentEdit(logDir, 'docs/superpowers-optimized/specs/test-spec.md');
+    writeRecentEdit(logDir, 'docs/specs/test-spec.md');
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
     const reason = result.reason || '';
@@ -235,7 +235,7 @@ test('Detects specs/*.md edits (new pattern)', () => {
 test('Detects plans/*.md edits (new pattern)', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
-    writeRecentEdit(logDir, 'docs/superpowers-optimized/plans/test-plan.md');
+    writeRecentEdit(logDir, 'docs/plans/test-plan.md');
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
     const reason = result.reason || '';

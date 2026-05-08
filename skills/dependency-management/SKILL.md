@@ -8,7 +8,7 @@ description: >
   (which fixes application bugs) and refactoring (which restructures application code).
   Triggers on: "update dependencies", "upgrade packages", "npm update", "pip upgrade",
   "outdated", "vulnerability", "CVE", "security advisory", "breaking change",
-  "migration guide", "dependency conflict", "peer dependency", "version bump",
+  "migration guide", "dependency conflict", "peer dependency",
   "update to latest", "audit dependencies", "npm audit", "dependabot".
   Routed by using-superpowers, or invoke directly via /dependency-management.
 ---

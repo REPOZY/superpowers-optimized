@@ -42,6 +42,18 @@ Before any completion claim:
 - Bugfix: reproduction case now passes
 - Requirements: explicit checklist against plan
 
+## Stub Scan (Implementation Tasks)
+
+When verifying completion of any task that created or modified production code, run a stub scan before claiming done:
+
+```bash
+grep -rn "TODO\|FIXME\|placeholder\|NotImplementedError\|raise NotImplementedError" <src-dir> \
+  --include="*.ts" --include="*.js" --include="*.py" --include="*.go" --include="*.rs" \
+  | grep -v -i "test\|spec\|__tests__"
+```
+
+Adjust `<src-dir>` and `--include` patterns to the project's language and source structure. If any match falls in a file this task created or modified: the task is not done. Remove the stub or confirm with the user it is intentional before claiming completion.
+
 ## Regression Test Verification (Red-Green Cycle)
 
 When verifying a bugfix with a regression test, the test must prove it catches the bug:
