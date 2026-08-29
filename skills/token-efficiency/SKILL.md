@@ -85,7 +85,9 @@ Do not wait for context to auto-compress mid-task. Break proactively at logical 
 | `state.md` (if written before compacting) | Multi-step conversation context |
 | Git state, files on disk | Variable names, paths, facts not saved to `state.md` |
 
-**Why this matters:** Auto-compaction at 95% context fill destroys the most recent content — exactly the variable names, discovered paths, and evidence gathered just before implementation. A proactive break at 50% preserves all of it. And because project-map.md and session-log entries survive automatically, you only need to save task-specific working state to `state.md` — not the entire project context.
+**Why this matters:** Auto-compaction at 95% context fill destroys the most recent content — exactly the variable names, discovered paths, and evidence gathered just before implementation. A proactive break well before that preserves all of it. And because project-map.md and session-log entries survive automatically, you only need to save task-specific working state to `state.md` — not the entire project context.
+
+**The number to break at is 60%.** That is the same threshold the context pressure gate enforces in `skill-activator`, which hard-blocks plan execution above it. Breaking earlier is fine; letting it drift past 60% before a phase transition is what the gate exists to prevent. If `SP_CONTEXT_PRESSURE_THRESHOLD` is set, that value wins — the gate and this guidance always use the same number.
 
 ## Context Rules
 

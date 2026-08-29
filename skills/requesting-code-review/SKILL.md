@@ -27,6 +27,10 @@ Request review early to catch issues before they spread.
      - **Hashes match (fresh):** use `changed_files` and `blast_radius` as the review scope. Inject this summary into the code-reviewer prompt: *"Changed files: [list]. Also referenced by: [blast_radius callers]."*
      - **Hashes differ (stale):** note the snapshot is from a previous commit; use `changed_files` as a starting point but do not rely on `blast_radius`.
    - If absent: determine scope from `git diff --name-only BASE_SHA..HEAD_SHA` directly.
+
+   **What `blast_radius` means.** Each entry lists files containing a reference that *resolves* to the changed file's path — a relative import, or the repo path written out. It is deliberately incomplete: references that cannot be resolved (package-style imports, dynamic paths, aliases from `tsconfig`) are dropped rather than guessed, so an empty list means "nothing was proven," not "nothing depends on this." Never widen review scope on a name match alone; if you need dependents the snapshot does not list, grep for them and say you did.
+
+   `blast_radius_method` records how the edges were derived. If it is missing, the snapshot came from a version that matched basenames as words — ignore `blast_radius` entirely and scope from the diff.
 3. Dispatch `superpowers-optimized:code-reviewer` using `requesting-code-review/code-reviewer.md`.
 4. Provide:
    - What changed (from context snapshot or git diff)

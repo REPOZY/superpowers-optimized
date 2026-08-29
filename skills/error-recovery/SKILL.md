@@ -58,7 +58,9 @@ exact command or steps to resolve
 
 - Keep `known-issues.md` under 50 entries. If it grows beyond that, prune entries that haven't been relevant in months.
 - Group entries by category (Environment, Dependencies, Tests, Build, Platform).
-- When a known issue is permanently fixed (e.g., the root cause was removed from the codebase), delete the entry.
+- **When an issue is fixed, strike the heading — do not delete the entry.** Change `## Some error` to `## ~~Some error~~ ✅ Fixed in vX.Y.Z` and leave the body in place.
+
+  The session-start hook and the keyword-recall hook both skip headings that begin with `## ~~`, so a struck entry costs nothing at injection time while remaining greppable. Deleting it throws away the diagnosis — and a "fixed" error that regresses is exactly the case where the old root-cause analysis is worth most. Delete only when the entire subsystem the entry describes no longer exists.
 
 ## Integration
 

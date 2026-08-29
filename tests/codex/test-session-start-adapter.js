@@ -188,6 +188,31 @@ test('session-log.md: only [saved] entries injected, not [auto]', () => {
   } finally { cleanup(dir); }
 });
 
+test('session-log.md: [superseded] entries are never injected (D4)', () => {
+  const dir = makeTempDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'session-log.md'), [
+      '## 2026-01-01 10:00 [saved]',
+      'Goal: live decision A',
+      '',
+      '## 2026-01-02 12:00 [saved]',
+      'Goal: live decision B',
+      '',
+      '## 2026-01-03 12:00 [saved] [superseded by 2026-02-01]',
+      'Goal: overturned decision that must never be resurfaced',
+      '',
+    ].join('\n'));
+    const result = runAdapter({ source: 'startup' }, dir);
+    const ctx = result._rawPlainText || '';
+    assert.ok(!ctx.includes('overturned decision'),
+      'a superseded decision was injected as if it were still current');
+    assert.ok(ctx.includes('live decision B'),
+      'the newest live entry should still be injected');
+    assert.ok(ctx.includes('live decision A'),
+      'the second-newest live entry should be injected once superseded ones are skipped');
+  } finally { cleanup(dir); }
+});
+
 test('Large project-map.md (>200 lines) → truncated to key sections', () => {
   const dir = makeTempDir();
   try {

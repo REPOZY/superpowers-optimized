@@ -21,29 +21,47 @@ const LOG_DIR = path.join(
   'hooks-logs'
 );
 
+// Legacy shared file. Kept only so an in-flight session upgrading mid-run still
+// shows a summary; all new writes go to a per-session file.
 const STATS_FILE = path.join(LOG_DIR, 'session-stats.json');
 
+const STATS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 /**
- * Load current session stats or initialize empty.
+ * Per-session stats path. The shared file was contaminated across sessions:
+ * working in project A then project B within the 2-hour expiry attributed A's
+ * skill invocations to B. Same class of bug as the edit-log fix in v6.5.2.
  */
-function loadStats() {
+function statsPath(sessionId) {
+  if (!sessionId) return STATS_FILE;
+  const safe = String(sessionId).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
+  return path.join(LOG_DIR, `session-stats-${safe}.json`);
+}
+
+/**
+ * Load stats for this session, or initialize empty.
+ */
+function loadStats(sessionId) {
+  const file = statsPath(sessionId);
   try {
-    if (fs.existsSync(STATS_FILE)) {
-      const raw = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
-      // Auto-expire after 2 hours (new session)
-      if (raw.startedAt && (Date.now() - new Date(raw.startedAt).getTime()) > 2 * 60 * 60 * 1000) {
-        return createFreshStats();
+    if (fs.existsSync(file)) {
+      const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+      // A different session id in the same file means the shared legacy file —
+      // never inherit another session's counts.
+      if (sessionId && raw.sessionId && raw.sessionId !== sessionId) {
+        return createFreshStats(sessionId);
       }
       return raw;
     }
   } catch {
     // Corrupted file — start fresh
   }
-  return createFreshStats();
+  return createFreshStats(sessionId);
 }
 
-function createFreshStats() {
+function createFreshStats(sessionId) {
   return {
+    sessionId: sessionId || null,
     startedAt: new Date().toISOString(),
     skillInvocations: {},
     totalSkillCalls: 0,
@@ -53,10 +71,28 @@ function createFreshStats() {
   };
 }
 
-function saveStats(stats) {
+function pruneOldStats() {
+  try {
+    const cutoff = Date.now() - STATS_TTL_MS;
+    for (const name of fs.readdirSync(LOG_DIR)) {
+      if (!/^session-stats-.*\.json$/.test(name)) continue;
+      const full = path.join(LOG_DIR, name);
+      try {
+        if (fs.statSync(full).mtimeMs < cutoff) fs.unlinkSync(full);
+      } catch {
+        // Skip files we cannot stat or remove
+      }
+    }
+  } catch {
+    // Directory unreadable — nothing to prune
+  }
+}
+
+function saveStats(stats, sessionId) {
   try {
     if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
-    fs.writeFileSync(STATS_FILE, JSON.stringify(stats, null, 2));
+    fs.writeFileSync(statsPath(sessionId), JSON.stringify(stats, null, 2));
+    pruneOldStats();
   } catch {
     // Silently ignore
   }
@@ -103,7 +139,7 @@ async function main() {
 
   try {
     const data = JSON.parse(input);
-    const { tool_name, tool_input } = data;
+    const { tool_name, tool_input, session_id } = data;
 
     if (tool_name !== 'Skill') {
       process.stdout.write('{}');
@@ -111,13 +147,13 @@ async function main() {
     }
 
     const skillName = tool_input?.skill || 'unknown';
-    const stats = loadStats();
+    const stats = loadStats(session_id);
 
     // Track skill invocation
     stats.skillInvocations[skillName] = (stats.skillInvocations[skillName] || 0) + 1;
     stats.totalSkillCalls += 1;
 
-    saveStats(stats);
+    saveStats(stats, session_id);
   } catch {
     // Silently ignore
   }
@@ -128,5 +164,8 @@ async function main() {
 if (require.main === module) {
   main();
 } else {
-  module.exports = { loadStats, saveStats, formatSummary, createFreshStats, STATS_FILE };
+  module.exports = {
+    loadStats, saveStats, formatSummary, createFreshStats,
+    statsPath, pruneOldStats, STATS_FILE,
+  };
 }

@@ -4,7 +4,8 @@
  *
  * Runs on every session start. Executes git commands to compute:
  *   - Recently changed files (last commit)
- *   - Blast radius: which tracked files reference each changed file
+ *   - Blast radius: tracked files whose reference to a changed file actually
+ *     resolves to that file's path. Word-level matches are never counted.
  *   - Recent commit history and change statistics
  *
  * Writes context-snapshot.json to the project root.
@@ -39,7 +40,81 @@ function getLastHeadFile(cwd) {
 const BASENAME_DENYLIST = new Set([
   'index', 'main', 'test', 'tests', 'spec', 'utils', 'util', 'helpers', 'helper',
   'config', 'setup', 'app', 'types', 'constants', 'common', 'shared', 'lib', 'mod',
+  // Added after measuring: these produced the worst false positives.
+  // "SKILL.md" claimed 21 dependents, ".claude-plugin/plugin.json" claimed 16 —
+  // every file that merely used the word "skill" or "plugin" in prose.
+  'skill', 'plugin', 'version', 'readme', 'changelog', 'license', 'package',
+  'manifest', 'schema', 'model', 'client', 'server', 'core', 'base',
 ]);
+
+// Extensions stripped when comparing a reference to a file path, so that
+// "./foo", "./foo.js" and "./foo/index.js" all normalise to the same target.
+const MODULE_EXTENSIONS = [
+  '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts',
+  '.py', '.rb', '.go', '.rs', '.java', '.kt', '.php', '.cs',
+  '.json', '.yaml', '.yml', '.md', '.sh',
+];
+
+/** Normalise a path for comparison: forward slashes, no extension, no /index. */
+function normalizeTarget(p) {
+  let out = p.replace(/\\/g, '/').replace(/^\.\//, '');
+  for (const ext of MODULE_EXTENSIONS) {
+    if (out.toLowerCase().endsWith(ext)) {
+      out = out.slice(0, -ext.length);
+      break;
+    }
+  }
+  return out.replace(/\/index$/, '');
+}
+
+/**
+ * Extract path-like tokens from a source line that could refer to `basename`.
+ * Quotes, backticks, parentheses and trailing punctuation are stripped.
+ */
+function extractPathTokens(line, basename) {
+  const tokens = [];
+  const re = /[A-Za-z0-9_@.\-/\\]+/g;
+  let m;
+  while ((m = re.exec(line)) !== null) {
+    const raw = m[0].replace(/[.,;:)\]}]+$/, '');
+    if (raw.toLowerCase().includes(basename.toLowerCase())) tokens.push(raw);
+  }
+  return tokens;
+}
+
+/**
+ * Does `line` in `fromFile` contain a reference that actually resolves to
+ * `changedFile`? This is the whole point of the rewrite: an edge is kept only
+ * when the reference can be resolved to the changed file's real path. A bare
+ * word that merely matches the basename is not evidence and is dropped.
+ */
+function referenceResolves(line, fromFile, changedFile, basename) {
+  const target = normalizeTarget(changedFile);
+  const fromDir = path.posix.dirname(fromFile.replace(/\\/g, '/'));
+
+  for (const token of extractPathTokens(line, basename)) {
+    // A reference must carry a path separator. A bare token — even one that
+    // looks like a filename ("SKILL.md") — cannot identify *which* file is
+    // meant, and counting it is how the old implementation invented dependents.
+    // Under-reporting is the correct failure direction here.
+    if (!token.includes('/') && !token.includes('\\')) continue;
+
+    const normalized = token.replace(/\\/g, '/');
+
+    // Relative specifier resolved against the referencing file's directory.
+    if (normalized.startsWith('./') || normalized.startsWith('../')) {
+      const resolved = path.posix.normalize(path.posix.join(fromDir, normalized));
+      if (normalizeTarget(resolved) === target) return true;
+      continue;
+    }
+
+    // Repo-relative or suffix reference (docs and configs use these).
+    const norm = normalizeTarget(normalized.replace(/^\/+/, ''));
+    if (norm === target || target.endsWith('/' + norm)) return true;
+  }
+
+  return false;
+}
 
 function run(cmd, cwd) {
   try {
@@ -142,7 +217,13 @@ async function main() {
     // Silent
   }
 
-  // Blast radius: for each changed file, find tracked files that import/reference it
+  // Blast radius: for each changed file, find tracked files that reference it.
+  //
+  // Every edge must be *path-resolved*. The previous implementation kept any file
+  // containing the basename as a word, which produced 21 fabricated "dependents"
+  // for skills/brainstorming/SKILL.md and 16 for .claude-plugin/plugin.json —
+  // and requesting-code-review feeds this list straight into the reviewer's scope.
+  // An empty list is honest; a wrong one teaches the reviewer to ignore the field.
   const blastRadius = {};
   for (const file of changedFiles.slice(0, MAX_FILES)) {
     const basename = path.basename(file, path.extname(file));
@@ -153,27 +234,36 @@ async function main() {
     const safeName = basename.replace(/[^a-zA-Z0-9_\-]/g, '');
     if (!safeName) continue;
 
-    const refs = run(
-      `git grep -l "${safeName}" -- ":(exclude)*.lock" ":(exclude)package-lock.json" ":(exclude)*.min.js" ":(exclude)*.map"`,
+    // One grep with line content — cheaper than the old grep-per-candidate loop.
+    const hits = run(
+      `git grep -n "${safeName}" -- ":(exclude)*.lock" ":(exclude)package-lock.json" ":(exclude)*.min.js" ":(exclude)*.map"`,
       cwd
     );
-    if (!refs) {
+    if (!hits) {
       blastRadius[file] = [];
       continue;
     }
 
-    // Secondary filter: keep only files where the match looks like an import/reference,
-    // not a prose mention. Fail-open: if the content check errors, keep the ref.
-    const importPatterns = [
-      new RegExp(`(import|require|from).*${safeName}`, 'i'),
-      new RegExp(`[./]${safeName}[./'";\`]`),
-    ];
-    blastRadius[file] = refs.split('\n').filter(f => {
-      if (!f || f === file) return false;
-      const content = run(`git grep -h "${safeName}" -- "${f}"`, cwd);
-      if (!content) return true; // fail-open
-      return importPatterns.some(p => p.test(content));
-    });
+    const dependents = new Set();
+    for (const hit of hits.split('\n')) {
+      if (!hit) continue;
+      // Format: path:lineNumber:content
+      const firstColon = hit.indexOf(':');
+      if (firstColon < 0) continue;
+      const secondColon = hit.indexOf(':', firstColon + 1);
+      if (secondColon < 0) continue;
+
+      const refFile = hit.slice(0, firstColon);
+      const content = hit.slice(secondColon + 1);
+      if (!refFile || refFile === file) continue;
+      if (dependents.has(refFile)) continue;
+
+      if (referenceResolves(content, refFile, file, safeName)) {
+        dependents.add(refFile);
+      }
+    }
+
+    blastRadius[file] = [...dependents];
   }
 
   const snapshot = {
@@ -183,6 +273,8 @@ async function main() {
     change_stat: changeStat,
     recent_commits: recentCommits,
     blast_radius: blastRadius,
+    // Consumers must know how much to trust the edges above.
+    blast_radius_method: 'path-resolved',
     cross_session_files: crossSessionFiles,
     cross_session_commit_count: crossSessionCommitCount,
   };
@@ -200,4 +292,14 @@ async function main() {
   process.stdout.write('{}');
 }
 
-main();
+if (require.main === module) {
+  main();
+} else {
+  module.exports = {
+    normalizeTarget,
+    extractPathTokens,
+    referenceResolves,
+    BASENAME_DENYLIST,
+    MODULE_EXTENSIONS,
+  };
+}

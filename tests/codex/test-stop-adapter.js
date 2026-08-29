@@ -226,6 +226,38 @@ test('SKILL.md modified for project that already has session-log [saved] → sti
   } finally { cleanup(dir); }
 });
 
+test('Plain app project: enough source files triggers the reminder (D2)', () => {
+  const dir = makeTempRepo();
+  try {
+    fs.mkdirSync(path.join(dir, 'src', 'auth'), { recursive: true });
+    for (const f of ['src/auth/session.ts', 'src/auth/token.ts', 'src/auth/guard.ts', 'src/auth/store.ts']) {
+      fs.writeFileSync(path.join(dir, f), 'export const x = 1;');
+    }
+    const result = runAdapter({ stop_hook_active: false }, dir);
+    assert.ok(result.reason, 'Expected reminders');
+    assert.ok(result.reason.toLowerCase().includes('decision log'),
+      `4 source files in a non-plugin project should trigger: ${result.reason}`);
+    assert.ok(result.reason.includes('4 source files'),
+      `Reminder should name the real trigger: ${result.reason}`);
+  } finally { cleanup(dir); }
+});
+
+test('getChangeSignificance ignores non-source files and small change sets', () => {
+  const { getChangeSignificance } = require('../../hooks/codex/stop-adapter');
+  assert.strictEqual(getChangeSignificance([]), null);
+  assert.strictEqual(getChangeSignificance(null), null);
+  assert.strictEqual(getChangeSignificance(['a.ts', 'b.ts', 'c.ts']), null, '3 sources is below threshold');
+  assert.strictEqual(
+    getChangeSignificance(['README.md', 'docs/x.md', 'package.json', 'tsconfig.json', '.prettierrc']),
+    null,
+    'docs and config must not count toward the volume rule'
+  );
+  const vol = getChangeSignificance(['a.ts', 'b.ts', 'c.ts', 'd.ts']);
+  assert.strictEqual(vol && vol.kind, 'volume');
+  const cfg = getChangeSignificance(['CLAUDE.md', 'a.ts']);
+  assert.strictEqual(cfg && cfg.kind, 'config');
+});
+
 // ── Output shape ──────────────────────────────────────────────────────────────
 
 console.log('\nOutput shape');

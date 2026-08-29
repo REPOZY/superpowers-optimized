@@ -112,21 +112,28 @@ test('changedFiles uses diffBase, not hardcoded HEAD~1', () => {
   assert.ok(changedRawLine, 'changedRaw does not use diffBase variable');
 });
 
-// ── Blast radius import filtering ────────────────────────────────────────────
+// ── Blast radius filtering contract ──────────────────────────────────────────
+// The old regex/fail-open filter was replaced by path resolution. Fail-open was
+// itself the defect: an unresolvable reference was kept as a dependent, which is
+// how prose mentions became "callers". These tests pin the new contract; the
+// behavioural cases live in the referenceResolves block below.
 
-console.log('\nBlast radius import filtering');
+console.log('\nBlast radius filtering contract');
 
-test('Has import pattern filtering for blast radius', () => {
-  assert.ok(source.includes('importPatterns'), 'Missing importPatterns for blast radius filtering');
+test('Edges are path-resolved, not regex-matched', () => {
+  assert.ok(source.includes('referenceResolves'), 'Missing path-resolution filter');
+  assert.ok(!source.includes('importPatterns'),
+    'Old regex filter must be gone — it matched prose, not references');
 });
 
-test('Checks for import/require/from patterns', () => {
-  assert.ok(source.includes('import|require|from'), 'Missing import/require/from pattern');
+test('No fail-open: an unresolvable reference is dropped, not kept', () => {
+  assert.ok(!source.includes('if (!content) return true'),
+    'Fail-open kept unresolvable references and fabricated dependents');
 });
 
-test('Fail-open: keeps ref if content check errors', () => {
-  // If content check returns empty, should keep the reference (fail-open)
-  assert.ok(source.includes('if (!content) return true'), 'Missing fail-open logic');
+test('Snapshot declares how the edges were derived', () => {
+  assert.ok(source.includes('blast_radius_method'),
+    'Consumers need to know the provenance of these edges');
 });
 
 // ── BASENAME_DENYLIST ────────────────────────────────────────────────────────
@@ -137,6 +144,139 @@ test('BASENAME_DENYLIST blocks common generic names', () => {
   assert.ok(source.includes("'index'"), 'Missing index in denylist');
   assert.ok(source.includes("'config'"), 'Missing config in denylist');
   assert.ok(source.includes("'utils'"), 'Missing utils in denylist');
+});
+
+// ── Blast radius resolution ──────────────────────────────────────────────────
+// Every edge must resolve to the changed file's real path. The previous
+// implementation kept any file containing the basename as a word, inventing
+// 21 "dependents" for skills/brainstorming/SKILL.md and 16 for plugin.json —
+// and requesting-code-review feeds this list into the reviewer's scope.
+
+const {
+  normalizeTarget,
+  referenceResolves,
+  extractPathTokens,
+  BASENAME_DENYLIST,
+} = require('../../hooks/context-engine.js');
+
+console.log('\nBlast radius — normalizeTarget');
+
+test('Strips a known extension', () => {
+  assert.strictEqual(normalizeTarget('hooks/skill-activator.js'), 'hooks/skill-activator');
+  assert.strictEqual(normalizeTarget('src/a/b.tsx'), 'src/a/b');
+});
+test('Strips a trailing /index', () => {
+  assert.strictEqual(normalizeTarget('src/thing/index.ts'), 'src/thing');
+});
+test('Normalises separators and leading ./', () => {
+  assert.strictEqual(normalizeTarget('.\\src\\a.js'), 'src/a');
+});
+
+console.log('\nBlast radius — extractPathTokens');
+
+test('Finds path-like tokens containing the basename', () => {
+  const t = extractPathTokens("const x = require('../skill-activator');", 'skill-activator');
+  assert.ok(t.some(tok => tok.includes('../skill-activator')), `got ${JSON.stringify(t)}`);
+});
+test('Ignores tokens that do not contain the basename', () => {
+  const t = extractPathTokens("import fs from 'fs';", 'skill-activator');
+  assert.deepStrictEqual(t, []);
+});
+
+console.log('\nBlast radius — referenceResolves');
+
+test('Relative require that resolves to the changed file is an edge', () => {
+  assert.strictEqual(
+    referenceResolves(
+      "const { matchSkills } = require('../skill-activator');",
+      'hooks/codex/user-prompt-submit-adapter.js',
+      'hooks/skill-activator.js',
+      'skill-activator'
+    ),
+    true
+  );
+});
+
+test('Relative import resolving somewhere else is NOT an edge', () => {
+  assert.strictEqual(
+    referenceResolves(
+      "import { load } from './session';",
+      'src/other/login.ts',
+      'src/api/session.ts',
+      'session'
+    ),
+    false,
+    'src/other/session is a different file from src/api/session'
+  );
+});
+
+test('Repo-relative path reference in prose is an edge', () => {
+  assert.strictEqual(
+    referenceResolves(
+      '- hooks/skill-activator.js — UserPromptSubmit hook that injects hints',
+      'README.md',
+      'hooks/skill-activator.js',
+      'skill-activator'
+    ),
+    true
+  );
+});
+
+test('Bare word mention is NOT an edge — this was the original bug', () => {
+  assert.strictEqual(
+    referenceResolves(
+      'The skill activator decides routing, and skill-activator is fast.',
+      'README.md',
+      'hooks/skill-activator.js',
+      'skill-activator'
+    ),
+    false
+  );
+});
+
+test('Bare filename without a path is NOT an edge', () => {
+  assert.strictEqual(
+    referenceResolves(
+      'Every skill lives in a SKILL.md file.',
+      'docs/architecture/project-memory.md',
+      'skills/brainstorming/SKILL.md',
+      'SKILL'
+    ),
+    false,
+    'SKILL.md alone cannot identify which SKILL.md is meant'
+  );
+});
+
+test('Prose using the word "plugin" is NOT an edge', () => {
+  assert.strictEqual(
+    referenceResolves(
+      'This is a Claude Code plugin, and the plugin loads skills.',
+      'docs/architecture/testing-structure.md',
+      '.claude-plugin/plugin.json',
+      'plugin'
+    ),
+    false
+  );
+});
+
+test('Extensionless relative specifier resolves', () => {
+  assert.strictEqual(
+    referenceResolves(
+      "export * from './helpers/format'",
+      'src/index.ts',
+      'src/helpers/format.ts',
+      'format'
+    ),
+    true
+  );
+});
+
+console.log('\nBlast radius — denylist');
+
+test('Basenames that caused the worst false positives are denylisted', () => {
+  for (const name of ['skill', 'plugin', 'version', 'readme']) {
+    assert.ok(BASENAME_DENYLIST.has(name), `"${name}" must be denylisted`);
+  }
 });
 
 // ── Summary ──────────────────────────────────────────────────────────────────

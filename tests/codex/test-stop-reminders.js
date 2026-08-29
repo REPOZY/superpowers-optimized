@@ -73,6 +73,14 @@ function writeRecentEdit(logDir, filePath) {
   fs.writeFileSync(path.join(logDir, 'edit-log.txt'), line, 'utf8');
 }
 
+function writeRecentEdits(logDir, filePaths) {
+  const now = Date.now();
+  const lines = filePaths
+    .map((p, i) => `${new Date(now + i).toISOString()} | ${TEST_SESSION_ID} | Edit | ${p}\n`)
+    .join('');
+  fs.writeFileSync(path.join(logDir, 'edit-log.txt'), lines, 'utf8');
+}
+
 console.log('\nStop reminders output contract (Claude)');
 
 test('Test-file detection recognizes tests/codex/test-*.js naming', () => {
@@ -266,6 +274,214 @@ test('Does NOT trigger for regular source file edits', () => {
     const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
     const reason = result.reason || '';
     assert.ok(!reason.includes('Decision log'), `Regular source file should NOT trigger decision log: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+// ── Project-agnostic significance (D2) ───────────────────────────────────────
+// SIGNIFICANT_FILE_PATTERNS only match agent-tooling repos. These tests cover
+// the volume rule, which is what makes the reminder fire in ordinary projects.
+
+console.log('\nProject-agnostic decision-log trigger');
+
+test('Fires on a plain app project with enough source files touched', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, [
+      '/app/src/auth/session.ts',
+      '/app/src/auth/token.ts',
+      '/app/src/api/login.ts',
+      '/app/src/components/LoginForm.tsx',
+    ]);
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(reason.includes('Decision log'),
+      `4 source files in a non-plugin project should trigger the reminder: ${reason}`);
+    assert.ok(reason.includes('4 source files'),
+      `Reminder should name the real trigger, got: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Does not fire below the source-file threshold', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, ['/app/src/a.ts', '/app/src/b.ts', '/app/src/c.ts']);
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(!reason.includes('Decision log'), `3 source files is a fix, not a design session: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Counts distinct files, not repeated edits to one file', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, [
+      '/app/src/a.ts', '/app/src/a.ts', '/app/src/a.ts',
+      '/app/src/a.ts', '/app/src/a.ts', '/app/src/a.ts',
+    ]);
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(!reason.includes('Decision log'),
+      `Six edits to one file is iteration, not breadth: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Docs-only and config-only sessions do not trigger the volume rule', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, [
+      '/app/README.md', '/app/docs/guide.md', '/app/package.json',
+      '/app/tsconfig.json', '/app/.prettierrc',
+    ]);
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(!reason.includes('Decision log'), `Non-source files must not count: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Config-pattern match still wins and names the files', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, ['/app/CLAUDE.md', '/app/src/a.ts']);
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(reason.includes('Decision log'), `CLAUDE.md should trigger: ${reason}`);
+    assert.ok(reason.includes('CLAUDE.md'), `Reminder should name the file, got: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('getSessionSignificance returns null for an empty session', () => {
+  const { homeDir, cwdDir } = makeTempDirs();
+  try {
+    const { getSessionSignificance } = loadHookWithHome(homeDir);
+    assert.strictEqual(getSessionSignificance([]), null);
+    assert.strictEqual(getSessionSignificance(null), null);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+// ── Volume nudge is one-shot; design signal lowers the bar ────────────────────
+// The volume rule is a heuristic, so it must not nag every turn of a long
+// feature session. A design/diagnostic skill is direct evidence of decisions,
+// so it triggers at a lower file count and keeps reminding until saved.
+
+console.log('\nDecision-log nudge cadence and design signal');
+
+function writeSkillStats(logDir, sessionId, skills) {
+  fs.writeFileSync(
+    path.join(logDir, `session-stats-${sessionId}.json`),
+    JSON.stringify({
+      sessionId,
+      startedAt: new Date().toISOString(),
+      skillInvocations: skills,
+      totalSkillCalls: Object.values(skills).reduce((a, b) => a + b, 0),
+    }),
+    'utf8'
+  );
+}
+
+test('Volume nudge fires once, then stays quiet for the rest of the session', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, ['/a/x1.ts', '/a/x2.ts', '/a/x3.ts', '/a/x4.ts']);
+    const { evaluatePayload, setGuard } = loadHookWithHome(homeDir);
+
+    const first = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(first.includes('Decision log'), `First stop should nudge: ${first}`);
+
+    // Clear the 2-minute anti-loop guard so only the one-shot marker can suppress.
+    fs.rmSync(path.join(logDir, 'stop-hook-fired.lock'), { force: true });
+    const second = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(!second.includes('Decision log'),
+      `Volume nudge must not repeat in the same session: ${second}`);
+    void setGuard;
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Config-file nudge keeps firing until a [saved] entry exists', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, ['/a/skills/x/SKILL.md']);
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+
+    const first = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    fs.rmSync(path.join(logDir, 'stop-hook-fired.lock'), { force: true });
+    const second = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+
+    assert.ok(first.includes('Decision log'), 'first should fire');
+    assert.ok(second.includes('Decision log'),
+      'precise config signal is repeatable — it must keep reminding');
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Design skill lowers the bar to 2 source files', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, ['/a/x1.ts', '/a/x2.ts']);
+    writeSkillStats(logDir, TEST_SESSION_ID, { 'systematic-debugging': 2 });
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(reason.includes('Decision log'), `2 files + design skill should fire: ${reason}`);
+    assert.ok(reason.includes('systematic-debugging'),
+      `Reminder should name the skill that justified it: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Non-design skills do not lower the bar', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, ['/a/x1.ts', '/a/x2.ts']);
+    writeSkillStats(logDir, TEST_SESSION_ID, { 'token-efficiency': 1 });
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(!reason.includes('Decision log'),
+      `token-efficiency is not a design signal: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Skill stats from another session are never inherited', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, ['/a/x1.ts', '/a/x2.ts']);
+    writeSkillStats(logDir, 'a-completely-different-session', { 'brainstorming': 3 });
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(!reason.includes('Decision log'),
+      `Another session's skill usage must not trigger this session: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Plugin-namespaced skill names are recognised', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, ['/a/x1.ts', '/a/x2.ts']);
+    writeSkillStats(logDir, TEST_SESSION_ID, { 'superpowers-optimized:brainstorming': 1 });
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(reason.includes('Decision log'),
+      `Namespaced skill name should still count as a design signal: ${reason}`);
   } finally {
     cleanup(homeDir, cwdDir);
   }

@@ -11,7 +11,7 @@
 const {
   buildContext, isMicroTask, matchSkills,
   extractKeywords, searchSessionLog, buildMemoryContext,
-  searchKnownIssues, buildKnownIssuesContext,
+  searchKnownIssues, buildKnownIssuesContext, dedupeRecall,
   isExecutionTrigger, getContextPressure, buildContextPressureBlock,
 } = require('../skill-activator');
 const { readJsonStdin } = require('./utils');
@@ -43,9 +43,12 @@ function evaluatePayload(data) {
   const memoryEntries = searchSessionLog(cwd, keywords);
   const knownIssueEntries = searchKnownIssues(cwd, keywords);
 
+  // Suppress entries already surfaced earlier in this session
+  const fresh = dedupeRecall(cwd, sessionId, memoryEntries, knownIssueEntries);
+
   const skillContext = buildContext(matches);
-  const memoryContext = buildMemoryContext(memoryEntries);
-  const knownIssuesContext = buildKnownIssuesContext(knownIssueEntries);
+  const memoryContext = buildMemoryContext(fresh.sessionLog);
+  const knownIssuesContext = buildKnownIssuesContext(fresh.knownIssues);
 
   if (!skillContext && !memoryContext && !knownIssuesContext) return {};
 
