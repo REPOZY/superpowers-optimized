@@ -16,6 +16,23 @@
 'use strict';
 
 const assert = require('assert');
+const os = require('os');
+const fs = require('fs');
+const path = require('path');
+
+// ── Hermetic environment ──────────────────────────────────────────────────────
+// skill-activator writes a per-session recall ledger under $HOME/.claude/hooks-logs.
+// Point HOME at a throwaway dir for the whole run so tests never touch the real
+// home, and clear the window/threshold overrides so a developer's shell settings
+// cannot change the context-pressure expectations below.
+const TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-activator-home-'));
+process.env.USERPROFILE = TEST_HOME;
+process.env.HOME = TEST_HOME;
+delete process.env.SP_CONTEXT_WINDOW;
+delete process.env.SP_CONTEXT_PRESSURE_THRESHOLD;
+process.on('exit', () => {
+  try { fs.rmSync(TEST_HOME, { recursive: true, force: true }); } catch { /* best effort */ }
+});
 
 const { evaluatePayload } = require('../../hooks/codex/user-prompt-submit-adapter');
 
@@ -231,9 +248,6 @@ test('Prompt with special regex characters → does not crash', () => {
 
 // ── Memory recall (extractKeywords / searchSessionLog / buildMemoryContext) ───
 
-const os = require('os');
-const fs = require('fs');
-const path = require('path');
 const {
   extractKeywords,
   searchSessionLog,
@@ -781,6 +795,377 @@ test('Non-execution prompt + high pressure → no pressure block', () => {
 
   const ctx = result.hookSpecificOutput?.additionalContext || '';
   assert.ok(!ctx.includes('context-pressure-gate'), 'Non-execution prompt should never get pressure block');
+});
+
+// ── Recall ranking (F8) ───────────────────────────────────────────────────────
+// Flat density scoring let recency outrank relevance ~13x on normal prompts.
+// These tests lock the two properties that fixed it: IDF weighting and the
+// coverage gate.
+
+const { rankEntries, MIN_COVERAGE } = require('../../hooks/skill-activator');
+
+console.log('\nRecall ranking — rankEntries');
+
+test('Relevance beats recency', () => {
+  const entries = [
+    '## 2026-01-01 [saved]\nGoal: rewrite the session-log recall scoring model',
+    '## 2026-06-01 [saved]\nGoal: bump the release version and update notes',
+  ];
+  const ranked = rankEntries(entries, ['session-log', 'recall', 'scoring']);
+  assert.ok(ranked.length > 0, 'the on-topic entry must be returned');
+  assert.ok(ranked[0].entry.includes('2026-01-01'),
+    'older but on-topic entry must outrank the newest off-topic one');
+});
+
+test('A single common word cannot carry an entry (coverage gate)', () => {
+  const entries = [
+    '## A\nthe plugin hooks do not fire on codex',
+    '## B\nthe plugin manifest version must stay in sync',
+  ];
+  // Only "plugin" exists in the corpus; the other four keywords do not.
+  const ranked = rankEntries(entries, ['re-verify', 'improve', 'plugin', 'memory', 'stack']);
+  assert.strictEqual(ranked.length, 0,
+    'matching 1 of 5 keywords is 20% coverage — below the gate');
+});
+
+test('Terms present in every entry carry little weight', () => {
+  const entries = [
+    '## A\nhook change about compression rules',
+    '## B\nhook change about worktree isolation',
+    '## C\nhook change about memory recall ranking',
+  ];
+  const ranked = rankEntries(entries, ['hook', 'memory', 'recall']);
+  assert.ok(ranked.length > 0, 'expected a match');
+  assert.ok(ranked[0].entry.includes('memory recall'),
+    'the entry matching the distinctive terms must rank first, not the newest');
+});
+
+test('Returns [] for empty inputs', () => {
+  assert.deepStrictEqual(rankEntries([], ['x']), []);
+  assert.deepStrictEqual(rankEntries(['## A\nbody'], []), []);
+  assert.deepStrictEqual(rankEntries(null, ['x']), []);
+});
+
+test('Reports relevance and coverage on every hit', () => {
+  const ranked = rankEntries(['## A\nmemory recall ranking work'], ['memory', 'recall']);
+  assert.strictEqual(ranked.length, 1);
+  assert.ok(ranked[0].relevance > 0 && ranked[0].relevance <= 1);
+  assert.ok(ranked[0].coverage >= MIN_COVERAGE);
+});
+
+test('Prompt scaffolding words are not treated as keywords', () => {
+  const kw = extractKeywords('first take a step, once done please tell me anything else');
+  for (const noise of ['first', 'take', 'step', 'once', 'done', 'tell', 'anything', 'else']) {
+    assert.ok(!kw.includes(noise), `"${noise}" is scaffolding and must be stripped`);
+  }
+});
+
+test('Domain nouns survive the stop-word list', () => {
+  const kw = extractKeywords('update state and the plan hook memory context map');
+  for (const domain of ['state', 'plan', 'hook', 'memory', 'context']) {
+    assert.ok(kw.includes(domain), `"${domain}" must remain a keyword`);
+  }
+});
+
+// ── Context window resolution (D7) ────────────────────────────────────────────
+
+const {
+  parseWindowSetting,
+  parseThresholdSetting,
+  resolveContextWindow,
+  getPressureThreshold,
+  formatWindowLabel,
+  DEFAULT_CONTEXT_WINDOW,
+  LARGE_CONTEXT_WINDOW,
+} = require('../../hooks/skill-activator');
+
+console.log('\nContext window resolution — parseWindowSetting');
+
+test('Parses raw token counts', () => {
+  assert.strictEqual(parseWindowSetting('1000000'), 1000000);
+  assert.strictEqual(parseWindowSetting('200000'), 200000);
+});
+test('Parses k/m shorthand, case-insensitively', () => {
+  assert.strictEqual(parseWindowSetting('1m'), 1000000);
+  assert.strictEqual(parseWindowSetting('1M'), 1000000);
+  assert.strictEqual(parseWindowSetting('200k'), 200000);
+  assert.strictEqual(parseWindowSetting('1.5m'), 1500000);
+});
+test('Tolerates separators and whitespace', () => {
+  assert.strictEqual(parseWindowSetting(' 1_000_000 '), 1000000);
+  assert.strictEqual(parseWindowSetting('1,000,000'), 1000000);
+});
+test('Rejects nonsense and empty values', () => {
+  assert.strictEqual(parseWindowSetting(''), null);
+  assert.strictEqual(parseWindowSetting(null), null);
+  assert.strictEqual(parseWindowSetting(undefined), null);
+  assert.strictEqual(parseWindowSetting('abc'), null);
+  assert.strictEqual(parseWindowSetting('-5'), null);
+  assert.strictEqual(parseWindowSetting('5'), null, 'sub-1K values are not a real window');
+});
+
+console.log('\nContext window resolution — parseThresholdSetting');
+
+test('Parses ratios and percentages', () => {
+  assert.strictEqual(parseThresholdSetting('0.75'), 0.75);
+  assert.strictEqual(parseThresholdSetting('.5'), 0.5);
+  assert.strictEqual(parseThresholdSetting('75'), 0.75);
+  assert.strictEqual(parseThresholdSetting('75%'), 0.75);
+});
+test('Rejects out-of-range and unparseable thresholds', () => {
+  assert.strictEqual(parseThresholdSetting('0'), null);
+  assert.strictEqual(parseThresholdSetting('1'), null);
+  assert.strictEqual(parseThresholdSetting('100'), null);
+  assert.strictEqual(parseThresholdSetting('abc'), null);
+  assert.strictEqual(parseThresholdSetting(null), null);
+});
+test('getPressureThreshold falls back to the default', () => {
+  assert.strictEqual(getPressureThreshold({}), 0.60);
+  assert.strictEqual(getPressureThreshold({ SP_CONTEXT_PRESSURE_THRESHOLD: '80' }), 0.80);
+  assert.strictEqual(getPressureThreshold({ SP_CONTEXT_PRESSURE_THRESHOLD: 'junk' }), 0.60);
+});
+
+console.log('\nContext window resolution — resolveContextWindow');
+
+test('Defaults to the conservative window', () => {
+  assert.strictEqual(resolveContextWindow({}, {}), DEFAULT_CONTEXT_WINDOW);
+  assert.strictEqual(resolveContextWindow(null, {}), DEFAULT_CONTEXT_WINDOW);
+});
+test('SP_CONTEXT_WINDOW overrides everything', () => {
+  assert.strictEqual(
+    resolveContextWindow({ model: 'claude-opus-5', observedMax: 10 }, { SP_CONTEXT_WINDOW: '1m' }),
+    LARGE_CONTEXT_WINDOW
+  );
+  assert.strictEqual(
+    resolveContextWindow({ model: 'claude-sonnet-4-5[1m]' }, { SP_CONTEXT_WINDOW: '200k' }),
+    200000,
+    'explicit setting must win over the model marker'
+  );
+});
+test('Detects the [1m] model marker', () => {
+  assert.strictEqual(resolveContextWindow({ model: 'claude-sonnet-4-5[1m]' }, {}), LARGE_CONTEXT_WINDOW);
+  assert.strictEqual(resolveContextWindow({ model: 'claude-opus-5' }, {}), DEFAULT_CONTEXT_WINDOW);
+});
+test('Auto-escalates when observed context exceeds the default', () => {
+  assert.strictEqual(resolveContextWindow({ observedMax: 250000 }, {}), LARGE_CONTEXT_WINDOW);
+  assert.strictEqual(resolveContextWindow({ observedMax: 199000 }, {}), DEFAULT_CONTEXT_WINDOW);
+  assert.strictEqual(resolveContextWindow({ observedMax: 1200000 }, {}), 1200000);
+});
+test('formatWindowLabel renders K and M tiers', () => {
+  assert.strictEqual(formatWindowLabel(200000), '200K');
+  assert.strictEqual(formatWindowLabel(1000000), '1M');
+  assert.strictEqual(formatWindowLabel(1500000), '1.5M');
+});
+
+console.log('\nContext pressure gate — window-aware pressure (D7 regression)');
+
+function pressureWithEnv(turns, env, model) {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-win-'));
+  const cwd = path.join(tmpHome, 'myproject');
+  const projDir = cwdToProjectDir(cwd);
+  const sessionId = 'test-win-' + Math.random().toString(36).slice(2);
+  const projectPath = path.join(tmpHome, '.claude', 'projects', projDir);
+  fs.mkdirSync(projectPath, { recursive: true });
+  const lines = turns.map(t => JSON.stringify({
+    type: 'assistant',
+    message: model ? { model, usage: t } : { usage: t },
+    sessionId,
+  }));
+  fs.writeFileSync(path.join(projectPath, sessionId + '.jsonl'), lines.join('\n'));
+  const orig = { up: process.env.USERPROFILE, home: process.env.HOME };
+  process.env.USERPROFILE = tmpHome;
+  process.env.HOME = tmpHome;
+  const result = getContextPressure(cwd, sessionId, env);
+  process.env.USERPROFILE = orig.up;
+  process.env.HOME = orig.home;
+  fs.rmSync(tmpHome, { recursive: true, force: true });
+  return result;
+}
+
+const TURN_125K = [{ input_tokens: 5, cache_creation_input_tokens: 100000, cache_read_input_tokens: 25000, output_tokens: 2000 }];
+
+test('125K on a 200K window is over threshold (unchanged behaviour)', () => {
+  const r = pressureWithEnv(TURN_125K, {});
+  assert.strictEqual(r.overThreshold, true);
+  assert.strictEqual(r.windowK, 200);
+  assert.strictEqual(r.percent, 63);
+});
+test('125K on a 1M window is NOT over threshold (the D7 bug)', () => {
+  const r = pressureWithEnv(TURN_125K, { SP_CONTEXT_WINDOW: '1m' });
+  assert.strictEqual(r.overThreshold, false, '125K of 1M is 13% — must not block');
+  assert.strictEqual(r.windowK, 1000);
+  assert.strictEqual(r.percent, 13);
+});
+test('[1m] model marker widens the window without any env var', () => {
+  const r = pressureWithEnv(TURN_125K, {}, 'claude-sonnet-4-5[1m]');
+  assert.strictEqual(r.overThreshold, false);
+  assert.strictEqual(r.windowK, 1000);
+});
+test('Observed context above 200K auto-escalates the window', () => {
+  const r = pressureWithEnv([
+    { input_tokens: 5, cache_creation_input_tokens: 300000, cache_read_input_tokens: 0, output_tokens: 100 },
+  ], {});
+  assert.strictEqual(r.windowK, 1000, 'a 300K turn proves the window is larger than 200K');
+  assert.strictEqual(r.overThreshold, false);
+});
+test('Threshold override changes when the gate fires', () => {
+  const r = pressureWithEnv(TURN_125K, { SP_CONTEXT_PRESSURE_THRESHOLD: '80' });
+  assert.strictEqual(r.overThreshold, false, '63% is below an 80% threshold');
+  assert.strictEqual(r.threshold, 0.8);
+});
+test('Pressure block reports the real window and threshold', () => {
+  const block = buildContextPressureBlock({ inputK: 700, percent: 70, window: 1000000, threshold: 0.6 });
+  assert.ok(block.includes('1M limit'), `Expected "1M limit", got: ${block.slice(0, 300)}`);
+  assert.ok(block.includes('≥60%'), 'Expected the threshold in the block');
+});
+test('Pressure block still renders with only inputK/percent', () => {
+  const block = buildContextPressureBlock({ inputK: 142, percent: 71 });
+  assert.ok(block.includes('200K limit'), 'Should fall back to the default window label');
+});
+
+// ── Session-scoped recall dedupe (D5) ─────────────────────────────────────────
+
+const { dedupeRecall, entryKey, sessionStartSeed } = require('../../hooks/skill-activator');
+
+console.log('\nRecall dedupe — entryKey / sessionStartSeed');
+
+test('entryKey uses the entry header line', () => {
+  assert.strictEqual(entryKey('## 2026-01-01 [saved]\nGoal: x'), '## 2026-01-01 [saved]');
+  assert.strictEqual(entryKey(''), '');
+  assert.strictEqual(entryKey(null), '');
+});
+
+function makeMemoryProject(savedHeaders, issueHeaders) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dedupe-'));
+  if (savedHeaders) {
+    fs.writeFileSync(
+      path.join(dir, 'session-log.md'),
+      savedHeaders.map(h => `${h}\nGoal: hook staleness work\n`).join('\n')
+    );
+  }
+  if (issueHeaders) {
+    fs.writeFileSync(
+      path.join(dir, 'known-issues.md'),
+      issueHeaders.map(h => `${h}\n**Error:** hook staleness\n`).join('\n')
+    );
+  }
+  return dir;
+}
+
+test('Seed mirrors the SessionStart injection window', () => {
+  const dir = makeMemoryProject(
+    ['## 2026-01-01 [saved]', '## 2026-01-02 [saved]', '## 2026-01-03 [saved]'],
+    ['## Issue A', '## ~~Fixed issue~~', '## Issue B']
+  );
+  const seed = sessionStartSeed(dir);
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.deepStrictEqual(seed.sessionLog, ['## 2026-01-02 [saved]', '## 2026-01-03 [saved]'],
+    'only the last 2 [saved] headers are injected at session start');
+  assert.deepStrictEqual(seed.knownIssues, ['## Issue A', '## Issue B'],
+    'fixed (~~struck~~) issues are never injected');
+});
+
+test('Seed is empty when the memory files do not exist', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dedupe-empty-'));
+  const seed = sessionStartSeed(dir);
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.deepStrictEqual(seed, { sessionLog: [], knownIssues: [] });
+});
+
+console.log('\nRecall dedupe — dedupeRecall');
+
+test('No session id → nothing is filtered', () => {
+  const entries = ['## 2026-01-01 [saved]\nGoal: x'];
+  const out = dedupeRecall('/nonexistent', null, entries, []);
+  assert.deepStrictEqual(out.sessionLog, entries);
+});
+
+test('An entry is injected once, then suppressed for the rest of the session', () => {
+  const dir = makeMemoryProject(null, null);
+  const sid = 'dedupe-' + Math.random().toString(36).slice(2);
+  const entries = ['## 2026-01-01 [saved]\nGoal: first', '## 2026-01-02 [saved]\nGoal: second'];
+
+  const first = dedupeRecall(dir, sid, entries, []);
+  assert.strictEqual(first.sessionLog.length, 2, 'first turn surfaces both entries');
+
+  const second = dedupeRecall(dir, sid, entries, []);
+  assert.strictEqual(second.sessionLog.length, 0, 'second turn must suppress both');
+
+  const third = dedupeRecall(dir, sid, [...entries, '## 2026-01-03 [saved]\nGoal: new'], []);
+  assert.strictEqual(third.sessionLog.length, 1, 'only the unseen entry survives');
+  assert.ok(third.sessionLog[0].includes('2026-01-03'));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('Entries already injected by SessionStart are never repeated', () => {
+  const dir = makeMemoryProject(['## 2026-01-01 [saved]', '## 2026-01-02 [saved]'], null);
+  const sid = 'dedupe-seed-' + Math.random().toString(36).slice(2);
+  const out = dedupeRecall(dir, sid, ['## 2026-01-02 [saved]\nGoal: already shown'], []);
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.strictEqual(out.sessionLog.length, 0,
+    'session-start already injected the last 2 [saved] entries');
+});
+
+test('Known issues dedupe independently of session-log entries', () => {
+  const dir = makeMemoryProject(null, null);
+  const sid = 'dedupe-ki-' + Math.random().toString(36).slice(2);
+  const issues = ['## Codex hooks not firing\n**Error:** x'];
+  const first = dedupeRecall(dir, sid, [], issues);
+  assert.strictEqual(first.knownIssues.length, 1);
+  const second = dedupeRecall(dir, sid, [], issues);
+  assert.strictEqual(second.knownIssues.length, 0);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('Different sessions keep independent ledgers', () => {
+  const dir = makeMemoryProject(null, null);
+  const entries = ['## 2026-01-01 [saved]\nGoal: x'];
+  const a = 'dedupe-a-' + Math.random().toString(36).slice(2);
+  const b = 'dedupe-b-' + Math.random().toString(36).slice(2);
+  dedupeRecall(dir, a, entries, []);
+  const outB = dedupeRecall(dir, b, entries, []);
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.strictEqual(outB.sessionLog.length, 1, 'a new session starts with a clean ledger');
+});
+
+test('Corrupt ledger falls back to seeding instead of throwing', () => {
+  const dir = makeMemoryProject(null, null);
+  const sid = 'dedupe-corrupt-' + Math.random().toString(36).slice(2);
+  const { recallLedgerPath } = require('../../hooks/skill-activator');
+  const p = recallLedgerPath(sid);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, '{not json');
+  const out = dedupeRecall(dir, sid, ['## 2026-01-01 [saved]\nGoal: x'], []);
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.strictEqual(out.sessionLog.length, 1, 'corrupt ledger must not suppress recall');
+});
+
+test('evaluatePayload does not repeat recall within one session', () => {
+  // The matching entry must be older than the last two, otherwise the seed
+  // correctly suppresses it — SessionStart already injected it.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dedupe-int-'));
+  fs.writeFileSync(path.join(dir, 'session-log.md'), [
+    '## 2026-04-01 09:00 [saved]',
+    'Goal: condition-based waiting for flaky hooks',
+    '',
+    '## 2026-04-02 09:00 [saved]',
+    'Goal: unrelated release chore',
+    '',
+    '## 2026-04-03 09:00 [saved]',
+    'Goal: another unrelated chore',
+    '',
+  ].join('\n'));
+  const sid = 'dedupe-int-' + Math.random().toString(36).slice(2);
+  const payload = {
+    prompt: 'help me understand the condition-based waiting approach for hooks',
+    cwd: dir,
+    session_id: sid,
+  };
+  const first = evaluatePayload(payload).hookSpecificOutput?.additionalContext || '';
+  const second = evaluatePayload(payload).hookSpecificOutput?.additionalContext || '';
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.ok(first.includes('session-memory-recall'), 'first turn injects the entry');
+  assert.ok(!second.includes('session-memory-recall'), 'second turn must not repeat it');
 });
 
 // ── Result ────────────────────────────────────────────────────────────────────

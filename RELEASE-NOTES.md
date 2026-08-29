@@ -1,5 +1,39 @@
 # Superpowers Optimized Release Notes
 
+## v6.7.0 (2026-08-29)
+
+Memory stack overhaul: recall that ranks by relevance instead of recency, impact data you can trust, and a health report to check both.
+
+### New Features
+
+**`tools/memory-health.js`** — a read-only report on your project's memory files. It shows how many tokens each artifact injects per session, how many paths `project-map.md` documents that no longer exist, how many documented files have changed since the map was written, and an approximate capture rate comparing significant sessions against saved decisions. Run `node tools/memory-health.js` whenever the memory files stop feeling trustworthy.
+
+**Configurable context window** — the context pressure gate no longer assumes a 200K window. Set `SP_CONTEXT_WINDOW=1m` if you run a 1M-token model, or the gate blocks plan execution at 12% of your real capacity. `SP_CONTEXT_PRESSURE_THRESHOLD` adjusts the 60% trigger. Without configuration the gate still self-corrects from a `[1m]` model marker or from any turn that measurably exceeds 200K, but only after it has already misfired once — set the variable explicitly.
+
+### Changes
+
+**Memory recall now ranks by relevance, not recency.** Scoring is IDF-weighted with relevance and coverage gates, so a distinctive term outweighs a common one and an entry must actually cover what you asked about. The previous model let recency outrank relevance roughly 13-to-1 on normal-length prompts, which turned recall into "show the newest entries that share any word with the prompt." Measured on real prompts, an unrelated known-issue that previously surfaced on 5 of 5 turns now surfaces on none.
+
+**Each recalled entry is injected at most once per session.** A per-session ledger tracks what has already been shown, seeded with whatever the session-start hook injected on turn one. One measured session was re-injecting the same entries 11 times.
+
+**The decision-log reminder now works outside plugin-style repos.** It previously matched only `SKILL.md`, hook, and manifest paths, so a session that redesigned `src/auth/session.ts` in an ordinary app never triggered it. It now also fires when a design or diagnostic skill ran alongside 2+ source-file changes, or when 4+ distinct source files changed. The broad volume rule nudges once per session rather than at every turn.
+
+**Blast radius edges are path-resolved.** A file is listed as referencing a changed file only when the reference resolves to that file's actual path. Word-level matches are gone: they had produced 21 fabricated dependents for a single `SKILL.md` and 16 for `plugin.json`, and `requesting-code-review` feeds this list straight into review scope. The list is now deliberately incomplete — an empty list means "nothing proven," never "no dependents."
+
+**Project map staleness names the files that changed.** Instead of a blanket "the map is stale" flag pointing at an unbounded diff, the session-start hook intersects the diff with the paths the map documents and lists them, so updating the map is a short work list. When the hash moved but nothing you documented changed, it now says so instead of raising a false alarm.
+
+**`executing-plans` checkpoints `state.md` after each task.** This is the cross-session execution path, so it is the one most likely to be interrupted — yet it was the only one without a checkpoint. It now records the next task, what verification proved, and facts discovered during execution, and reads `state.md` first when resuming.
+
+**Skill invocation stats are per-session.** They were kept in one shared file with a two-hour expiry, so working across two projects in the same window attributed one project's skill usage to the other.
+
+### Fixes
+
+**Superseded decisions are no longer injected at session start.** Entries marked `[superseded by ...]` were skipped by keyword recall but injected unconditionally by the session-start hook, so an explicitly overturned decision could arrive as current context. All three paths now agree.
+
+**Documentation corrected to match behavior.** The architecture docs described an automatic `[auto]` session-log writer that was retired in April — nothing writes `session-log.md` except the `context-management` skill. The `context-management` skill also instructed deriving Hot Files from `Files:` lines that no longer exist; it now uses git history. `error-recovery` said to delete fixed known-issues entries, while both injection paths are built around strikethrough — deleting them threw away the diagnosis. `token-efficiency` advised compacting at 50% while the gate fires at 60%. The project map's 150-line target and 200-line hard limit are now documented as distinct, with the consequence of crossing each.
+
+**Test suite coverage.** The `context-engine` and `subagent-guard` unit suites existed but were never wired into the runner. The suite now runs 263 tests across 8 suites, up from 158 across 6.
+
 ## v6.6.1 (2026-05-08)
 
 Context pressure gate, Tailwind v4 reference, plan-level security flag, stub scan, and cleaner docs paths.
@@ -8,7 +42,7 @@ Context pressure gate, Tailwind v4 reference, plan-level security flag, stub sca
 
 **Context pressure gate** — The skill-activator hook (and its Codex adapter) now reads the live session JSONL to estimate context window usage, and hard-blocks plan-execution prompts when the last assistant turn exceeded 60% of the 200K window. When triggered, the hook replaces all skill hints with a compact-first instruction telling the model to save state.md via context-management, run /compact, and resume from state.md. This prevents Auto Compact from firing mid-implementation and destroying file paths, variable names, and discovered facts at the worst possible moment. Pressure is computed from `input + cache_creation + cache_read` of the last assistant turn — that is the actual current context size, not a cumulative sum across turns.
 
-**Tailwind v4 reference (`skills/frontend-design/tailwind-v4.md`)** — A dedicated companion file with v4 install commands, `@theme` config syntax, renamed class scales, and new features. Frontend-design's training data is biased toward v3, which leads to broken setups when scaffolding for current Tailwind. The skill now routes to this file before any Tailwind work on greenfield or version-unknown projects.
+**Tailwind v4 reference (`skills/frontend-design/tailwind-v4.md`)** — A dedicated companion file with v4 install commands, `@theme` config syntax, renamed class scales, and new features. Frontend-design's training data is biased toward v3, which leads to broken setups when scaffolding for current Tailwind and it leads to not getting the latest and greatest for your UI designs. The skill now routes to this file before any Tailwind work on greenfield or version-unknown projects.
 
 ### Changes
 

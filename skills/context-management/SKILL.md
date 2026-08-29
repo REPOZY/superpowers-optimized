@@ -134,11 +134,13 @@ The log contains a single entry type:
 
 - **[saved]** — written by this skill when explicitly invoked: full decision record including goals, rationale, rejected approaches, and key facts.
 
+Nothing else writes to this file. The Stop hook reads it and reminds you to save, but it never appends. If a session's decisions are not saved through this skill, they are lost when the session ends.
+
 **File management:**
 - Lives at the project root alongside `CLAUDE.md` and `package.json`
 - Keep under 200 entries — prune entries older than 6 months when it exceeds this
 - When a decision is permanently superseded (e.g., the approach was replaced), mark it rather than deleting: append `[superseded by YYYY-MM-DD]`
-- Do NOT log trivial sessions (the stop hook already filters these out)
+- Do NOT log trivial sessions — a session with no decision worth carrying forward should leave no entry
 
 **For cross-project recall** (finding how a similar problem was solved in a different codebase): `session-log.md` is per-project and keyword-searchable only. Cross-project recall is outside the scope of this system.
 
@@ -169,7 +171,11 @@ The log contains a single entry type:
 
 4. **Capture critical constraints:** The highest-value section. These are non-obvious facts that are not visible in the code itself — quoting rules, platform differences, version sync requirements, things that caused bugs before. Pull these from `session-log.md` `[saved]` entries and from `known-issues.md` if they exist.
 
-5. **Identify hot files:** From `session-log.md` history, list the files most frequently appearing in `Files:` lines. These are the ones most likely to need freshness checks on future sessions.
+5. **Identify hot files:** The files that change most often — the ones most likely to need a freshness check on future sessions.
+   ```bash
+   git log --name-only --pretty=format: --since=6.months | grep -v '^$' | sort | uniq -c | sort -rn | head -15
+   ```
+   Without git, fall back to the files most often named in `session-log.md` decisions. Do not look for `Files:` lines — that field belonged to `[auto]` entries, which were retired on 2026-04-04.
 
 6. **Write `project-map.md` at the project root** — same level as `CLAUDE.md` and `package.json`, never in `docs/` or any subdirectory. The session-start hook looks for it with `ls project-map.md 2>/dev/null` from the project root — if it's anywhere else, the hook cannot find it and every future session loses the map. Use this format:
 
@@ -201,7 +207,7 @@ When the staleness check in the entry sequence flags changed files:
 3. Update the git hash / timestamp in the header.
 4. If any new critical constraints were discovered this session, add them.
 
-Keep `project-map.md` under 150 lines. If it grows beyond that, it is not a map — it is documentation. Prune file entries for things that are now obvious from context.
+**Size: 150 lines is the authoring target, 200 is the hard limit.** Under 150, the map is doing its job. Between 150 and 200 it is still injected in full, but it has stopped being a map and become documentation — prune file entries whose purpose is now obvious. At 200+ the session-start hook stops injecting the full file and falls back to Critical Constraints and Hot Files only, so anything you wrote in Key Files silently stops reaching future sessions. Never let it cross 200.
 
 ## Guardrails
 

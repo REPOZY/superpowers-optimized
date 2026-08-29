@@ -278,11 +278,52 @@ ${project_map_raw}"
         project_map_content="\n\n<project-map>\n${project_map_raw}\n</project-map>"
     fi
 
-    # Staleness check — compare map header hash to current git HEAD
+    # Staleness check — report WHICH documented files changed, not just that the
+    # hash moved. A bare "the map is stale" flag pointed at an unbounded
+    # `git diff <map_hash> HEAD` (56 files across 6 commits in this repo), which
+    # is more work than re-reading the map, so it was reliably ignored and the
+    # map silently rotted. Intersecting the diff with the paths the map actually
+    # documents turns it into a short, actionable work list.
     map_hash=$(grep -oE 'Git: [a-f0-9]+' "project-map.md" 2>/dev/null | head -1 | awk '{print $2}' || echo "")
     current_hash=$(git rev-parse --short HEAD 2>/dev/null || echo "")
     if [ -n "$map_hash" ] && [ -n "$current_hash" ] && [ "$map_hash" != "$current_hash" ]; then
-        project_map_content="${project_map_content}\n\n<project-map-stale>project-map.md is stale — map records Git: ${map_hash} but current HEAD is ${current_hash}. Run the staleness update (using-superpowers entry sequence step 6) before making any recommendations about project structure or file locations.</project-map-stale>"
+        changed_since_map=$(git diff --name-only "${map_hash}..HEAD" 2>/dev/null || echo "")
+        stale_entries=$(CHANGED="$changed_since_map" node -e "
+            try {
+                const fs = require('fs');
+                const map = fs.readFileSync('project-map.md', 'utf8');
+                const changed = new Set((process.env.CHANGED || '').split('\n').filter(Boolean));
+                if (changed.size === 0) { process.stdout.write('UNKNOWN'); process.exit(0); }
+                // Paths the map documents: any token containing a slash.
+                const documented = new Set();
+                for (const m of map.matchAll(/[A-Za-z0-9_@.\-]+(?:\/[A-Za-z0-9_@.\-]+)+/g)) {
+                    documented.add(m[0].replace(/[.,;:)]+$/, ''));
+                }
+                const hits = [...changed].filter(f => {
+                    if (documented.has(f)) return true;
+                    // A documented directory prefix counts too (e.g. 'hooks/').
+                    for (const d of documented) {
+                        if (d.endsWith('/') && f.startsWith(d)) return true;
+                    }
+                    return false;
+                });
+                const MAX = 10;
+                if (hits.length === 0) { process.stdout.write('NONE'); process.exit(0); }
+                let out = hits.slice(0, MAX).join(', ');
+                if (hits.length > MAX) out += ' (+' + (hits.length - MAX) + ' more)';
+                process.stdout.write(String(hits.length) + '|' + out);
+            } catch (e) { process.stdout.write('UNKNOWN'); }
+        " 2>/dev/null || echo "UNKNOWN")
+
+        if [ "$stale_entries" = "NONE" ]; then
+            project_map_content="${project_map_content}\n\n<project-map-stale>project-map.md records Git: ${map_hash} and HEAD is now ${current_hash}, but none of the files it documents changed. Its Key Files and Critical Constraints are still accurate — treat the map as usable and just refresh the header hash next time you touch it.</project-map-stale>"
+        elif [ "$stale_entries" = "UNKNOWN" ]; then
+            project_map_content="${project_map_content}\n\n<project-map-stale>project-map.md records Git: ${map_hash} but current HEAD is ${current_hash}, and the diff between them could not be computed (the recorded commit may no longer exist). Verify any structural claim from the map against the filesystem before relying on it.</project-map-stale>"
+        else
+            stale_count="${stale_entries%%|*}"
+            stale_list="${stale_entries#*|}"
+            project_map_content="${project_map_content}\n\n<project-map-stale>project-map.md is stale in ${stale_count} place(s). These documented files changed since the map was written (Git: ${map_hash} → ${current_hash}):\n${stale_list}\n\nRe-read ONLY those files and update their Key Files entries plus the header hash. Everything else in the map is still accurate — do not regenerate it.</project-map-stale>"
+        fi
     fi
 fi
 
@@ -292,10 +333,18 @@ fi
 # [auto] entries (just file lists) are skipped — only [saved] entries carry rationale.
 session_log_content=""
 if [ -f "session-log.md" ]; then
+    # [superseded ...] entries are overturned decisions. skill-activator already
+    # skips them during keyword recall; this path used to inject them anyway, so
+    # a decision that was explicitly reversed could still arrive as context at
+    # every session start. Both paths must agree.
     saved_raw=$(awk '
-        /^## .* \[saved\]/ { if (found && block != "") saved_entries[++n] = block; found=1; block="" }
+        /^## / {
+            if (found && block != "") { saved_entries[++n] = block }
+            found = (/\[saved\]/ && !/\[superseded/) ? 1 : 0
+            block = found ? $0 : ""
+            next
+        }
         found { block = block "\n" $0 }
-        /^## / && !/\[saved\]/ && found && block != "" { saved_entries[++n] = block; found=0; block="" }
         END { if (found && block != "") saved_entries[++n] = block
               # Print last 2 saved entries
               start = (n > 2) ? n-1 : 1

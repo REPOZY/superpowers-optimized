@@ -42,9 +42,10 @@ digraph executing_plans {
 
 ### Step 1: Load and Review Plan
 1. Read the plan completely.
-2. Review critically — identify any questions or concerns.
-3. If concerns: raise them with the user before starting.
-4. If no concerns: create task tracking and proceed.
+2. If `state.md` exists and names this plan, read it first — it records which task is next and what earlier sessions already proved. Resume from there instead of restarting at task 1.
+3. Review critically — identify any questions or concerns.
+4. If concerns: raise them with the user before starting.
+5. If no concerns: create task tracking and proceed.
 
 ### Step 2: Set Up Workspace
 If working on main/master branch AND the plan involves code changes:
@@ -57,8 +58,18 @@ If already on a feature branch, or the plan is documentation/config only:
 For each task:
 1. Follow each step exactly (plan has bite-sized steps with checkboxes).
 2. Run verifications as specified.
-3. Mark task complete.
+3. Mark task complete: tick the checkbox in plan.md (`- [ ]` → `- [x]`), then update `state.md`.
 4. For tasks involving UI/UX or frontend implementation, apply guidance from `frontend-design`.
+
+**The `state.md` checkpoint is not optional.** This skill exists for execution that spans sessions, so it is the path most likely to be interrupted by a context compaction or a closed terminal. After each completed task, `state.md` must say:
+
+- which plan file is being executed and which task number is next
+- what the last verification proved (the command and its result, not "tests pass")
+- any fact discovered during execution that the plan does not spell out — exact paths, config keys, function names, non-obvious constraints
+
+Keep it to the diff: update the current task pointer and append newly discovered facts. Do not restate the plan; `plan.md` owns the task list.
+
+Without this, a compaction mid-plan loses the discovered facts and the next session restarts the task from a blank slate — re-deriving what was already proven, or silently redoing completed work.
 
 **Note:** Superpowers works significantly better with subagent support. If subagents are available, use `subagent-driven-development` instead — the quality of work will be higher with fresh-context-per-task and two-stage review gates.
 
@@ -97,5 +108,6 @@ Do not carry long historical summaries. Never forward full session history to su
 ## Completion
 
 After all tasks pass verification:
-1. Announce `finishing-a-development-branch`.
-2. Invoke `finishing-a-development-branch`.
+1. Update `state.md` to record that the plan is complete, so the next session does not try to resume it.
+2. Announce `finishing-a-development-branch`.
+3. Invoke `finishing-a-development-branch`.

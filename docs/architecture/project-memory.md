@@ -16,9 +16,14 @@ Superpowers Optimized solves this with three plain markdown files placed at the 
 
 | File | Created by | Purpose |
 |---|---|---|
-| `session-log.md` | Stop hook (automatic) + `context-management` skill | Episodic history of what happened across all sessions |
+| `session-log.md` | `context-management` skill (explicit invocation) | Episodic history of decisions across sessions |
 | `project-map.md` | `context-management` skill (on demand) | Semantic map of the project structure and critical constraints |
 | `state.md` | `context-management` skill (on demand) | Task continuity when work spans multiple sessions |
+
+**Nothing writes memory automatically.** Hooks read these files, inject them, and
+remind you to update them — but every write goes through the `context-management`
+skill. That is a deliberate trade-off: automatic capture was tried and removed
+(see [Why there are no `[auto]` entries](#why-there-are-no-auto-entries)).
 
 ---
 
@@ -30,31 +35,86 @@ A chronological log of every meaningful session, built up automatically over tim
 
 ### How it's written
 
-The `stop-reminders` hook fires at the end of every session and appends a minimal `[auto]` entry if the session had real activity (skills invoked or files edited). Empty or trivial sessions are skipped. No user action required.
-
-```markdown
-## 2026-03-18 14:32 [auto]
-Skills: systematic-debugging (2x), test-driven-development
-Files: hooks/session-start, hooks/stop-reminders.js, tests/opencode/setup.sh
-```
-
-When you explicitly invoke the `context-management` skill mid-task, it writes a richer `[saved]` entry containing the goal, decisions made, approaches rejected, and open questions — structured for future recall.
+Entries are written by the `context-management` skill, and only by it. Invoking
+the skill writes a `[saved]` entry containing the goal, decisions made, approaches
+rejected, and open questions — structured for future recall.
 
 ```markdown
 ## 2026-03-18 16:45 [saved]
 Goal: Fix emoji rendering in session-start hook
 Decisions:
 - Use literal 🔄 character; bash does not expand \U escapes in double-quoted strings
-Approaches rejected: $'\U0001F504' syntax works but reduces readability
-Key facts: escape_for_json doubles backslashes, so \U → \\U in JSON output
+Rejected: $'\U0001F504' syntax works but reduces readability
 Open: Verify emoji renders correctly in Claude's context injection
 ```
 
+The `stop-reminders` hook does **not** write to the log. Its role is to notice
+that a session made decisions worth preserving and to say so before the session
+ends — see [What triggers the reminder](#what-triggers-the-decision-log-reminder).
+
+### Why there are no `[auto]` entries
+
+An earlier version had the Stop hook append a minimal `[auto]` entry (skills
+invoked, files touched) at the end of every active session. That was removed on
+2026-04-04: the information was already available from git and
+`context-snapshot.json`, and the entries diluted keyword search — a grep for a
+design decision returned file lists instead. `session-log.md` is `[saved]`-only.
+
+The cost of that decision is that memory capture depends on the reminder firing
+and on the skill actually being invoked. If a session's decisions are never
+saved, they are gone.
+
+### What triggers the decision-log reminder
+
+Because capture is manual, the Stop hook's judgement about *when to ask* is what
+determines whether a project accumulates memory at all. `stop-reminders.js` looks
+at the files edited since the last `[saved]` entry — not the last 30 minutes — so
+a long session keeps being reminded until each work phase is documented.
+
+A session is significant when **any** rule matches:
+
+| Rule | Trigger | Repeats? |
+|---|---|---|
+| **Workflow/config** | `SKILL.md`, `hooks/*.js`, `CLAUDE.md`, `AGENTS.md`, `agents/*.md`, `specs/*.md`, `plans/*.md`, `plugin.universal.yaml` changed | Yes — until saved |
+| **Design** | a design or diagnostic skill ran (`brainstorming`, `writing-plans`, `deliberation`, `premise-check`, `systematic-debugging`, `refactoring`, `performance-investigation`, `dependency-management`) **and** 2+ distinct source files changed | Yes — until saved |
+| **Volume** | 4+ distinct source files changed | No — once per session |
+
+Rule 1 alone was the original implementation, and it silently did nothing outside agent-tooling repos: a session that redesigned `src/auth/session.ts` in a React app matched none of those patterns, so the only prompt to preserve the "why" never appeared.
+
+Rule 2 uses direct evidence that decisions were made, so it triggers at a lower file count. It reads per-session skill counts from `~/.claude/hooks-logs/session-stats-<id>.json`; another session's skill usage can never trigger yours.
+
+Rule 3 is a heuristic, so it nudges **once per session**. Without that cap, an ordinary feature session touching four files would re-fire the reminder at every turn until an entry was written — which trains you to ignore it.
+
+Repeated edits to one file never count — the rules measure breadth, not iteration — and documentation- or config-only sessions do not trigger the volume rule.
+
+---
+
+## Checking the health of all of this
+
+```bash
+node tools/memory-health.js [project-dir]
+```
+
+Read-only. Reports entry counts and injection cost per artifact, how many paths `project-map.md` documents that no longer exist, how many documented files changed since the map's recorded commit, and an approximate capture rate (significant sessions seen in the edit log versus `[saved]` entries written). Run it after a release, or whenever the memory files feel untrustworthy.
+
 ### How it helps
 
-The `session-start` hook automatically injects the **last two `[saved]` entries** into every session before your first message arrives. This means recent decisions are always available without any instruction-following required.
+The `session-start` hook automatically injects the **last two live `[saved]` entries** into every session before your first message arrives. Entries marked `[superseded by ...]` are skipped — an overturned decision is worse than no decision, because it reads as current.
 
-For older history — decisions from earlier in a project's lifetime — Claude can `Grep session-log.md` for keywords relevant to the current task. The log is keyword-searchable, per-project, and stays under 200 entries (entries older than 6 months are pruned when the limit is reached).
+For older history, the `skill-activator` hook searches the log on every prompt and injects the entries that match. Claude can also `Grep session-log.md` directly. The log is keyword-searchable, per-project, and stays under 200 entries (entries older than 6 months are pruned when the limit is reached).
+
+### How recall picks entries
+
+Matching is IDF-weighted, not keyword-density based. Each keyword is weighted by how rare it is across the log, so a term appearing in every entry contributes almost nothing while a distinctive term dominates. Only the 12 rarest terms in a prompt vote. An entry must clear two gates to be injected:
+
+- **relevance** — at least 30% of the corpus's discriminating weight
+- **coverage** — at least 25% of the keywords the prompt actually used
+
+Recency is a tiebreak worth 10%, never a substitute for relevance.
+
+The earlier model scored `0.7 × (hits / total_keywords) + 0.3 × recency`. On a 38-keyword prompt a genuinely relevant entry earned 0.023 from density while the newest entry earned 0.300 from recency alone — recency outweighed relevance about 13×, so recall degenerated into "show the most recent entries that share any word with the prompt." Measured on one real session, that produced 11 redundant re-injections and surfaced an unrelated Codex issue on 5 of 5 prompts.
+
+Each entry is also injected **at most once per session**. A per-session ledger under `~/.claude/hooks-logs/` records what has already been shown, seeded with whatever `session-start` injected at turn one.
 
 This prevents:
 - Rediscovering the same bug twice
@@ -79,7 +139,9 @@ Invoke the `context-management` skill and ask Claude to "map this project" or "g
 2. Glob the project structure and identify directory purposes
 3. Document 10–20 key files that are non-obvious or frequently referenced
 4. Capture critical constraints — the non-obvious facts that are invisible in the code itself
-5. Identify hot files from `session-log.md` history (most frequently modified)
+5. Identify hot files from git history (`git log --name-only`) — the files that
+   change most often. Without git, fall back to the files most often named in
+   `session-log.md` decisions.
 
 The output is a structured markdown file capped at 150 lines. If it grows larger, it's not a map — it's documentation. Entries for files whose purpose is now obvious are pruned.
 
@@ -140,15 +202,19 @@ Session starts (session-start hook fires automatically)
     ├── Inject project-map.md (full content if ≤200 lines, else Critical Constraints + Hot Files)
     ├── Inject state.md in full (if exists — means work is in progress)
     ├── Inject last 2 [saved] entries from session-log.md (if exists)
-    ├── Inject known-issues.md in full (if exists)
+    ├── Inject up to 5 most recent OPEN entries from known-issues.md (if exists)
     └── Inject context-snapshot.json summary (changed files + recent commits)
             │
             ▼
         Work happens
             │
-            ├── For older session history: Grep session-log.md for task keywords
-            ├── [auto] Stop hook appends minimal entry to session-log.md
-            └── [manual] context-management writes rich [saved] entry + updates state.md
+            ├── Every prompt: skill-activator injects keyword-matched entries
+            │   from session-log.md + known-issues.md (once per session each)
+            ├── For older history: Grep session-log.md for task keywords
+            └── Session end: Stop hook checks whether the session was significant
+                and reminds you to invoke context-management
+                    │
+                    └── context-management writes the [saved] entry + state.md
 
 Over time:
     project-map.md ──► fast orientation for any future session
@@ -163,11 +229,11 @@ Over time:
 
 **File-based, not database-based.** Everything is plain markdown in the project root. The files are readable by humans, editable with any text editor, searchable with grep, and committable to git. No external services, no embeddings API, no local SQLite — just files.
 
-**Additive, never destructive.** The stop hook only appends to `session-log.md`. It never modifies or deletes existing entries. You can inspect, edit, prune, or delete any of these files at any time without breaking anything.
+**Additive, never destructive.** Writes to `session-log.md` only ever append. Superseded decisions are marked, never deleted. You can inspect, edit, prune, or delete any of these files at any time without breaking anything.
 
-**Zero setup for new projects.** `session-log.md` starts building automatically from the first session that does real work. `project-map.md` is generated on demand, not required for the plugin to function.
+**No setup required, but memory is opt-in per session.** None of these files need to exist for the plugin to work, and none are created behind your back. `session-log.md` gets its first entry the first time `context-management` is invoked; the Stop hook's job is to make sure you are asked when it matters. `project-map.md` is generated on demand.
 
-**Works on existing projects.** Installing the plugin on a large existing codebase works exactly the same way — the memory files start accumulating from the first session forward. `project-map.md` can be generated at any time to map the existing structure.
+**Works on existing projects.** Installing the plugin on a large existing codebase works exactly the same way — memory accumulates from the first saved session forward. `project-map.md` can be generated at any time to map the existing structure.
 
 **Token-efficient by design.** The session-start hook injects only the last two `[saved]` entries from session-log.md — not the full file. For older history, Claude greps rather than reads. The project map is capped at 150 lines. State is capped at 100 lines. known-issues.md is injected in full but stays short by design (one entry per error signature).
 

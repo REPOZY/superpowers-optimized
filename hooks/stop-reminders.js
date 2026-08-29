@@ -197,14 +197,48 @@ function getEditsAfter(timestamp, sessionId) {
 
 /**
  * Load session statistics for progress visibility.
+ * Prefers the per-session file; falls back to the legacy shared file only when
+ * no session id is available (the shared file mixes concurrent sessions).
  */
-function getSessionStats() {
+function getSessionStats(sessionId) {
   try {
+    if (sessionId) {
+      const safe = String(sessionId).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
+      const perSession = path.join(LOG_DIR, `session-stats-${safe}.json`);
+      if (fs.existsSync(perSession)) {
+        return JSON.parse(fs.readFileSync(perSession, 'utf8'));
+      }
+      return null;
+    }
     if (!fs.existsSync(STATS_FILE)) return null;
     return JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
   } catch {
     return null;
   }
+}
+
+/**
+ * Skills whose invocation means the session made design or diagnostic decisions
+ * worth recording. Their presence lowers the source-file bar, because the
+ * decisions — not the file count — are what future sessions need.
+ */
+const DESIGN_SKILLS = new Set([
+  'brainstorming',
+  'writing-plans',
+  'deliberation',
+  'premise-check',
+  'systematic-debugging',
+  'refactoring',
+  'performance-investigation',
+  'dependency-management',
+]);
+
+function getDesignSkillsUsed(sessionId) {
+  const stats = getSessionStats(sessionId);
+  if (!stats || !stats.skillInvocations) return [];
+  return Object.keys(stats.skillInvocations)
+    .map(name => name.replace(/^superpowers-optimized:/, ''))
+    .filter(name => DESIGN_SKILLS.has(name));
 }
 
 /**
@@ -241,11 +275,11 @@ function getUncommittedCount(cwd) {
   }
 }
 
-function generateReminders(edits, cwd) {
+function generateReminders(edits, cwd, sessionId) {
   const reminders = [];
 
   // Session stats summary (always include if available)
-  const stats = getSessionStats();
+  const stats = getSessionStats(sessionId);
   const statsSummary = formatStatsSummary(stats);
   if (statsSummary) {
     reminders.push(statsSummary);
@@ -283,23 +317,108 @@ function generateReminders(edits, cwd) {
 
 
 /**
- * Detect sessions where significant architectural decisions were made.
- * These are sessions that modified skill files, hooks, or plugin config —
- * places where the "why" matters and would be costly to rediscover.
+ * Files whose "why" is expensive to rediscover: agent configuration, workflow
+ * definitions, and design documents. Strong signals — but shaped like an
+ * agent-tooling repo, so they never match in an ordinary application project.
+ * The volume rule below is what makes this work outside this repo.
  */
-function isSignificantSession(edits) {
-  const sigPatterns = [
-    /SKILL\.md$/i,
-    /[/\\]hooks[/\\][^/\\]+\.js$/,
-    /[/\\]hooks[/\\]session-start$/,
-    /skill-rules\.json$/,
-    /CLAUDE\.md$/i,
-    /agents[/\\][^/\\]+\.md$/i,
-    /[/\\]specs[/\\][^/\\]+\.md$/i,
-    /[/\\]plans[/\\][^/\\]+\.md$/i,
-    /plugin\.universal\.yaml$/,
-  ];
-  return edits.some(e => sigPatterns.some(p => p.test(e.filePath)));
+const SIGNIFICANT_FILE_PATTERNS = [
+  /SKILL\.md$/i,
+  /[/\\]hooks[/\\][^/\\]+\.js$/,
+  /[/\\]hooks[/\\]session-start$/,
+  /skill-rules\.json$/,
+  /CLAUDE\.md$/i,
+  /AGENTS\.md$/i,
+  /agents[/\\][^/\\]+\.md$/i,
+  /[/\\]specs[/\\][^/\\]+\.md$/i,
+  /[/\\]plans[/\\][^/\\]+\.md$/i,
+  /plugin\.universal\.yaml$/,
+];
+
+/**
+ * Project-agnostic thresholds. Touching this many distinct source files in one
+ * work phase is a design session whatever the project's layout is. The bar drops
+ * when a design or diagnostic skill ran, because then we have direct evidence
+ * that decisions were made rather than inferring it from breadth alone.
+ */
+const SIGNIFICANT_SOURCE_FILE_COUNT = 4;
+const SIGNIFICANT_SOURCE_FILE_COUNT_WITH_DESIGN = 2;
+
+/**
+ * Classify a session's significance for the decision-log reminder.
+ * Returns null when nothing worth recording happened, otherwise a descriptor:
+ *   - `detail` is spliced into the reminder so it names the real trigger
+ *   - `repeatable` marks precise signals that should keep nagging until saved;
+ *     the volume heuristic is imprecise, so it nudges once per session only
+ */
+function getSessionSignificance(edits, designSkillsUsed) {
+  const paths = [...new Set((edits || []).map(e => e && e.filePath).filter(Boolean))];
+  const design = designSkillsUsed || [];
+
+  const sigFiles = paths.filter(p => SIGNIFICANT_FILE_PATTERNS.some(rx => rx.test(p)));
+  if (sigFiles.length > 0) {
+    const names = sigFiles.slice(0, 3).map(p => path.basename(p));
+    const more = sigFiles.length > 3 ? ` +${sigFiles.length - 3} more` : '';
+    return {
+      kind: 'config',
+      repeatable: true,
+      detail: `core workflow/config files (${names.join(', ')}${more})`,
+    };
+  }
+
+  const sourceFiles = paths.filter(isSourceFile);
+
+  if (design.length > 0 && sourceFiles.length >= SIGNIFICANT_SOURCE_FILE_COUNT_WITH_DESIGN) {
+    return {
+      kind: 'design',
+      repeatable: true,
+      detail: `${sourceFiles.length} source files while running ${design.join(', ')}`,
+    };
+  }
+
+  if (sourceFiles.length >= SIGNIFICANT_SOURCE_FILE_COUNT) {
+    return {
+      kind: 'volume',
+      repeatable: false,
+      detail: `${sourceFiles.length} source files`,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Detect sessions where significant decisions were made.
+ */
+function isSignificantSession(edits, designSkillsUsed) {
+  return getSessionSignificance(edits, designSkillsUsed) !== null;
+}
+
+/**
+ * One-shot marker for the imprecise volume nudge. Without this, a long feature
+ * session touching 4+ source files would re-fire the decision-log reminder at
+ * every stop until a [saved] entry existed — turning a useful nudge into nagging.
+ */
+function volumeNudgePath(sessionId) {
+  const safe = String(sessionId || 'nosession').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
+  return path.join(LOG_DIR, `volume-nudge-${safe}.flag`);
+}
+
+function volumeNudgeAlreadySent(sessionId) {
+  try {
+    return fs.existsSync(volumeNudgePath(sessionId));
+  } catch {
+    return false;
+  }
+}
+
+function markVolumeNudgeSent(sessionId) {
+  try {
+    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.writeFileSync(volumeNudgePath(sessionId), new Date().toISOString());
+  } catch {
+    // Never block the Stop hook on marker writes
+  }
 }
 
 /**
@@ -400,19 +519,24 @@ function evaluatePayload(data) {
   // File-based guard prevents infinite loop for reminder injection
   if (!shouldFire()) return {};
 
-  const reminders = generateReminders(edits, cwd);
+  const reminders = generateReminders(edits, cwd, sessionId);
 
   // Decision-log reminder: significant files modified since the last [saved] entry.
   // Using "since last saved" (not "last 30 min") means long sessions with multiple
   // work phases keep getting reminded until each phase is explicitly documented.
   const lastSavedTime = getLastSavedEntryTime();
   const editsSinceLastSaved = getEditsAfter(lastSavedTime, sessionId);
-  if (isSignificantSession(editsSinceLastSaved)) {
+  const significance = getSessionSignificance(
+    editsSinceLastSaved,
+    getDesignSkillsUsed(sessionId)
+  );
+  if (significance && !(significance.repeatable === false && volumeNudgeAlreadySent(sessionId))) {
+    if (significance.repeatable === false) markVolumeNudgeSent(sessionId);
     reminders.push(
-      'Decision log: This session modified core skill/hook/config files. ' +
+      `Decision log: This session modified ${significance.detail}. ` +
       'Before stopping, invoke context-management via the Skill tool to write a [saved] entry ' +
       'capturing decisions, rationale, and rejected approaches. ' +
-      'Future sessions start with zero context — this is the only way to preserve the "why".'
+      'Nothing writes session-log.md automatically — if the "why" is not saved here, it is lost.'
     );
   }
 
@@ -458,11 +582,20 @@ if (require.main === module) {
     getEditsAfter,
     getLastSavedEntryTime,
     getRecentEdits,
+    getDesignSkillsUsed,
+    getSessionSignificance,
+    getSessionStats,
+    isSignificantSession,
     isSourceFile,
+    markVolumeNudgeSent,
+    volumeNudgeAlreadySent,
+    DESIGN_SKILLS,
+    SIGNIFICANT_SOURCE_FILE_COUNT_WITH_DESIGN,
     isTestFile,
     matchesSession,
     parseLogLine,
     setGuard,
     shouldFire,
+    SIGNIFICANT_SOURCE_FILE_COUNT,
   };
 }

@@ -42,6 +42,33 @@ const SIG_PATTERNS = [
 const isTestFile = f => TEST_PATTERNS.some(p => p.test(f));
 const isSourceFile = f => SOURCE_PATTERNS.some(p => p.test(f)) && !CONFIG_PATTERNS.some(p => p.test(f));
 const isSignificantFile = f => SIG_PATTERNS.some(p => p.test(f));
+
+// Project-agnostic decision-log threshold. SIG_PATTERNS only match agent-tooling
+// repos; without this rule the decision-log reminder never fires in an ordinary
+// application project. Mirrors SIGNIFICANT_SOURCE_FILE_COUNT in stop-reminders.js.
+const SIGNIFICANT_SOURCE_FILE_COUNT = 4;
+
+/**
+ * Classify a change set's significance. Returns null when there is nothing
+ * worth recording, otherwise a descriptor naming the actual trigger.
+ */
+function getChangeSignificance(changedFiles) {
+  const paths = [...new Set((changedFiles || []).filter(Boolean))];
+
+  const sigFiles = paths.filter(isSignificantFile);
+  if (sigFiles.length > 0) {
+    const names = sigFiles.slice(0, 3).map(f => path.basename(f));
+    const more = sigFiles.length > 3 ? ` +${sigFiles.length - 3} more` : '';
+    return { kind: 'config', detail: `core workflow/config files (${names.join(', ')}${more})` };
+  }
+
+  const sourceFiles = paths.filter(isSourceFile);
+  if (sourceFiles.length >= SIGNIFICANT_SOURCE_FILE_COUNT) {
+    return { kind: 'volume', detail: `${sourceFiles.length} source files` };
+  }
+
+  return null;
+}
 const REMINDER_CACHE_FILE = 'superpowers-stop-reminder-cache.json';
 const REMINDER_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -213,12 +240,13 @@ function generateReminders(cwd, changedFiles) {
     );
   }
 
-  const sigFiles = changedFiles.filter(isSignificantFile);
-  if (sigFiles.length > 0) {
+  const significance = getChangeSignificance(changedFiles);
+  if (significance) {
     reminders.push(
-      `Decision log: Core skill/hook/config files were modified (${sigFiles.map(f => path.basename(f)).join(', ')}). ` +
+      `Decision log: This session modified ${significance.detail}. ` +
       'Before stopping, invoke the context-management skill to write a [saved] entry ' +
-      'capturing decisions and rationale. Future sessions start with zero context.'
+      'capturing decisions and rationale. Nothing writes session-log.md automatically — ' +
+      'if the "why" is not saved there, it is lost.'
     );
   }
 
@@ -272,9 +300,11 @@ if (require.main === module) {
     buildReminderSignature,
     evaluatePayload,
     generateReminders,
+    getChangeSignificance,
     getUncommittedFiles,
     getSessionScopeKey,
     isSignificantFile,
+    SIGNIFICANT_SOURCE_FILE_COUNT,
     isSourceFile,
     isTestFile,
     main,

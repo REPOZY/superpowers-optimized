@@ -143,17 +143,15 @@ function assembleSessionLog(cwd) {
   const raw = readFileSafe(filePath);
   if (!raw) return '';
 
+  // [superseded ...] entries are overturned decisions and must never be
+  // injected — keyword recall already skips them, and the two paths must agree.
   const savedEntries = [];
   let current = null;
   for (const line of raw.split('\n')) {
-    if (/^## .* \[saved\]/.test(line)) {
+    if (/^## /.test(line)) {
       if (current !== null) savedEntries.push(current);
-      current = line;
-    } else if (/^## /.test(line) && !/\[saved\]/.test(line)) {
-      if (current !== null) {
-        savedEntries.push(current);
-        current = null;
-      }
+      const isLiveSaved = /\[saved\]/.test(line) && !/\[superseded/.test(line);
+      current = isLiveSaved ? line : null;
     } else if (current !== null) {
       current += '\n' + line;
     }

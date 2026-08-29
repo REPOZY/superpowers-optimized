@@ -266,7 +266,7 @@ hooks/skill-rules.json — 22 rules: skill name, keywords, intentPatterns, prior
 hooks/stop-reminders.js, hooks/skill-activator.js, skills/using-superpowers/SKILL.md
 ```
 
-**Staleness is automatic.** The AI checks the git hash (or file timestamps on non-git projects) at every session start and re-reads only files that actually changed since the map was made. No manual invalidation needed.
+**Staleness is automatic and bounded.** At every session start the hook compares the map's recorded commit to HEAD, intersects the diff with the paths the map actually documents, and names them: *"project-map.md is stale in 3 place(s): hooks/session-start, skills/using-superpowers/SKILL.md, ..."* — so refreshing the map is a short work list rather than an open-ended re-read. If the commit moved but nothing the map documents changed, it says that too, and the map stays trusted instead of being flagged for nothing.
 
 Works on any project — git or non-git. If no git is detected during map generation, the AI offers to run `git init` (creates a `.git` folder, touches none of your files). If you decline, it falls back to timestamp comparison instead.
 
@@ -290,6 +290,8 @@ Written automatically by the `context-engine` hook on every session start. No se
 
 Skills that need to know what changed — code review, systematic debugging — read this file first instead of running `git diff` and `git log` themselves. If the snapshot is fresh (git hash matches HEAD), the review scope is pre-verified before the agent starts. If it's stale or absent, skills fall back to git commands directly.
 
+`blast_radius` lists a file only when it contains a reference that **resolves** to the changed file's path — a relative import, or the repo path written out. References that can't be resolved (package-style imports, aliases, dynamic paths) are dropped rather than guessed, so the list is deliberately incomplete: an empty list means "nothing proven," not "no dependents." That trade is intentional. A half-right impact list is worse than none, because the agent learns to ignore it.
+
 Automatically added to `.gitignore` — it's a tooling artifact, not project code.
 
 ### session-log.md — What happened
@@ -311,7 +313,11 @@ Key facts: hooks.json requires \" not ' around ${CLAUDE_PLUGIN_ROOT} — single 
 Open: Monitor whether [saved] entries get used in practice; if not, consider folding key facts into project-map.md Critical Constraints instead
 ```
 
-Write an entry by invoking `context-management`. Only the most recent entries are injected at session start — older entries are lookup-only, surfaced via keyword grep when a task touches the same area. **Entry size directly affects your per-session token cost** — the stop-hook monitors this and warns when entries exceed budget. Keep entries under 115 words.
+Write an entry by invoking `context-management`. The two most recent live entries are injected at session start; entries marked `[superseded by ...]` are never injected, because an overturned decision reads as current and is worse than no decision at all.
+
+Older entries surface automatically as you work. On every prompt the activator ranks the log by IDF-weighted relevance — a distinctive term outweighs a common one — and injects only entries that clear both a relevance and a coverage gate, with recency acting as a tiebreak rather than the deciding factor. Each entry is injected **at most once per session**, so a long conversation never pays for the same history twice.
+
+**Entry size directly affects your per-session token cost** — the stop-hook monitors this and warns when entries exceed budget. Keep entries under 115 words.
 
 ### known-issues.md — Error memory
 
@@ -405,16 +411,47 @@ With this stack, sessions start with full context and zero re-discovery overhead
 ### Hooks (10 total)
 This is the full cross-platform hook inventory for the plugin. Claude Code gets the full set. Codex currently wires the smaller `SessionStart` / `UserPromptSubmit` / `PreToolUse(Bash)` / `PostToolUse(Bash)` / `Stop` subset through `hooks/codex/*`, subject to Codex platform limits.
 
-- **context-engine** (SessionStart) — Runs git commands on every session start and writes `context-snapshot.json`: changed files, blast radius (which other files reference each changed file, filtered to actual import/require references), recent commits, and change stats. Uses per-project watermarks (md5 of cwd) so multiple projects don't interfere, and cross-session diff base so "what changed" reflects changes since your last session, not just the last commit. Zero dependencies. Silent no-op on non-git projects
+- **context-engine** (SessionStart) — Runs git commands on every session start and writes `context-snapshot.json`: changed files, blast radius, recent commits, and change stats. Blast radius edges are **path-resolved**: a file is listed only when it contains a reference that actually resolves to the changed file's path (a relative import, or the repo path written out). References that cannot be resolved are dropped rather than guessed, so the list is deliberately incomplete — an empty list means "nothing proven", not "no dependents". Uses per-project watermarks (md5 of cwd) so multiple projects don't interfere, and a cross-session diff base so "what changed" reflects changes since your last session, not just the last commit. Zero dependencies. Silent no-op on non-git projects
 - **session-start** (SessionStart) — Injects using-superpowers routing into every session; injects `project-map.md` content directly if it exists (full content ≤200 lines, Critical Constraints + Hot Files only above that); checks for available plugin update
-- **skill-activator** (UserPromptSubmit) — Context pressure gate: reads session JSONL, blocks plan-execution triggers when context ≥60% of 200K window (fires compact-first instruction instead of skill hints). Also: micro-task detection + confidence-threshold skill matching + weighted memory recall from session-log.md and known-issues.md (70% keyword density + 30% recency scoring)
+- **skill-activator** (UserPromptSubmit) — Context pressure gate: reads session JSONL, blocks plan-execution triggers when context is ≥60% full (fires compact-first instruction instead of skill hints). The window defaults to 200K and is resolved per session — set `SP_CONTEXT_WINDOW=1m` if you run a 1M-token window, or the gate will block you at 12% utilization (see [Configuration](#configuration)). Also: micro-task detection + confidence-threshold skill matching + weighted memory recall from session-log.md and known-issues.md (70% keyword density + 30% recency scoring), with each recalled entry injected at most once per session
 - **track-edits** (PostToolUse: Edit/Write) — Logs file changes for TDD reminders; auto-adds AI workspace artifacts (`project-map.md`, `session-log.md`, `state.md`) to `.gitignore` on first write
-- **track-session-stats** (PostToolUse: Skill) — Tracks skill invocations for progress visibility
-- **stop-reminders** (Stop) — Surfaces TDD reminders, commit nudges, and session summary after each response turn
+- **track-session-stats** (PostToolUse: Skill) — Tracks skill invocations per session (`session-stats-<id>.json`) for progress visibility and to tell the decision-log reminder whether a design or diagnostic skill ran
+- **stop-reminders** (Stop) — Surfaces TDD reminders, commit nudges, and session summary after each response turn. Also fires the decision-log reminder when a session either touched workflow/config files (`SKILL.md`, hooks, `CLAUDE.md`, specs, plans) or reworked 4+ distinct source files — the second rule is what makes the reminder work in ordinary application projects, where none of the first patterns ever match
 - **block-dangerous-commands** (PreToolUse: Bash) — 30+ patterns blocking destructive commands with 3-tier severity
 - **protect-secrets** (PreToolUse: Read/Edit/Write/Bash) — 50+ file patterns protecting sensitive files + 14 content patterns detecting hardcoded secrets (API keys, tokens, PEM blocks, connection strings) in source code with actionable env var guidance
 - **bash-compress-hook** (PreToolUse: Bash) — smart-compress: automatically removes noise from Bash output before it enters context. Covers 17 command types across two tiers: near-lossless summaries for install/push/pull commands (e.g. `npm install` → `ok, added 150 packages, in 12s`), and smart filtering for commands like `git status` (hint lines removed) and passing test runs (individual lines collapsed to summary). Hard safety rules: diffs, file reads, piped commands, `--verbose`/`--debug` output, and any failed command always pass through raw — no information loss on errors. Every filtered output gets a `[compressed: X->Y lines | type]` marker so Claude always knows compression occurred and can re-run if it needs more detail. If Claude does re-run the same command within 60 seconds, the hook automatically passes through the full uncompressed output on that second run. ~76% token savings on mixed sessions. Disable per-project with a `.sp-no-compress` file or globally with `SP_NO_COMPRESS=1`. See `docs/architecture/smart-compress.md` for full details
 - **subagent-guard** (SubagentStop) — Detects and blocks subagent skill leakage (12 action verbs + Skill tool invocation patterns) with automatic recovery
+
+### Checking memory health
+
+```bash
+node tools/memory-health.js [project-dir]
+```
+
+Read-only report on the memory stack: how many tokens each artifact injects per session, how many paths `project-map.md` documents that no longer exist, how many documented files changed since the map's recorded commit, and an approximate capture rate (significant sessions in the edit log versus `[saved]` entries written). Run it after a release or whenever the memory files stop feeling trustworthy.
+
+### Configuration
+
+Everything works out of the box. These environment variables exist for cases where the defaults are wrong for your setup.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `SP_CONTEXT_WINDOW` | `200k` | Size of your model's context window. Accepts `1m`, `200k`, or a raw token count. **Set this to `1m` if you run a 1M-token window** — otherwise the context pressure gate treats 120K as "60% full" and blocks plan execution at 12% of your real capacity. |
+| `SP_CONTEXT_PRESSURE_THRESHOLD` | `0.60` | How full the window must be before plan execution is gated. Accepts `0.75` or `75`. |
+| `SP_NO_COMPRESS` | unset | Set to `1` to disable smart-compress globally. Per-project: add a `.sp-no-compress` file. |
+| `SUPERPOWERS_AUTO_UPDATE` | on | Set to `0` to stop the session-start update check. |
+
+Without `SP_CONTEXT_WINDOW`, the gate still self-corrects in two cases: a model id carrying the `[1m]` marker, or any turn whose measured context already exceeds 200K (which proves the window is larger). Both only help *after* the first misfire, so set the variable explicitly.
+
+In Claude Code, set these under `env` in `.claude/settings.json` (project) or `~/.claude/settings.json` (global):
+
+```json
+{
+  "env": {
+    "SP_CONTEXT_WINDOW": "1m"
+  }
+}
+```
 
 ### Agents
 - **code-reviewer** — Senior code review agent with social accountability framing (merge decision and downstream fixes depend on review accuracy) and ASI-guided fix prioritization (single most impactful finding surfaced first)
