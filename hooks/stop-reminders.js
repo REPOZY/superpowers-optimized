@@ -296,7 +296,9 @@ function generateReminders(edits, cwd, sessionId) {
   if (untestedSources.length > 0 && testFiles.length === 0) {
     reminders.push(
       `TDD reminder: ${untestedSources.length} source file(s) modified without test changes. ` +
-      `Consider running tests or invoking TDD workflow if behavior changed.`
+      `Consider running the tests covering those files, or invoking TDD workflow if behavior ` +
+      `changed. Scope the run to the change (see verification-before-completion) — not the ` +
+      `whole repo suite by reflex.`
     );
   }
 

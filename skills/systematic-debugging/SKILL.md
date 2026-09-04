@@ -91,7 +91,9 @@ Then for the selected hypothesis:
 ### Phase 4: Fix and Verify
 - Add a failing regression test that reproduces the bug **first**.
 - Apply **one** focused fix — never bundle multiple changes.
-- Re-run the full test suite and confirm the issue is resolved.
+- Re-run the tests that cover the fix and confirm the issue is resolved. Scope per
+  `verification-before-completion` — a root cause that spanned subsystems earns the full suite;
+  a one-module fix earns that module's suite.
 
 ## Rationalization Table — Do Not Skip Investigation
 
