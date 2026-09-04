@@ -64,7 +64,9 @@ For each move in the scope definition:
    - Inline a helper that adds indirection without value
    - Split a module into two
 
-2. **Run the full test suite.** All tests must pass. If the suite takes more than 2 minutes, run the subset covering the modules in scope — but always run the full suite in Phase 4.
+2. **Run the tests covering the modules in scope.** All must pass. Bias wider here than
+   `verification-before-completion` would for an equivalent edit — structural moves cross module
+   boundaries more often than they look like they do. The full suite still runs once in Phase 4.
 
 3. **If a test breaks:** The structural change altered behavior. Do not fix the test to match the new structure — that's adjusting the lock, not proving safety. Instead:
    - Revert the structural change.

@@ -391,7 +391,7 @@ With this stack, sessions start with full context and zero re-discovery overhead
 ### Quality & Testing
 - **test-driven-development** — RED-GREEN-REFACTOR cycle with rationalization tables, testing anti-patterns, and advanced test strategy (integration, E2E, property-based, performance)
 - **systematic-debugging** — 5-phase root cause process: known-issues check, investigation (reads `context-snapshot.json` first to answer "what changed recently?" without running git commands), pattern comparison, self-consistency hypothesis testing, fix-and-verify
-- **verification-before-completion** — Evidence gate for completion claims with multi-path verification reasoning and configuration change verification
+- **verification-before-completion** — Evidence gate for completion claims: a verification-scope table that sizes the proving command to the change (one-line edit → that file's tests; shared contract or cross-subsystem change → the full matrix), plus multi-path verification reasoning and configuration change verification
 - **self-consistency-reasoner** — Internal multi-path reasoning technique (Wang et al., ICLR 2023) embedded in debugging and verification
 
 ### Code Health

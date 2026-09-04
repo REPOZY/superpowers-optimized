@@ -1,5 +1,21 @@
 # Superpowers Optimized Release Notes
 
+## v6.7.1 (2026-09-04)
+
+Verification is now scaled to the change instead of defaulting to a full-suite run after every edit.
+
+### Changes
+
+**`verification-before-completion` gains a verification-scope table.** The gate said "run the full command now" and had no notion of proportionality, so a docstring edit and a cross-subsystem rule removal earned the same five-minute suite run. A new *Scale Verification to the Change* section maps change scope to the command that proves it: a one-line edit gets that file's tests, one module gets its suite plus a typecheck if types moved, several modules in one subsystem get their suites, and shared types, public contracts, cross-subsystem changes, dependency bumps, and build/CI changes still get the full matrix. Three rules keep it honest — widen on evidence rather than pre-emptively, never imply an unrun suite is green (report it as unrun), and let a project's own CLAUDE.md matrix win over the table. Scoping the command is explicitly not a licence to skip the gate: the narrow command still runs and its real output still gets read.
+
+This was the gap that forced projects to hand-write their own proportionality rules. One repo's CLAUDE.md had already patched around it in prose that named the skill directly: *"`verification-before-completion` says to run the full proving command now. It has no notion of proportionality, so taken literally every edit becomes a full-matrix run."*
+
+**Four skills now defer to that table instead of mandating the full suite.** `systematic-debugging` Phase 4 asks for the tests covering the fix rather than the whole suite. `requesting-code-review` scopes its final regression pass to what the fixes actually touched. `refactoring` drops the awkward "unless the suite takes more than 2 minutes" escape hatch for a scoped run that biases deliberately wider — structural moves cross module boundaries more often than they look like they do — while keeping the mandatory full run in Phase 4. `test-driven-development` replaces the undefined "relevant broader tests" in VERIFY GREEN with the target test plus the changed module's suite, and says outright not to run the whole repo suite on every cycle.
+
+**The Stop hook's TDD reminder suggests a scope.** It said "consider running tests," which nudged toward a run without saying which one. It now points at the tests covering the edited files and names the scope table, so the reminder does not itself push toward a reflexive full-suite run.
+
+**`dependency-management` and `refactoring` Phase 4 keep their full-suite mandates, deliberately.** Dependency bumps and rename/move audits have unbounded blast radius — they are the bottom row of the new table, not exceptions to it. Softening them would have been consistency for its own sake.
+
 ## v6.7.0 (2026-08-29)
 
 Memory stack overhaul: recall that ranks by relevance instead of recency, impact data you can trust, and a health report to check both.

@@ -15,10 +15,38 @@ Do not claim success without fresh command evidence.
 Before any completion claim:
 
 1. Identify the command that proves the claim.
-2. Run the full command now.
+2. Run that command now, in full — no truncated invocation, no reading a previous run's output. Scope it per *Scale Verification to the Change* below.
 3. Inspect exit code and output.
 4. State results exactly as observed.
 5. **If the change includes a condition or gate that determines when something applies: explicitly state what it does NOT cover. If the answer reveals a gap that should be covered, fix it before proceeding.**
+
+## Scale Verification to the Change
+
+The gate says run the command that proves the claim. It does not say every edit earns a
+full-matrix run. Pick the **narrowest command that could actually catch a break from this
+change** — a five-minute suite run after a one-line edit is not rigor, it is a reflex.
+
+| Change | Verify with |
+|---|---|
+| Comment, docstring, one-line edit | that file's tests; nothing else |
+| One module, component, or panel | its suite, plus a typecheck if types moved |
+| Several modules inside one subsystem | the suites for those modules |
+| A shared type, a public contract, a cross-cutting rule, or two subsystems together | the full suite / matrix |
+| Dependency, build config, or CI change | the full suite / matrix |
+
+Rules:
+
+- **Widen on evidence, not pre-emptively.** Run the narrow command first. Widen when something
+  connected actually breaks — not because it might.
+- **Never imply an unrun suite is green.** Report it as unrun. "Radar suite passes; full core
+  suite not run" is honest. "Tests pass" is not.
+- **The bottom two rows are not negotiable.** Shared contracts and dependency changes have
+  unbounded blast radius — targeted tests are blindest exactly there.
+- **A project's own matrix wins.** If the repo's CLAUDE.md defines verification scope, follow it
+  over this table.
+
+Scoping the command is not a licence to skip the gate. The narrow command still has to run, and
+its real output still has to be read.
 
 ## Applies To
 

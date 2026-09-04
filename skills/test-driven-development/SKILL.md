@@ -25,7 +25,7 @@ This is the hardest rule to follow and the most important. Every rationalization
 1. **RED**: Write one small failing test for one behavior.
 2. **VERIFY RED**: Run the test. Confirm it fails **for the expected reason** (not a syntax error or import issue).
 3. **GREEN**: Write the **minimum** production code to make the test pass. Nothing more.
-4. **VERIFY GREEN**: Run the target test and relevant broader tests. Confirm pass.
+4. **VERIFY GREEN**: Run the target test plus the suite for the module you changed. Confirm pass. Do not run the whole repo suite on every cycle — that belongs at the end of the task, scoped per `verification-before-completion`.
 5. **REFACTOR**: Improve structure without changing behavior. Tests must stay green.
 
 Repeat per behavior. Never skip VERIFY steps.
@@ -93,7 +93,7 @@ Do not skip this step — a "failing test" that fails because the runner doesn't
 - [ ] Every changed behavior has a test.
 - [ ] Each new test was observed failing before implementation.
 - [ ] Changed tests pass.
-- [ ] Relevant suite passes.
+- [ ] The suite covering the changed module passes (scope per `verification-before-completion`).
 
 ## Advanced Test Strategy
 

@@ -95,7 +95,9 @@ When the red team report contains Critical or High findings, run the auto-fix pi
 6. **Repeat** from step 2 until no Critical or High findings remain.
 
 **After the loop completes:**
-- Run the full test suite one final time to confirm no regressions across all fixes.
+- Run one final regression check covering everything the fixes touched, scoped per
+  `verification-before-completion`. Fixes confined to one module: that module's suite plus its
+  dependents. Fixes spanning modules or touching a shared contract: the full suite.
 - Report: findings fixed, false positives skipped, any regressions introduced and resolved.
 
 **Skip conditions:**
