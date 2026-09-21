@@ -21,7 +21,11 @@ Request review early to catch issues before they spread.
 
 ## How
 
-1. Determine review range (`BASE_SHA` -> `HEAD_SHA`).
+1. Determine review range (`BASE_SHA` -> `HEAD_SHA`). Getting this wrong silently reviews the wrong thing:
+   - **Whole branch:** `BASE_SHA=$(git merge-base origin/main HEAD)` (substitute your default branch). **Not** a bare `origin/main` — once main moves past your branch point, main's newer files appear in the diff as phantom deletions your branch never made, and the reviewer spends its pass on them.
+   - **A single task or batch:** the commit recorded *before* the work started. **Not** `HEAD~1`, which silently drops all but the last commit of a multi-commit task.
+   - No remote, or `origin/main` not fetched: fall back to `git merge-base main HEAD`.
+   - Confirm the range is non-empty before dispatching — `git diff --stat BASE..HEAD`. An empty range produces a confident "no issues found" review of nothing.
 2. Check for `context-snapshot.json` at the project root:
    - If present: run `git rev-parse HEAD` and compare to `git_hash` in the file.
      - **Hashes match (fresh):** use `changed_files` and `blast_radius` as the review scope. Inject this summary into the code-reviewer prompt: *"Changed files: [list]. Also referenced by: [blast_radius callers]."*
@@ -31,8 +35,9 @@ Request review early to catch issues before they spread.
    **What `blast_radius` means.** Each entry lists files containing a reference that *resolves* to the changed file's path — a relative import, or the repo path written out. It is deliberately incomplete: references that cannot be resolved (package-style imports, dynamic paths, aliases from `tsconfig`) are dropped rather than guessed, so an empty list means "nothing was proven," not "nothing depends on this." Never widen review scope on a name match alone; if you need dependents the snapshot does not list, grep for them and say you did.
 
    `blast_radius_method` records how the edges were derived. If it is missing, the snapshot came from a version that matched basenames as words — ignore `blast_radius` entirely and scope from the diff.
-3. Dispatch `superpowers-optimized:code-reviewer` using `requesting-code-review/code-reviewer.md`.
-4. Provide:
+3. If a plan is in play, write the diff to a file first: `bash ../subagent-driven-development/scripts/review-package PLAN_FILE BASE HEAD`. It refuses empty and non-descendant ranges outright, so the reviewer never receives a range that cannot mean what it claims. Pass the printed path to the reviewer.
+4. Dispatch `superpowers-optimized:code-reviewer` using `requesting-code-review/code-reviewer.md`.
+5. Provide:
    - What changed (from context snapshot or git diff)
    - Scoped file list (changed files + blast radius callers if fresh snapshot available, or broad if not)
    - Requirement or plan reference

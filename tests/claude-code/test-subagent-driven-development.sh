@@ -31,12 +31,32 @@ fi
 
 echo ""
 
-# Test 2: Verify skill describes correct workflow order
-echo "Test 2: Workflow ordering..."
+# Test 2: Verify the task review returns both verdicts from one reviewer
+echo "Test 2: Task review structure..."
 
-output=$(run_claude "Read the file at $SKILL_FILE. Answer yes or no: does spec compliance review happen before code quality review in subagent-driven-development?" 60 "Read")
+output=$(run_claude "Read the file at $SKILL_FILE. Answer: how many reviewers are dispatched per task, and which verdicts must that review return?" 60 "Read")
 
-if assert_contains "$output" "[Yy]es\|spec.*compliance.*before\|compliance.*first\|compliance.*then.*quality\|quality.*after.*compliance" "Spec compliance before code quality"; then
+if assert_contains "$output" "[Oo]ne\|ONE\|single" "One reviewer per task"; then
+    : # pass
+else
+    exit 1
+fi
+
+if assert_contains "$output" "spec\|compliance" "Spec verdict required"; then
+    : # pass
+else
+    exit 1
+fi
+
+if assert_contains "$output" "quality" "Quality verdict required"; then
+    : # pass
+else
+    exit 1
+fi
+
+output=$(run_claude "Read the file at $SKILL_FILE. Answer: is a review report that contains only one of the two verdicts acceptable?" 60 "Read")
+
+if assert_contains "$output" "[Nn]o\|not acceptable\|incomplete\|both.*required\|send it back" "Single-verdict report is rejected"; then
     : # pass
 else
     exit 1
@@ -82,18 +102,28 @@ fi
 
 echo ""
 
-# Test 5: Verify spec compliance reviewer is skeptical
-echo "Test 5: Spec compliance reviewer mindset..."
+# Test 5: Verify the task reviewer is skeptical and read-only
+echo "Test 5: Task reviewer mindset..."
 
-output=$(run_claude "Read the file at $SKILL_FILE and answer: what is the spec compliance reviewer's attitude toward the implementer's report?" 60 "Read")
+REVIEWER_FILE="../../skills/subagent-driven-development/task-reviewer-prompt.md"
 
-if assert_contains "$output" "not trust\|don't trust\|skeptical\|verify.*independently\|suspiciously" "Reviewer is skeptical"; then
+output=$(run_claude "Read the file at $REVIEWER_FILE and answer: what is the reviewer's attitude toward the implementer's report and rationale?" 60 "Read")
+
+if assert_contains "$output" "not trust\|don't trust\|skeptical\|rationale is not a fix\|not.*soften\|independently" "Reviewer does not defer to the implementer's rationale"; then
     : # pass
 else
     exit 1
 fi
 
-if assert_contains "$output" "read.*code\|inspect.*code\|verify.*code" "Reviewer reads code"; then
+if assert_contains "$output" "read.*code\|read.*file\|Read tool\|inspect.*code\|verify.*code" "Reviewer reads the code before forming findings"; then
+    : # pass
+else
+    exit 1
+fi
+
+output=$(run_claude "Read the file at $REVIEWER_FILE and answer: may the reviewer modify the working tree, run git checkout, or dispatch its own subagent?" 60 "Read")
+
+if assert_contains "$output" "[Nn]o\|read-only\|not.*modify\|never.*checkout\|must not\|do not" "Reviewer is read-only and may not spawn subagents"; then
     : # pass
 else
     exit 1
@@ -112,7 +142,21 @@ else
     exit 1
 fi
 
-if assert_contains "$output" "implementer.*fix\|fix.*issues" "Implementer fixes issues"; then
+output=$(run_claude "Read the file at $SKILL_FILE and answer: when a reviewer finds issues, who makes the fixes — the controller session itself, or the implementer subagent? Is the loop bounded?" 60 "Read")
+
+if assert_contains "$output" "implementer" "Implementer makes the fixes"; then
+    : # pass
+else
+    exit 1
+fi
+
+if assert_contains "$output" "not.*controller\|never.*controller\|controller.*never\|controller.*not\|don't fix\|do not fix\|skips review\|not yourself" "Controller does not fix findings itself"; then
+    : # pass
+else
+    exit 1
+fi
+
+if assert_contains "$output" "five\|5 round\|cap\|circuit breaker\|bounded\|maximum" "Fix loop is bounded"; then
     : # pass
 else
     exit 1
@@ -120,12 +164,24 @@ fi
 
 echo ""
 
-# Test 7: Verify full task text is provided
+# Test 7: Verify task context is handed over as a brief file, not pasted
 echo "Test 7: Task context provision..."
 
-output=$(run_claude "Read the file at $SKILL_FILE and answer: how does the controller provide task information to the implementer subagent? Does it make them read a file or provide it directly?" 60 "Read")
+output=$(run_claude "Read the file at $SKILL_FILE and answer: how does the controller give the implementer subagent its task requirements? Does the implementer read the full plan file?" 60 "Read")
 
-if assert_contains "$output" "provide.*directly\|full.*text\|paste\|include.*prompt\|inline\|passed.*directly" "Provides text directly"; then
+if assert_contains "$output" "brief" "Hands over a brief"; then
+    : # pass
+else
+    exit 1
+fi
+
+if assert_contains "$output" "path\|file" "Passes a path rather than pasted text"; then
+    : # pass
+else
+    exit 1
+fi
+
+if assert_contains "$output" "never.*whole plan\|not.*whole plan\|never.*full plan\|not.*full plan\|don't read\|do not read\|never read\|no[,.]" "Implementer does not read the whole plan file"; then
     : # pass
 else
     exit 1

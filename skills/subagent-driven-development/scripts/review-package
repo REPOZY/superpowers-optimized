@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# review-package — write one task's or branch's review diff to a file.
+#
+# Usage:  bash review-package PLAN_FILE BASE HEAD
+# Prints: the absolute path of the package it wrote (one line, nothing else)
+#
+# This exists to make two silent-wrong-answer cases impossible, not to save
+# tokens:
+#
+#   * An EMPTY range (BASE == HEAD, or no commits between them) hands a
+#     reviewer nothing and gets back a confident "no issues found" — and the
+#     task is marked reviewed. Nothing was reviewed.
+#   * A BASE that is NOT an ancestor of HEAD — an implementer that committed to
+#     the wrong branch, or a stale BASE — produces a diff describing work
+#     nobody on this branch did.
+#
+# Both refuse to write a package. A reviewer never sees a range that cannot
+# mean what it claims to mean.
+#
+# Exit codes:
+#   0  package written; its path is on stdout
+#   1  usage error, or the plan file does not exist
+#   2  not a git repository, or a ref that does not resolve
+#   3  the range is empty, or BASE is not an ancestor of HEAD
+
+set -uo pipefail
+
+if [ $# -ne 3 ]; then
+  echo "Usage: $0 PLAN_FILE BASE HEAD" >&2
+  echo "  per task:   BASE = the commit recorded BEFORE dispatching the implementer" >&2
+  echo "  whole branch: BASE = \$(git merge-base origin/main HEAD)" >&2
+  echo "Never HEAD~1 — it silently drops all but the last commit of a task." >&2
+  exit 1
+fi
+
+PLAN="$1"
+BASE_REF="$2"
+HEAD_REF="$3"
+
+if [ ! -f "$PLAN" ]; then
+  echo "Plan file not found: $PLAN" >&2
+  exit 1
+fi
+
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+  echo "Not a git repository — a review package needs history to diff." >&2
+  exit 2
+fi
+
+BASE_SHA="$(git rev-parse --verify --quiet "${BASE_REF}^{commit}" 2>/dev/null || true)"
+if [ -z "$BASE_SHA" ]; then
+  echo "BASE ref does not resolve to a commit: $BASE_REF" >&2
+  exit 2
+fi
+
+HEAD_SHA="$(git rev-parse --verify --quiet "${HEAD_REF}^{commit}" 2>/dev/null || true)"
+if [ -z "$HEAD_SHA" ]; then
+  echo "HEAD ref does not resolve to a commit: $HEAD_REF" >&2
+  exit 2
+fi
+
+# ── Refuse ranges that cannot mean what they claim ───────────────────────────
+COMMIT_COUNT="$(git rev-list --count "${BASE_SHA}..${HEAD_SHA}" 2>/dev/null || echo 0)"
+
+if [ "$COMMIT_COUNT" -eq 0 ]; then
+  echo "Range ${BASE_REF}..${HEAD_REF} is empty — no commits to review." >&2
+  echo "" >&2
+  echo "  Nothing would be reviewed, and a reviewer handed an empty diff" >&2
+  echo "  reports that it found nothing wrong. That is not a clean review." >&2
+  echo "" >&2
+  echo "  Likely causes: the implementer never committed; BASE was recorded" >&2
+  echo "  after the work instead of before; BASE and HEAD are the same commit." >&2
+  exit 3
+fi
+
+if ! git merge-base --is-ancestor "$BASE_SHA" "$HEAD_SHA" 2>/dev/null; then
+  echo "BASE is not an ancestor of HEAD — the range spans a branch point." >&2
+  echo "" >&2
+  echo "  BASE: $BASE_SHA" >&2
+  echo "  HEAD: $HEAD_SHA" >&2
+  echo "" >&2
+  echo "  A diff across divergent history describes work this branch never" >&2
+  echo "  did, and shows the other branch's files as deletions." >&2
+  echo "" >&2
+  echo "  For a whole-branch review use: git merge-base origin/main HEAD" >&2
+  exit 3
+fi
+
+# ── Resolve the plan's workspace (same rules as task-brief) ──────────────────
+PLAN_ABS="$(cd "$(dirname "$PLAN")" && pwd)/$(basename "$PLAN")"
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+BASE_NAME="$(basename "$PLAN")"
+BASE_NAME="${BASE_NAME%.md}"
+WS="$ROOT/.superpowers/sdd/$BASE_NAME"
+
+if [ -f "$WS/.plan-identity" ] && [ "$(cat "$WS/.plan-identity" 2>/dev/null)" != "$PLAN_ABS" ]; then
+  WS="$WS-$(printf '%s' "$PLAN_ABS" | cksum | cut -d' ' -f1)"
+fi
+
+mkdir -p "$WS" || { echo "Cannot create workspace: $WS" >&2; exit 1; }
+printf '%s' "$PLAN_ABS" > "$WS/.plan-identity"
+[ -f "$ROOT/.superpowers/.gitignore" ] || printf '*\n' > "$ROOT/.superpowers/.gitignore"
+
+SHORT_BASE="$(git rev-parse --short "$BASE_SHA")"
+SHORT_HEAD="$(git rev-parse --short "$HEAD_SHA")"
+PKG="$WS/review-${SHORT_BASE}-${SHORT_HEAD}.md"
+
+# ── Write the package ────────────────────────────────────────────────────────
+# Ten lines of context costs roughly 20% more than git's default three. That is
+# cheap on a task-sized diff and not cheap on a whole branch, so the size is
+# reported in the header and the reviewer is told to triage by the stat when it
+# is large, rather than reading straight through.
+DIFF_BODY="$(git diff -U10 "${BASE_SHA}..${HEAD_SHA}")"
+DIFF_CHARS="$(printf '%s' "$DIFF_BODY" | wc -c | tr -d '[:space:]')"
+DIFF_KTOK=$(( DIFF_CHARS / 4000 ))
+
+{
+  echo "# Review package"
+  echo
+  echo "- **Plan:** ${PLAN_ABS}"
+  echo "- **Range:** \`${SHORT_BASE}..${SHORT_HEAD}\` (${COMMIT_COUNT} commit(s))"
+  echo "- **Base:** ${BASE_SHA}"
+  echo "- **Head:** ${HEAD_SHA}"
+  echo "- **Diff size:** ${DIFF_CHARS} chars (~${DIFF_KTOK}k tokens)"
+  echo
+  echo "This is the complete change set under review. It was verified non-empty"
+  echo "and BASE was verified to be an ancestor of HEAD before this file was"
+  echo "written, so the range means what it says."
+  echo
+  echo "## Commits"
+  echo
+  echo '```'
+  git log --oneline "${BASE_SHA}..${HEAD_SHA}"
+  echo '```'
+  echo
+  echo "## Files changed"
+  echo
+  echo '```'
+  git diff --stat "${BASE_SHA}..${HEAD_SHA}"
+  echo '```'
+  echo
+  echo "## Full diff"
+  echo
+  echo "Ten lines of context per hunk, so surrounding code is visible without"
+  echo "opening every file. Still read the changed files themselves before"
+  echo "forming findings — a diff hides what it does not touch."
+  echo
+  if [ "$DIFF_KTOK" -ge 25 ]; then
+    echo "> **This diff is large (~${DIFF_KTOK}k tokens).** Do not read it straight"
+    echo "> through. Trawl the stat above first, pick the files where a defect"
+    echo "> would actually matter, and read those in full. Say in your report"
+    echo "> which files you reviewed closely and which you only skimmed — a"
+    echo "> review that silently skipped half the diff is worse than one that"
+    echo "> says so."
+    echo
+  fi
+  echo '```diff'
+  printf '%s\n' "$DIFF_BODY"
+  echo '```'
+} > "$PKG"
+
+printf '%s\n' "$PKG"
+exit 0
