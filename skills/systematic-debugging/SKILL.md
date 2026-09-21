@@ -28,7 +28,14 @@ This is non-negotiable. Every fix must trace back to a proven root cause. A fix 
 
 ### Phase 1: Investigate
 - Read the **full** error output — not just the last line.
-- Reproduce the bug reliably. If you cannot reproduce, you cannot fix. For tests that fail only in certain orderings (test pollution), run `find-polluter.sh` from this skill's directory to identify which test is corrupting shared state.
+- Reproduce the bug reliably. If you cannot reproduce, you cannot fix. For tests that fail only in certain orderings (test pollution), run `bash find-polluter.sh <marker> <test-pattern>` from this skill's directory to identify which test is corrupting shared state. Read its exit code — they are not interchangeable:
+
+  | Exit | Meaning |
+  |---|---|
+  | 0 | Every matched test ran and none created the marker. A real clean result. |
+  | 1 | Polluter found; it is named in the output. |
+  | 2 | The pattern matched no test files. **Nothing ran, so nothing was proven** — fix the pattern and re-run. Never report this as clean. |
+  | 3 | The marker already existed before the run. Reset it first; no test can be blamed until you do. |
 - Check recent changes — what changed since it last worked?
   - If `context-snapshot.json` exists at the project root: read it. The `changed_files` and `recent_commits` fields answer this immediately without additional git commands.
   - Otherwise: run `git log --oneline -10` and `git diff HEAD~1..HEAD --name-only`.

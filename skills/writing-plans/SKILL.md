@@ -26,7 +26,20 @@ Save to `docs/plans/YYYY-MM-DD-<feature-name>.md`.
 **Goal:** <single sentence>
 **Architecture:** <2-4 sentences>
 **Tech Stack:** <languages/libraries/tools>
+**Spec:** <path to the design doc this plan implements, or `none` if there isn't one. The plan argues from the spec, so the spec travels with it — executors read both, and plan conflicts resolve against the spec.>
 **Assumptions:** <list the key assumptions this plan rests on. For each, state what it excludes: "Assumes X — will NOT work if Y."> *(skip only if the plan contains zero conditional logic)*
+
+## Global Constraints
+
+<The project-wide requirements every task is bound by — version floors, dependency limits, naming and copy rules, platform requirements, exact values — one line each, copied verbatim from the spec. Every task's requirements implicitly include this section. Write `none` if there genuinely are none.>
+
+## Review Focus
+
+<Up to five input classes or failure modes the spec implies but no task's tests exercise — the ones most likely to bite a real user, most likely first. One line each: name the input or condition, and the behavior a reasonable person would expect.
+
+A spec is a vision document. It says what the software must do; it does not enumerate every input the software will meet, and its silence about an input is not permission for that input to crash the program.
+
+Write this list once, with the spec in front of you. Then, for each line, add the test that pins it to the task that owns that code, in that task's own step style. An empty section means you checked and found none — not that you skipped the check.>
 
 ---
 ```
@@ -64,6 +77,12 @@ This structure informs the task decomposition. Each task should produce self-con
 - Create: `<path>`
 - Modify: `<path>`
 - Test: `<path>`
+
+**Interfaces:**
+- Consumes: *(exact signatures this task uses from earlier tasks — function names, parameter and return types. Write `nothing` if it stands alone.)*
+- Produces: *(exact signatures later tasks will rely on. Write `nothing` if no later task builds on this.)*
+
+*This block is not optional bookkeeping. An implementer dispatched by `subagent-driven-development` sees only its own task text — never the plan, never its neighbours. This block is the only way it learns the names and types the tasks around it use. Omit it and the implementer invents a plausible name, which the next task then fails to import.*
 
 **Security flag:** `none` *(set to `security` if this task handles auth, credentials, input validation, permissions, crypto, or data access boundaries — triggers pre-implementation security review before the implementer is dispatched)*
 
@@ -125,9 +144,11 @@ After writing the complete plan, look at the spec with fresh eyes and check the 
 
 **2. Placeholder scan:** Search your plan for red flags — any of the patterns from the "No Placeholders" section above. Fix them.
 
-**3. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug.
+**3. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug. Check this against the Interfaces blocks: every name in a task's `Consumes` list must appear verbatim in some earlier task's `Produces` list.
 
-**4. Scope-reduction scan:** Search the plan for: "v1", "basic", "simple", "for now", "placeholder", "initial version", "minimal". For each hit, verify it was explicitly sanctioned by the user — not a quiet scope downgrade from what was requested. Fix any that weren't.
+**4. Review Focus coverage:** For each input class or failure mode the spec implies, is there a task whose tests exercise it? The five uncovered ones most likely to bite a user go in the Review Focus section, and each line there gets its test added to the owning task. An empty section means you checked and found none.
+
+**5. Scope-reduction scan:** Search the plan for: "v1", "basic", "simple", "for now", "placeholder", "initial version", "minimal". For each hit, verify it was explicitly sanctioned by the user — not a quiet scope downgrade from what was requested. Fix any that weren't.
 
 If you find issues, fix them inline. No need to re-review — just fix and move on. If you find a spec requirement with no task, add the task.
 
@@ -154,7 +175,7 @@ Plan saved to `docs/plans/<filename>.md`. Ready to execute with **[Subagent-Driv
 
 **If Subagent-Driven:**
 - **REQUIRED SUB-SKILL:** Use superpowers-optimized:subagent-driven-development
-- Fresh subagent per task + two-stage review
+- Fresh subagent per task + a per-task review returning both spec and quality verdicts
 
 **If Inline Execution:**
 - **REQUIRED SUB-SKILL:** Use superpowers-optimized:executing-plans

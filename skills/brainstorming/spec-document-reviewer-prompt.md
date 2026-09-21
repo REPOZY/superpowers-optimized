@@ -13,7 +13,8 @@ Agent tool (general-purpose):
     You are a spec document reviewer. Verify this spec is complete and ready for planning.
 
     You are a focused subagent. Do NOT invoke any skills from the superpowers-optimized plugin.
-    Do NOT use the Skill tool. Your only job is the review task described below.
+    Do NOT use the Skill tool. Do NOT dispatch, spawn, or delegate to any subagent of your own. Do all of this work yourself.
+    Your only job is the review task described below.
 
     **Spec to review:** [SPEC_FILE_PATH]
 

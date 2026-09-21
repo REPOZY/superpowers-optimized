@@ -379,18 +379,18 @@ With this stack, sessions start with full context and zero re-discovery overhead
 ### Design & Planning
 - **deliberation** — Structured decision analysis for complex architectural choices: assembles 3–5 named stakeholder perspectives, each speaks once without debate, then surfaces convergence points and live tensions without forcing a premature conclusion. Use before brainstorming when the problem itself may need reframing
 - **brainstorming** — Socratic design refinement with engineering rigor, project-level scope decomposition, and architecture guidance for existing codebases
-- **writing-plans** — Executable implementation plans with exact paths, verification commands, TDD ordering, and pre-execution plan review gate
+- **writing-plans** — Executable implementation plans with exact paths, verification commands, TDD ordering, and a pre-execution plan review gate. Plans carry a `Spec:` pointer, a `Global Constraints` block, per-task `Interfaces` (consumes/produces), and a `Review Focus` section naming input classes the spec implies but no task's tests exercise
 - **claude-md-creator** — Create lean, high-signal CLAUDE/AGENTS context files for repositories
 
 ### Execution
-- **executing-plans** — Batch execution with verification checkpoints and engineering rigor for complex tasks
-- **subagent-driven-development** — Parallel subagent execution with two-stage review gates (spec compliance, then code quality), blocked-task escalation, E2E process hygiene, context isolation, and skill leakage prevention
+- **executing-plans** — Batch execution with verification checkpoints and engineering rigor for complex tasks, closing with one whole-branch code review before handoff so the inline path never ships unreviewed
+- **subagent-driven-development** — Parallel subagent execution with a single per-task review returning both spec and quality verdicts, same-shape task batching, a five-round fix-loop circuit breaker, blocked-task escalation, E2E process hygiene, context isolation, and subagent containment (no skill invocation, no nested dispatch). Ships two helpers: `scripts/task-brief` writes a task's self-contained brief so the controller hands over a path instead of pasting text it already holds, and `scripts/review-package` writes the diff to a file while refusing empty and non-descendant ranges outright
 - **dispatching-parallel-agents** — Concurrent subagent workflows for independent tasks
 - **using-git-worktrees** — Isolated workspace creation on feature branches
 
 ### Quality & Testing
-- **test-driven-development** — RED-GREEN-REFACTOR cycle with rationalization tables, testing anti-patterns, and advanced test strategy (integration, E2E, property-based, performance)
-- **systematic-debugging** — 5-phase root cause process: known-issues check, investigation (reads `context-snapshot.json` first to answer "what changed recently?" without running git commands), pattern comparison, self-consistency hypothesis testing, fix-and-verify
+- **test-driven-development** — RED-GREEN-REFACTOR cycle with rationalization tables, testing anti-patterns, and advanced test strategy (integration, E2E, property-based, performance). Scope bounds which command runs, never what gets reported: failures your change did not cause are named as pre-existing
+- **systematic-debugging** — 5-phase root cause process: known-issues check, investigation (reads `context-snapshot.json` first to answer "what changed recently?" without running git commands), pattern comparison, self-consistency hypothesis testing, fix-and-verify. Ships `find-polluter.sh` for test-pollution bisection, with an exit-code contract that distinguishes a real clean run from a pattern that matched nothing
 - **verification-before-completion** — Evidence gate for completion claims: a verification-scope table that sizes the proving command to the change (one-line edit → that file's tests; shared contract or cross-subsystem change → the full matrix), plus multi-path verification reasoning and configuration change verification
 - **self-consistency-reasoner** — Internal multi-path reasoning technique (Wang et al., ICLR 2023) embedded in debugging and verification
 
@@ -400,7 +400,7 @@ With this stack, sessions start with full context and zero re-discovery overhead
 - **dependency-management** — Incremental dependency updates with verification: audit, impact assessment, one-at-a-time upgrades, lockfile merge conflict resolution, security vulnerability fast-path
 
 ### Review & Integration
-- **requesting-code-review** — Structured code review with integrated security analysis (OWASP, auth flows, secrets handling, dependency vulnerabilities), adversarial red team dispatch, and ASI-guided iterative auto-fix pipeline for critical findings (fix one → re-check affected files only → re-prioritize → repeat)
+- **requesting-code-review** — Structured code review with integrated security analysis (OWASP, auth flows, secrets handling, dependency vulnerabilities), adversarial red team dispatch, and ASI-guided iterative auto-fix pipeline for critical findings (fix one → re-check affected files only → re-prioritize → repeat). Reviewers are read-only on the checkout, may not spawn subagents, judge behavior the spec is silent on by what a reasonable user expects, and return a "Declined to judge" list; ranges use `git merge-base`, never a bare `origin/main` or `HEAD~1`
 - **receiving-code-review** — Technical feedback handling with pushback rules and no-sycophancy enforcement
 - **finishing-a-development-branch** — 4-option branch completion (merge/PR/keep/discard) with safety gates
 
@@ -454,8 +454,8 @@ In Claude Code, set these under `env` in `.claude/settings.json` (project) or `~
 ```
 
 ### Agents
-- **code-reviewer** — Senior code review agent with social accountability framing (merge decision and downstream fixes depend on review accuracy) and ASI-guided fix prioritization (single most impactful finding surfaced first)
-- **red-team** — Adversarial analysis agent with social accountability framing: constructs concrete failure scenarios (logic bugs, race conditions, state corruption, resource exhaustion, assumption violations) — complements checklist-based security review; marks the single most critical finding as the ASI (auto-fix pipeline entry point)
+- **code-reviewer** — Senior code review agent with social accountability framing (merge decision and downstream fixes depend on review accuracy) and ASI-guided fix prioritization (single most impactful finding surfaced first). Read-only on the checkout, never dispatches subagents, and reports a "Declined to judge" list so nothing set aside is dropped silently
+- **red-team** — Adversarial analysis agent with social accountability framing: constructs concrete failure scenarios (logic bugs, race conditions, state corruption, resource exhaustion, assumption violations) — complements checklist-based security review; marks the single most critical finding as the ASI (auto-fix pipeline entry point). Output-only and never dispatches subagents of its own
 
 
 ### Philosophy

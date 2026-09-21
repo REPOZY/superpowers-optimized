@@ -1,5 +1,43 @@
 # Superpowers Optimized Release Notes
 
+## v6.8.0 (2026-09-21)
+
+Upstream parity pass: a silently-false test-pollution bisector fixed, one reviewer per task instead of two, and plans that actually carry the contract their implementers need.
+
+### Visible Changes
+
+**Two subagent prompt files were removed.** `skills/subagent-driven-development/spec-reviewer-prompt.md` and `code-quality-reviewer-prompt.md` are gone, replaced by a single `task-reviewer-prompt.md`. If you dispatch either file directly, switch to the new one. The reason is local rather than borrowed: the code-reviewer template already carried a Spec Alignment section covering missing and extra scope, which was the entire job of the separate spec reviewer. Two reviewers read the same diff and the same task text, rebuilt the same context twice, and split their findings across two fix round-trips that one reviewer surfaces in one. Both verdicts are still mandatory — a review that returns only one is incomplete and gets sent back.
+
+### Fixes
+
+**`find-polluter.sh` reported "all tests clean" without running a single test.** The script passed your pattern straight to `find -path`, but `find .` emits paths with a `./` prefix, so the documented pattern `src/**/*.test.ts` matched nothing. Counting lines in that empty result returned 1, so the script announced "Found 1 test files", ran nothing, and printed the clean bill of health. Every invocation since the script shipped returned a false all-clear. Fixed: the pattern is normalized for the `./` prefix, a caller-supplied `./` is no longer doubled into a never-matching form, and the collapsed form of `**/` is matched too, so a test sitting directly under the base directory is not skipped. A pattern that matches nothing now exits 2 and says plainly that nothing was proven, and a pollution marker that already exists before the run exits 3 rather than blaming the first test. Covered by a new deterministic test suite that needs no network and no npm.
+
+### New Features
+
+**`scripts/task-brief`** extracts one task from a plan into a self-contained brief file — the task body, the plan's Global Constraints, and its Spec pointer — and prints the path. The controller hands over that path instead of pasting task text it already holds, which keeps a second copy of every task, and every implementer report, out of the session that has to re-read them on every later turn. Measured on a real 18-task plan in this repository: roughly 605 tokens per task when pasted against roughly 75 when passed as a path. Task identifiers match exactly, so asking for task 3 never returns task 3.1 or task 10 — which matters, because real plans here contain all three.
+
+**`scripts/review-package`** writes the commit list, the stat summary, and the full diff to one file and prints the path. This is a correctness guard rather than a saving. It refuses an empty range, which otherwise hands a reviewer nothing and gets back a confident "no issues found" while the task is marked reviewed, and it refuses a base that is not an ancestor of head, which produces a diff describing work nobody on the branch did. Both exit 3 and explain how to correct the range. The package reports its own size and, past roughly 25k tokens, tells the reviewer to triage from the stat and to say which files it only skimmed.
+
+### Changes
+
+**Plans now carry the contract their implementers need.** The plan header gains a `Spec:` pointer and a `Global Constraints` block, and every task gains an `Interfaces` block naming exactly what it consumes and produces. This matters more here than upstream because implementers are hard context-isolated: a dispatched subagent sees only its own task and never the plan, so without that block it cannot learn its neighbours' signatures and invents a plausible name the next task then fails to import. `subagent-driven-development` scans those blocks against each other before dispatching the first task, and `executing-plans` does the same before starting an inline run.
+
+**Plans carry a Review Focus section, and reviewers are told the spec is a vision document.** Review Focus lists up to five input classes the spec implies but no task's tests exercise, each pinned by a test added to the task that owns the code. On the reviewing side, behavior the requirements are silent about is judged by what a reasonable person using the software would expect — silence is not permission, and a crash on an unnamed input is not Minor merely because nobody wrote that input down. Reviewers also return a "Declined to judge" list, so nothing they set aside is dropped silently.
+
+**Reviewers are read-only and may not dispatch subagents.** A reviewer that runs `git checkout` has orphaned commits made after the range under review, so review is now explicitly read-only on the checkout, with a temporary worktree as the escape hatch. Separately, every subagent prompt now bans nested dispatch: an implementer that spawns its own reviewer duplicates the review the controller dispatches anyway, at a full extra review seat per task, and its verdict reaches no one. Both constraints are in the skill templates and in the `code-reviewer` and `red-team` agent definitions, for Claude and Codex alike.
+
+**Review ranges are specified instead of guessed.** Whole-branch reviews use `git merge-base origin/main HEAD`, because a bare `origin/main` shows main's newer files as phantom deletions once main moves past the branch point. Per-task reviews use the commit recorded before the implementer was dispatched, never `HEAD~1`, which silently drops all but the last commit of a multi-commit task.
+
+**Same-shape tasks batch into one dispatch.** When a plan lists several tasks that are each the same small mechanical edit across different files, one subagent does the batch and one reviewer reads the diff as a single unit, instead of N dispatches each rebuilding the same context from zero. Batch reviews verify that every file named in the brief actually appears in the diff.
+
+**The per-task fix loop has a circuit breaker.** Five rounds maximum. Rounds one through three resume the implementer that did the work; rounds four and five dispatch a fresh one on a more capable model. At the cap the controller adjudicates each open finding and records every decision. There was previously no round cap and no exit at all.
+
+**Inline execution gets a review.** `executing-plans` went straight from the last task to `finishing-a-development-branch`, so the inline path shipped with no independent read of the branch. It now runs one whole-branch review first, on the most capable model available, and says plainly in its report when no subagent tool was available and the author reviewed their own work.
+
+**Test-driven development reports failures it did not cause.** The verification-scope table from v6.7.1 is unchanged: scope still bounds which command runs. What changed is that scope never bounds what gets reported. A failure in that run which your change did not cause is named explicitly as pre-existing, because a red test watched scrolling past and left unmentioned is a report falsified by omission.
+
+**Test assertions no longer fail on capitalization.** The Claude Code test helpers compared free-form model prose case-sensitively, so a correct answer beginning "Read plan" failed a pattern written as `read.*plan`. All four assertion helpers now match case-insensitively.
+
 ## v6.7.1 (2026-09-04)
 
 Verification is now scaled to the change instead of defaulting to a full-suite run after every edit.

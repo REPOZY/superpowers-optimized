@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# task-brief — extract one task from a plan into a self-contained brief file.
+#
+# Usage:  bash task-brief PLAN_FILE TASK_ID
+# Prints: the absolute path of the brief it wrote (one line, nothing else on stdout)
+#
+# Why this exists: the controller already holds the plan in its context. Pasting
+# a task's text into a dispatch prompt puts a SECOND copy there, and the
+# subagent's inline reply puts a third block beside it — all of it re-read on
+# every later turn. Handing over a path instead costs ~15 tokens.
+#
+# TASK_ID is matched exactly: `3` matches "### Task 3:" and never "### Task 3.1:"
+# or "### Task 10:". Real plans in this repo contain all three.
+#
+# Exit codes:
+#   0  brief written; its path is on stdout
+#   1  usage error, or the plan file does not exist
+#   2  no task with that id in the plan
+
+set -uo pipefail
+
+if [ $# -ne 2 ]; then
+  echo "Usage: $0 PLAN_FILE TASK_ID" >&2
+  echo "Example: $0 docs/plans/2026-09-21-feature.md 3" >&2
+  exit 1
+fi
+
+PLAN="$1"
+TASK_ID="$2"
+
+if [ ! -f "$PLAN" ]; then
+  echo "Plan file not found: $PLAN" >&2
+  exit 1
+fi
+
+# Absolute path of the plan — also this workspace's identity.
+PLAN_ABS="$(cd "$(dirname "$PLAN")" && pwd)/$(basename "$PLAN")"
+
+# ── Extract the task body ────────────────────────────────────────────────────
+# A task runs from its heading until the next heading at the same or shallower
+# depth. Deeper subheadings belong to the task and stay in the brief.
+TASK_BODY="$(awk -v id="$TASK_ID" '
+  BEGIN {
+    esc = id
+    gsub(/\./, "\\.", esc)                     # dots are literal, not wildcards
+    re = "^#+[ \t]+Task[ \t]+" esc "([^0-9.]|$)"
+    found = 0
+  }
+  /^#+[ \t]/ {
+    match($0, /^#+/); d = RLENGTH
+    if (found && d <= tdepth) exit
+    if (!found && $0 ~ re) { found = 1; tdepth = d; print; next }
+  }
+  found { print }
+' "$PLAN")"
+
+if [ -z "$TASK_BODY" ]; then
+  echo "No task $TASK_ID in $PLAN" >&2
+  echo "Tasks found:" >&2
+  grep -oE '^#+[[:space:]]+Task[[:space:]]+[0-9]+(\.[0-9]+)*' "$PLAN" 2>/dev/null \
+    | sed 's/^#*[[:space:]]*/  /' >&2 || echo "  (none)" >&2
+  exit 2
+fi
+
+# ── Extract the plan-level context the task body cannot carry ────────────────
+GLOBAL_CONSTRAINTS="$(awk '
+  /^##[ \t]+Global Constraints/ { f = 1; next }
+  f && /^##[ \t]/ { exit }
+  f { print }
+' "$PLAN" | sed -e '/./,$!d' | awk 'BEGIN{n=0} {lines[n++]=$0} END{last=n-1; while(last>=0 && lines[last]~/^[ \t]*$/) last--; for(i=0;i<=last;i++) print lines[i]}')"
+
+[ -z "$GLOBAL_CONSTRAINTS" ] && GLOBAL_CONSTRAINTS="none declared in this plan"
+
+SPEC="$(grep -m1 -E '^\*\*Spec:\*\*' "$PLAN" 2>/dev/null \
+  | sed -E 's/^\*\*Spec:\*\*[[:space:]]*//' || true)"
+[ -z "$SPEC" ] && SPEC="none declared in this plan"
+
+# ── Resolve a plan-scoped, self-ignoring workspace ───────────────────────────
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+BASE="$(basename "$PLAN")"
+BASE="${BASE%.md}"
+WS="$ROOT/.superpowers/sdd/$BASE"
+
+# Two plans can share a basename in different directories. Without this guard
+# they share a workspace and overwrite each other's briefs silently.
+if [ -f "$WS/.plan-identity" ] && [ "$(cat "$WS/.plan-identity" 2>/dev/null)" != "$PLAN_ABS" ]; then
+  WS="$WS-$(printf '%s' "$PLAN_ABS" | cksum | cut -d' ' -f1)"
+fi
+
+mkdir -p "$WS" || { echo "Cannot create workspace: $WS" >&2; exit 1; }
+printf '%s' "$PLAN_ABS" > "$WS/.plan-identity"
+
+# The workspace is scratch and must never reach a commit. It ignores itself so
+# this works in any project, without editing that project's .gitignore.
+[ -f "$ROOT/.superpowers/.gitignore" ] || printf '*\n' > "$ROOT/.superpowers/.gitignore"
+
+# ── Write the brief ──────────────────────────────────────────────────────────
+BRIEF="$WS/task-${TASK_ID}-brief.md"
+
+cat > "$BRIEF" <<EOF
+# Task ${TASK_ID} brief
+
+This file is your requirements. Use the exact values, names, and test cases
+written here — they are authoritative over anything summarized in your dispatch
+prompt. Do not read the full plan; everything scoped to you is below.
+
+- **Plan:** ${PLAN_ABS}
+- **Spec:** ${SPEC}
+
+## Global Constraints (bind every task in this plan)
+
+${GLOBAL_CONSTRAINTS}
+
+---
+
+${TASK_BODY}
+EOF
+
+printf '%s\n' "$BRIEF"
+exit 0

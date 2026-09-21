@@ -26,6 +26,8 @@ digraph executing_plans {
     "Execute next task" [shape=box];
     "Run verification" [shape=box];
     "More tasks?" [shape=diamond];
+    "Whole-branch code review (Review Focus passed in)" [shape=box];
+    "Fix Critical/Important; log Minor" [shape=box];
     "Invoke finishing-a-development-branch" [shape=doublecircle];
 
     "Load and review plan" -> "Concerns?";
@@ -36,12 +38,15 @@ digraph executing_plans {
     "Execute next task" -> "Run verification";
     "Run verification" -> "More tasks?";
     "More tasks?" -> "Execute next task" [label="yes"];
-    "More tasks?" -> "Invoke finishing-a-development-branch" [label="no"];
+    "More tasks?" -> "Whole-branch code review (Review Focus passed in)" [label="no"];
+    "Whole-branch code review (Review Focus passed in)" -> "Fix Critical/Important; log Minor";
+    "Fix Critical/Important; log Minor" -> "Invoke finishing-a-development-branch";
 }
 ```
 
 ### Step 1: Load and Review Plan
-1. Read the plan completely.
+1. Read the plan completely. Note its **Global Constraints** block — those bind every task — and follow its **Spec:** pointer if it names one. The spec is the authority the plan argues from; conflicts inside the plan resolve against it. If the plan names no reachable spec, say so, and treat any judgment call you make without one as provisional.
+1a. Check the plan's **Interfaces** blocks against each other before starting: every name a task `Consumes` must appear verbatim in some earlier task's `Produces`. A mismatch caught here costs one plan edit; the same mismatch caught at Task 5 costs a failed task and a rewrite.
 2. If `state.md` exists and names this plan, read it first — it records which task is next and what earlier sessions already proved. Resume from there instead of restarting at task 1.
 3. Review critically — identify any questions or concerns.
 4. If concerns: raise them with the user before starting.
@@ -71,7 +76,7 @@ Keep it to the diff: update the current task pointer and append newly discovered
 
 Without this, a compaction mid-plan loses the discovered facts and the next session restarts the task from a blank slate — re-deriving what was already proven, or silently redoing completed work.
 
-**Note:** Superpowers works significantly better with subagent support. If subagents are available, use `subagent-driven-development` instead — the quality of work will be higher with fresh-context-per-task and two-stage review gates.
+**Note:** Superpowers works significantly better with subagent support. If subagents are available, use `subagent-driven-development` instead — the quality of work will be higher with fresh-context-per-task and a per-task review gate.
 
 ## Engineering Rigor for Complex Tasks
 
@@ -108,6 +113,10 @@ Do not carry long historical summaries. Never forward full session history to su
 ## Completion
 
 After all tasks pass verification:
-1. Update `state.md` to record that the plan is complete, so the next session does not try to resume it.
-2. Announce `finishing-a-development-branch`.
-3. Invoke `finishing-a-development-branch`.
+1. **Run one whole-branch code review before finishing.** Inline execution removed the per-task review gates that `subagent-driven-development` provides; without this step the branch ships with no independent read at all. Invoke `requesting-code-review` over `git merge-base origin/main HEAD`..`HEAD`, passing the plan's **Review Focus** section verbatim so the reviewer deliberately checks the input classes the plan's own tests do not exercise.
+   - With a subagent tool: dispatch the reviewer on the most capable model available, and say which model explicitly — an omitted model silently inherits the session's.
+   - Without one: perform that review yourself as a separate pass, and say so plainly in your final report. A self-review by the author is weaker than a fresh reviewer, and the user decides whether that is enough before merge.
+2. Fix Critical and Important findings. Each fix gets a test that failed first. Minor findings go in the report, not the fix pass.
+3. Update `state.md` to record that the plan is complete, so the next session does not try to resume it.
+4. Announce `finishing-a-development-branch`.
+5. Invoke `finishing-a-development-branch`.
