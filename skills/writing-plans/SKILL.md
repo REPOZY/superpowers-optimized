@@ -11,6 +11,8 @@ description: >
 
 Create an implementation plan another agent can execute with minimal ambiguity.
 
+Write for an engineer who has not seen this codebase or this spec. Assume they write idiomatic code in the project's language once they know the exact interface and the exact test, and that they make a reasonable choice wherever the plan leaves one open. What they cannot know is what you decided: which files, which names and signatures, which values from the spec, which tests prove each task. The plan records those decisions. It is not a transcript of the code.
+
 ## Output Path
 
 Save to `docs/plans/YYYY-MM-DD-<feature-name>.md`.
@@ -62,7 +64,7 @@ This structure informs the task decomposition. Each task should produce self-con
 ## Task Rules
 
 - Keep tasks independent when possible.
-- Keep each step to one action (roughly 2-5 minutes).
+- Keep each step to one action with a checkable result.
 - Use exact file paths.
 - Include exact verification commands and expected outcomes.
 - Use TDD ordering when code behavior changes.
@@ -91,7 +93,7 @@ This structure informs the task decomposition. Each task should produce self-con
 - [ ] **Step 1: Write failing test**
 
 ```<lang>
-<actual test code>
+<the test's name and its assertions, with the spec's exact values>
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -99,11 +101,9 @@ This structure informs the task decomposition. Each task should produce self-con
 Run: `<command>`
 Expected: FAIL with "<expected failure reason>"
 
-- [ ] **Step 3: Implement minimal change**
+- [ ] **Step 3: Implement `<exact signature>` in `<path>`**
 
-```<lang>
-<actual implementation code>
-```
+<One line on the approach when the signature and the test leave a choice (which library call, which data structure). A code block only for an algorithm they do not determine.>
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -118,15 +118,23 @@ git commit -m "<message>"
 ```
 ````
 
-## No Placeholders
+## What a Step Contains
 
-Every step must contain the actual content an engineer needs. These are **plan failures** — never write them:
+A step is done when the implementer can write exactly one reasonable thing from it. That is the whole requirement: unambiguous, not complete. Each kind of step carries what makes it unambiguous and nothing more:
+
+- **A test step:** the test's name and its assertions, as code, with the spec's exact values in them.
+- **A code step:** the exact signature (name, parameters, return type), the file it lives in, and the specific values the spec pins. The implementer writes the body. A body appears only for an algorithm the signature and tests do not determine.
+- **A content step** (config, data, prose — including skill, doc, and manifest files): the exact text to write, or the exact before/after of the edit. There is no signature to derive it from, so the text itself is the decision.
+- **A verification step:** the command to run and the output that means it passed.
+- **A reference to another task:** that task's Interfaces block says what to use; the plan does not repeat that task's code. Never write "similar to Task N" or "same pattern as Task N" — the implementer sees only its own task brief, so a pointer to another task points at nothing. If two tasks share a pattern, state it in each.
+
+A plan is the set of decisions the implementer cannot make alone. A plan longer than the code it describes has written the code instead: that code was never run, and an implementer told to follow the plan will copy its bugs faithfully.
+
+Lines that decide nothing are the opposite failure — never write them:
 
 - "TBD", "TODO", "implement later", "fill in details"
 - "Add appropriate error handling" / "add validation" / "handle edge cases"
-- "Write tests for the above" (without actual test code)
-- "Similar to Task N" (repeat the code — the engineer may be reading tasks out of order)
-- Steps that describe what to do without showing how (code blocks required for code steps)
+- "Write tests for the above" (without the test names and assertions)
 - References to types, functions, or methods not defined in any task
 
 ## Quality Bar
@@ -142,13 +150,15 @@ After writing the complete plan, look at the spec with fresh eyes and check the 
 
 **1. Spec coverage:** Skim each section/requirement in the spec. Can you point to a task that implements it? List any gaps.
 
-**2. Placeholder scan:** Search your plan for red flags — any of the patterns from the "No Placeholders" section above. Fix them.
+**2. Step scan:** Every step must let the implementer write exactly one reasonable thing, and no step may carry more than that: a line that decides nothing is a gap, a function body the signature and tests already determine is a transcript. Fix both. Content steps are exempt from the transcript check — their exact text is the decision.
 
 **3. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug. Check this against the Interfaces blocks: every name in a task's `Consumes` list must appear verbatim in some earlier task's `Produces` list.
 
 **4. Review Focus coverage:** For each input class or failure mode the spec implies, is there a task whose tests exercise it? The five uncovered ones most likely to bite a user go in the Review Focus section, and each line there gets its test added to the owning task. An empty section means you checked and found none.
 
 **5. Scope-reduction scan:** Search the plan for: "v1", "basic", "simple", "for now", "placeholder", "initial version", "minimal". For each hit, verify it was explicitly sanctioned by the user — not a quiet scope downgrade from what was requested. Fix any that weren't.
+
+**6. Proportion:** Compare the plan's length to the spec's (or, with no spec, to the size of the change). A plan several times longer than the spec it implements is a transcript of the program, not a plan. If code blocks are most of the document, replace bodies with signatures, test names and assertions, then re-check that each step is still unambiguous. The exact text of content steps does not count against this — a plan that edits prose or config legitimately carries that text.
 
 If you find issues, fix them inline. No need to re-review — just fix and move on. If you find a spec requirement with no task, add the task.
 
