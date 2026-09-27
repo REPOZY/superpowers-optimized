@@ -1,5 +1,25 @@
 # Superpowers Optimized Release Notes
 
+## v6.8.1 (2026-09-27)
+
+Leaner plans: `writing-plans` records the decisions an implementer needs instead of writing the code out in advance. Adapted from upstream superpowers v6.4.2.
+
+### Changes
+
+**A plan records decisions. It is not a transcript of the code.** A new "What a Step Contains" section replaces "No Placeholders". A test step names the test and its assertions, a code step gives the exact signature, file, and spec values with a body only for an algorithm those don't determine, and a verification step gives the command and its passing output. Code written into a plan was never run, so an implementer told to follow the plan copied its bugs faithfully. Plans were also the largest thing the executing session had to hold in context. Upstream measured plans taking a quarter of the time and a third of the tokens, with 9/9 planted-defect probes still caught on Sonnet 5.
+
+**Content steps keep their exact text.** This fork's own plans mostly edit skills, docs, and manifests, where there is no signature to derive a body from. Unlike upstream, a content step (config, data, prose) states the exact text or the exact before/after, and it is exempt from the transcript and proportion checks.
+
+**"Similar to Task N" stays banned.** Upstream dropped the explicit rule. Here it stays, because a subagent implementer sees only its own task brief: a pointer to another task points at nothing. Shared patterns are stated in each task, and shared names go through the Interfaces block.
+
+**Self-review checks proportion.** "Placeholder scan" becomes "Step scan", which catches both a line that decides nothing and a body the signature and tests already determine. A new sixth check compares the plan's length to the spec's. When code blocks dominate, bodies are replaced with signatures and test assertions. Steps are now sized as "one action with a checkable result" instead of "2-5 minutes".
+
+### Fixes
+
+**Removed `skills/writing-plans/plan-document-reviewer-prompt.md`.** Nothing had dispatched it since the plan reviewer subagent was replaced by self-review. The README still advertised "a pre-execution plan review gate" from that era. It now describes what actually happens: a spec-anchored self-review, then a stop for your review before anything runs.
+
+**Two more stale README claims corrected.** The overview still described staged spec-then-quality reviews, which v6.8.0 replaced with one reviewer returning both verdicts. The `skill-activator` entry still described 70/30 keyword-density/recency recall scoring, which v6.7.0 replaced with IDF-weighted relevance gates where recency is only a tiebreak.
+
 ## v6.8.0 (2026-09-21)
 
 Upstream parity pass: a silently-false test-pollution bisector fixed, one reviewer per task instead of two, and plans that actually carry the contract their implementers need.
