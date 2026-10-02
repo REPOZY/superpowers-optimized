@@ -1,0 +1,8 @@
+{
+  "name": "auth-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/app.js",
+  "scripts": { "test": "node --test" },
+  "dependencies": { "express": "^4.19.2" }
+}

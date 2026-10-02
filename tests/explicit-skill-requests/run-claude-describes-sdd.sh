@@ -41,7 +41,7 @@ claude -p "I have a plan at docs/plans/auth-system.md. Tell me about my options 
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 3 \
-    --output-format stream-json \
+    --output-format stream-json --verbose \
     > "$OUTPUT_DIR/turn1.json" 2>&1 || true
 echo "Done."
 
@@ -54,7 +54,7 @@ claude -p "subagent-driven-development, please" \
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 2 \
-    --output-format stream-json \
+    --output-format stream-json --verbose \
     > "$FINAL_LOG" 2>&1 || true
 echo "Done."
 echo ""

@@ -10,9 +10,14 @@ description: >
 
 # Self-Consistency Reasoner
 
-A structured reasoning technique based on the Self-Consistency method (Wang et al., ICLR 2023).
+A structured reasoning technique adapted from Self-Consistency (Wang et al., ICLR 2023).
 
-**Core idea**: Complex problems often have multiple valid paths to the correct answer. Incorrect reasoning, even when confident-sounding, tends to scatter across different wrong answers. By generating N independent reasoning paths and taking majority vote, we reliably surface the correct answer and get a built-in confidence signal for free.
+**Core idea**: Complex problems often have multiple valid paths to the correct answer, while incorrect reasoning tends to scatter across different wrong answers. Reaching the answer by several deliberately different routes and comparing the endpoints exposes a single chain that committed early to a wrong assumption.
+
+**What this is not.** The paper samples N *separate* decodes from the same prompt and votes over them; their independence is what makes agreement track accuracy. Paths you write one after another in a single response are not independent — each one can see the ones before it, and all of them share your blind spots. So read the result asymmetrically:
+
+- **Disagreement is strong evidence.** If your own paths diverge, the problem is genuinely ambiguous to you. Stop and gather evidence.
+- **Agreement is weak evidence.** It means no route you thought of contradicts the answer — not that the answer is right. It never replaces the test or command that proves it.
 
 ---
 
@@ -40,7 +45,7 @@ Scale paths to difficulty:
 | Root cause diagnosis with 2-3 candidates | 5 paths |
 | Complex multi-factor diagnosis or high-stakes verification | 7 paths |
 
-Default: **5 paths**. Research shows gains plateau quickly — 5 captures most of the benefit of 40.
+Default: **5 paths**. The paper suggests 5–10 independent samples to capture most of the gain; in a single response, extra paths add little once the genuinely different starting points are used up — stop there rather than padding.
 
 ---
 
@@ -56,22 +61,21 @@ Produce each path **independently** — don't let earlier paths contaminate late
 - For debugging: start from different points in the call stack, assume different failure modes
 - For verification: evaluate the evidence from different angles (what would prove it true? what would prove it false?)
 
-Each path must end with a **clearly parsed final answer**.
+Each path tries to reach **the** answer — not a different candidate — and must end with a **clearly parsed final answer**. Asking each path for a *different* hypothesis manufactures disagreement and makes the vote meaningless.
 
-> Diversity is the whole point. Paths that all use the same approach just give you one answer repeated — that's not self-consistency, it's greedy decoding in disguise.
+> Diversity of route is the whole point. Paths that all use the same approach just give you one answer repeated — that's not self-consistency, it's greedy decoding in disguise.
 
 ### Step 2: Aggregate via Majority Vote
 
-Collect the final answers from all N paths. The most frequent answer wins.
+Group answers that mean the same thing (two phrasings of one root cause are one answer), then count. The most frequent answer wins.
 
-Compute confidence:
-- **Consistency %** = (paths agreeing with majority answer) / (total paths)
+**Agreement** = (paths agreeing with the majority answer) / (total paths). It is a count, not a calibrated probability.
 
 ### Step 3: Act on Results
 
-- **100% agreement**: Proceed with high confidence.
-- **60-99% agreement**: Proceed but note the minority view. In debugging, mention the alternative hypothesis; in verification, flag the uncertainty.
-- **<=50% agreement**: **STOP.** Do not proceed. The problem is genuinely ambiguous or underspecified. Report the top 2 competing conclusions and the key assumption that splits the paths. Ask the user for clarification or gather more evidence.
+- **Unanimous**: Proceed — and still prove it with the test or command; agreement alone is not evidence.
+- **Majority (more than half, not all)**: Proceed with the majority answer, but name the minority answer and test it next if the majority fails.
+- **No majority (half or fewer)**: **STOP.** Do not proceed. Report the top 2 competing conclusions and the assumption that splits them. Gather more evidence or ask the user.
 
 ---
 
@@ -81,19 +85,19 @@ Do **not** show all paths to the user. The process is internal. Surface only the
 
 ```
 **[Diagnosis/Verdict]**: [the majority-vote answer]
-**Confidence**: [X/N paths agree] [high/moderate/low]
+**Agreement**: [X/N paths] — unanimous | majority | no majority
 
-[Only if confidence < 80%]: Brief note on minority conclusion and the key divergence point.
+[Only if not unanimous]: Brief note on the minority conclusion and the key divergence point.
 ```
 
 ---
 
-## Key Principles from the Research
+## What the Research Supports — and What It Does Not
 
-- **Majority vote outperforms probability-weighted aggregation** — just count, don't weight
-- **Consistency correlates with accuracy** — high agreement is a reliable proxy for correctness
-- **Diversity beats quantity** — 5 genuinely different paths beats 10 paths that all reason the same way
-- **Works for zero-shot CoT** — no few-shot examples needed
+- **Majority vote is enough** — the paper found an unweighted vote about as accurate as probability-weighted aggregation, and you have no token probabilities anyway.
+- **Agreement tracks accuracy for independent samples** — "low consistency" signals the model does not know. That calibration is measured on separate decodes; for paths in one response, trust the disagreement signal and treat agreement as weak.
+- **Diverse reasoning routes matter** — the paper attributes the gain to diversity, and more independent samples kept helping up to 40. It does **not** claim that a few diverse paths beat many similar ones.
+- **Needs a fixed answer set** — a root cause or a yes/no verdict qualifies once equivalent phrasings are grouped. Open-ended design questions do not; use `deliberation` for those.
 
 ---
 

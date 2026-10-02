@@ -117,7 +117,7 @@ When the verification reasoning is non-trivial (multi-step inference, ambiguous 
    - **Majority agrees but minority dissents**: flag what the dissenting path identified — it may reveal a gap in the evidence.
    - **No majority**: evidence is insufficient. Do not claim completion. State what additional evidence is needed.
 
-This prevents the most expensive verification failure: confidently declaring "done" based on evidence that doesn't actually prove what you think it proves.
+The paths are written by you in one pass, so they share your assumptions: a dissent is a real signal to act on, while unanimity only means none of your three angles found a gap. It targets the most expensive verification failure — confidently declaring "done" on evidence that doesn't prove what you think it proves — but it narrows that risk; it does not remove it.
 
 ## Configuration Change Verification
 

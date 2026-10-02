@@ -14,7 +14,7 @@ Creates repository-level context files (`CLAUDE.md`, `AGENTS.md`) that give codi
 
 **Core principle: Only include what the agent cannot easily discover itself.**
 
-Empirical research (Gloaguen et al., 2026 — "Evaluating AGENTS.md") shows that LLM-generated context files *decrease* agent performance by 3% and increase cost by 20-23% when they contain redundant or overly broad content. Human-written, minimal context files improve performance by ~4%. The difference comes down to signal density — every unnecessary line adds cognitive load without helping the agent solve tasks.
+Empirical research (Gloaguen et al., "Evaluating AGENTS.md", v3 2026) found that context files did not significantly change task success — LLM-generated ones −0.5% to −2%, developer-written ones +2.4% — while raising cost 20–23%, because agents follow what the file says. Developer-written files did significantly beat LLM-generated ones, which mostly restated existing docs. Every line is an instruction the agent will act on: it costs steps whether or not it helps.
 
 ## Trigger Conditions
 
@@ -28,9 +28,9 @@ Invoke this skill when any of the following occur:
 
 ## What to Include (highest to lowest priority)
 
-### 1. Build, test, and lint commands (highest impact)
+### 1. Non-standard build, test, and lint commands
 
-Explicit tool and command mentions are the single most effective instruction type — agents use mentioned tools 1.6x-2.5x more often. Spell out exact commands:
+Agents use a tool almost only when the file names it (`uv`: 1.6 uses per task when mentioned, under 0.01 otherwise), so naming the project's *non-default* tooling reliably changes what they run. That is compliance, not proof of benefit: in the same study, testing instructions raised cost without improving success. Include a command only when the agent would otherwise run the wrong one. Spell those out exactly:
 
 ```
 npm run test -- --watch
@@ -55,10 +55,10 @@ Only patterns unique to this project that differ from standard practice. If it's
 
 ## What to Exclude
 
-These categories have been empirically shown to provide zero benefit or actively hurt agent performance:
+These categories were measured to give no benefit (or only cost) in the study, or follow directly from its findings:
 
 ### Repository overviews and project descriptions
-100% of LLM-generated context files included these, yet agents took identical steps to discover files whether the overview existed or not. The agent explores the repo anyway — an overview just adds tokens without saving any work.
+Nearly every LLM-generated context file included one (100% for Sonnet 4.5, 95–99% for two other models), yet overviews did not meaningfully reduce the steps agents took before reaching the relevant files. The agent explores the repo anyway — an overview just adds tokens without saving any work.
 
 ### Directory trees and file structure listings
 Same finding: detailed directory structures don't help agents locate relevant files. They navigate codebases by searching, not by reading maps.
@@ -67,7 +67,7 @@ Same finding: detailed directory structures don't help agents locate relevant fi
 Broad architecture descriptions don't help agents solve tasks. If there's an architectural constraint that would cause incorrect behavior (e.g., "this is a monorepo — changes to `packages/core` require rebuilding all dependents"), include the constraint. Skip the explanation of how the architecture works.
 
 ### Content that duplicates existing documentation
-Don't restate what's already in README, docs/, wiki, or inline comments. Redundancy with existing docs is actively harmful — when researchers removed documentation from repos, LLM-generated context files improved performance by 2.7%, proving the duplication was the problem.
+Don't restate what's already in README, docs/, wiki, or inline comments. Duplication is why LLM-generated files didn't help: when researchers removed the repos' documentation, the same files improved performance by 2.7%. With the docs present, they only added cost.
 
 ### Generic best practices
 "Write tests", "follow SOLID principles", "use meaningful variable names" — agents already know these. Only include project-specific deviations from standard practice.

@@ -142,6 +142,49 @@ function matchesSession(entry, sessionId) {
 }
 
 /**
+ * Normalise a path for containment checks: resolved, long-form on Windows (the
+ * session scratchpad is logged as C:\Users\ABCDEF~1\..., the cwd as the long name),
+ * and case-folded where the filesystem is case-insensitive.
+ */
+function canonicalPath(p) {
+  // Resolve the deepest ancestor that still exists, then re-append the rest, so a
+  // deleted file is normalised the same way as the directory it lived in.
+  let head = path.resolve(p);
+  const tail = [];
+  for (;;) {
+    try {
+      head = fs.realpathSync.native(head);
+      break;
+    } catch {
+      const parent = path.dirname(head);
+      if (parent === head) break;
+      tail.unshift(path.basename(head));
+      head = parent;
+    }
+  }
+  const out = path.join(head, ...tail);
+  return process.platform === 'win32' || process.platform === 'darwin' ? out.toLowerCase() : out;
+}
+
+/**
+ * Keep only edits to files inside the project. Every reminder this hook emits is
+ * about the project at cwd — its git status, its state.md, its session-log.md —
+ * so a scratch script or an edit in another repo must not count toward them.
+ */
+function scopeToProject(edits, cwd) {
+  if (!cwd) return edits;
+  const root = canonicalPath(cwd);
+  const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+  return edits
+    // track-edits.js resolves relative paths against cwd before logging; do the same.
+    .map(e => (path.isAbsolute(e.filePath) ? e : { ...e, filePath: path.resolve(cwd, e.filePath) }))
+    .filter(e => {
+      const p = canonicalPath(e.filePath);
+      return p === root || p.startsWith(prefix);
+    });
+}
+
+/**
  * Read recent edits from the edit log (last 30 minutes), filtered to the current session.
  */
 function getRecentEdits(sessionId) {
@@ -516,7 +559,7 @@ function evaluatePayload(data) {
 
   const cwd = data.cwd || process.cwd();
   const sessionId = data.session_id || null;
-  const edits = getRecentEdits(sessionId);
+  const edits = scopeToProject(getRecentEdits(sessionId), cwd);
 
   // File-based guard prevents infinite loop for reminder injection
   if (!shouldFire()) return {};
@@ -527,7 +570,7 @@ function evaluatePayload(data) {
   // Using "since last saved" (not "last 30 min") means long sessions with multiple
   // work phases keep getting reminded until each phase is explicitly documented.
   const lastSavedTime = getLastSavedEntryTime();
-  const editsSinceLastSaved = getEditsAfter(lastSavedTime, sessionId);
+  const editsSinceLastSaved = scopeToProject(getEditsAfter(lastSavedTime, sessionId), cwd);
   const significance = getSessionSignificance(
     editsSinceLastSaved,
     getDesignSkillsUsed(sessionId)
@@ -589,6 +632,7 @@ if (require.main === module) {
     getSessionStats,
     isSignificantSession,
     isSourceFile,
+    scopeToProject,
     markVolumeNudgeSent,
     volumeNudgeAlreadySent,
     DESIGN_SKILLS,

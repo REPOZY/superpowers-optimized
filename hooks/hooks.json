@@ -12,6 +12,16 @@
         ]
       },
       {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/session-memory.js\"",
+            "async": false
+          }
+        ]
+      },
+      {
         "hooks": [
           {
             "type": "command",

@@ -210,7 +210,6 @@ test('Max 3 skills suggested per prompt', () => {
   const ctx = result.hookSpecificOutput?.additionalContext || '';
   if (ctx) {
     // Count only skill list entries (lines starting with "  - superpowers-optimized:").
-    // Excludes the instruction line "invoke superpowers-optimized:using-superpowers FIRST".
     const skillLines = ctx.split('\n').filter(l => /^\s+-\s+superpowers-optimized:/.test(l));
     assert.ok(skillLines.length <= 3,
       `More than 3 skills suggested: ${skillLines.length}\n${ctx}`);
@@ -865,6 +864,69 @@ test('Domain nouns survive the stop-word list', () => {
   for (const domain of ['state', 'plan', 'hook', 'memory', 'context']) {
     assert.ok(kw.includes(domain), `"${domain}" must remain a keyword`);
   }
+});
+
+// Replayed against this repo's real prompts, one false recall came entirely from
+// the directories of an @-mentioned file ("users", "documents", "github"…).
+
+test('An @-mentioned absolute path contributes its file name only', () => {
+  const kw = extractKeywords(
+    'Bump the version in @"/c:/Users/Jane Doe/Documents/Github/proj/README.md" too',
+    'C:\\Users\\Jane Doe\\Documents\\Github\\proj');
+  for (const noise of ['users', 'jane', 'documents', 'github']) {
+    assert.ok(!kw.includes(noise), `path segment "${noise}" became a keyword`);
+  }
+  assert.ok(kw.includes('readme') && kw.includes('version') && kw.includes('bump'), kw.join(','));
+});
+
+test('Segments of the project path are not keywords even when typed bare', () => {
+  const kw = extractKeywords('open Jane Doe/Documents/Github staleness', '/home/Jane Doe/Documents/Github/proj');
+  for (const noise of ['jane', 'documents', 'github']) assert.ok(!kw.includes(noise), `"${noise}" kept`);
+  assert.ok(kw.includes('staleness'));
+});
+
+test('Editor and system wrappers are not the user\'s words', () => {
+  const kw = extractKeywords(
+    '<ide_opened_file>The user opened the file c:\\x\\Verdict.txt in the IDE.</ide_opened_file> fix the hook staleness');
+  for (const noise of ['opened', 'verdict', 'user']) assert.ok(!kw.includes(noise), `"${noise}" kept`);
+  assert.ok(kw.includes('hook') && kw.includes('staleness'));
+});
+
+test('One common word matching many entries equally recalls nothing', () => {
+  const entries = Array.from({ length: 12 }, (_, i) => `## 2026-01-${i} [saved]\nGoal: plugin work ${i}\nDecisions:\n- hook detail ${i}`);
+  const ranked = rankEntries(entries, ['ameliorate', 'plugin']);
+  assert.strictEqual(ranked.length, 0, `recalled: ${ranked.map(r => r.entry.split('\n')[0]).join('; ')}`);
+});
+
+test('A keyword never matches a fragment of a longer word or file name', () => {
+  // Real miss: "wait" matched condition-based-waiting-example.ts; being the
+  // rarest term, that fragment alone recalled an unrelated cleanup entry.
+  const entries = [
+    '## a [saved]\nGoal: cleanup\n- kept condition-based-waiting-example.ts (referenced)',
+    ...Array.from({ length: 10 }, (_, i) => `## v${i} [saved]\nGoal: version bump ${i}`),
+  ];
+  const ranked = rankEntries(entries, ['bump', 'version', 'wait']);
+  assert.ok(!ranked.some(r => r.entry.startsWith('## a ')), 'fragment match recalled the cleanup entry');
+});
+
+test('A keyword still matches the words it begins: plurals, -ed, -ing', () => {
+  const others = Array.from({ length: 6 }, (_, i) => `## x${i} [saved]\nGoal: unrelated ${i}`);
+  // (Not "save": every header contains "[saved]", so it matches all entries.)
+  const entries = ['## a [saved]\nGoal: recalled hooks; debugging, stored, mapped', ...others];
+  for (const kw of ['recall', 'hook', 'debug', 'store', 'map']) {
+    assert.strictEqual(rankEntries(entries, [kw]).length, 1, `"${kw}" did not match the word it begins`);
+  }
+});
+
+test('Up to three entries tied on the same specific terms are still recalled', () => {
+  const entries = [
+    '## a [saved]\nGoal: hookbridge compile drops statusMessage',
+    '## b [saved]\nGoal: hookbridge compile drops statusMessage again',
+    '## c [saved]\nGoal: hookbridge compile drops statusMessage third time',
+    ...Array.from({ length: 10 }, (_, i) => `## x${i} [saved]\nGoal: unrelated ${i}`),
+  ];
+  const ranked = rankEntries(entries, ['hookbridge', 'statusmessage']);
+  assert.strictEqual(ranked.length, 3, 'specific three-way tie was suppressed');
 });
 
 // ── Context window resolution (D7) ────────────────────────────────────────────

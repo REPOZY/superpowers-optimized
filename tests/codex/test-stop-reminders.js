@@ -180,7 +180,7 @@ test('Commit reminder suppressed when all session edits are committed (git clean
     // Simulate 6 session edits so the edit-count threshold (>=5) is crossed
     const editLog = path.join(logDir, 'edit-log.txt');
     const lines = ['a.js','b.js','c.js','d.js','e.js','f.js'].map(f =>
-      `${new Date().toISOString()} | ${TEST_SESSION_ID} | Edit | /project/${f}\n`
+      `${new Date().toISOString()} | ${TEST_SESSION_ID} | Edit | ${f}\n`
     ).join('');
     fs.writeFileSync(editLog, lines, 'utf8');
 
@@ -192,6 +192,50 @@ test('Commit reminder suppressed when all session edits are committed (git clean
     const reason = result.reason || '';
     assert.ok(!reason.includes('Commit reminder'),
       `Commit reminder must not fire when git reports no uncommitted changes, got: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Edits outside the project (scratch files, temp dirs) never trigger reminders', () => {
+  // Regression: a throwaway probe.js in the session scratchpad produced "TDD reminder:
+  // 1 source file(s) modified" and blocked the stop, though the repo was clean.
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-stop-scratch-'));
+  try {
+    writeRecentEdits(logDir, [path.join(scratch, 'probe.js'), path.join(scratch, 'a.js'),
+      path.join(scratch, 'b.js'), path.join(scratch, 'c.js')]);
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+    assert.deepStrictEqual(result, {},
+      `Edits outside cwd must not produce reminders, got: ${JSON.stringify(result)}`);
+  } finally {
+    cleanup(homeDir, cwdDir, scratch);
+  }
+});
+
+test('Edits inside the project still trigger the TDD reminder', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdit(logDir, path.join(cwdDir, 'src', 'index.js'));
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+    assert.ok((result.reason || '').includes('TDD reminder'),
+      `In-project source edit must still trigger TDD reminder, got: ${JSON.stringify(result)}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Project scoping is not fooled by a sibling directory sharing the prefix', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  const sibling = cwdDir + '-other';
+  try {
+    writeRecentEdit(logDir, path.join(sibling, 'index.js'));
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+    assert.deepStrictEqual(result, {},
+      `"${sibling}" is not inside "${cwdDir}", got: ${JSON.stringify(result)}`);
   } finally {
     cleanup(homeDir, cwdDir);
   }
@@ -217,7 +261,7 @@ test('Detects SKILL.md edits', () => {
 test('Detects hooks/*.js edits', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
-    writeRecentEdit(logDir, '/project/hooks/context-engine.js');
+    writeRecentEdit(logDir, 'hooks/context-engine.js');
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const result = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
     const reason = result.reason || '';
@@ -289,10 +333,10 @@ test('Fires on a plain app project with enough source files touched', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
     writeRecentEdits(logDir, [
-      '/app/src/auth/session.ts',
-      '/app/src/auth/token.ts',
-      '/app/src/api/login.ts',
-      '/app/src/components/LoginForm.tsx',
+      'src/auth/session.ts',
+      'src/auth/token.ts',
+      'src/api/login.ts',
+      'src/components/LoginForm.tsx',
     ]);
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
@@ -308,7 +352,7 @@ test('Fires on a plain app project with enough source files touched', () => {
 test('Does not fire below the source-file threshold', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
-    writeRecentEdits(logDir, ['/app/src/a.ts', '/app/src/b.ts', '/app/src/c.ts']);
+    writeRecentEdits(logDir, ['src/a.ts', 'src/b.ts', 'src/c.ts']);
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
     assert.ok(!reason.includes('Decision log'), `3 source files is a fix, not a design session: ${reason}`);
@@ -321,8 +365,8 @@ test('Counts distinct files, not repeated edits to one file', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
     writeRecentEdits(logDir, [
-      '/app/src/a.ts', '/app/src/a.ts', '/app/src/a.ts',
-      '/app/src/a.ts', '/app/src/a.ts', '/app/src/a.ts',
+      'src/a.ts', 'src/a.ts', 'src/a.ts',
+      'src/a.ts', 'src/a.ts', 'src/a.ts',
     ]);
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
@@ -337,8 +381,8 @@ test('Docs-only and config-only sessions do not trigger the volume rule', () => 
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
     writeRecentEdits(logDir, [
-      '/app/README.md', '/app/docs/guide.md', '/app/package.json',
-      '/app/tsconfig.json', '/app/.prettierrc',
+      'README.md', 'docs/guide.md', 'package.json',
+      'tsconfig.json', '.prettierrc',
     ]);
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
@@ -351,7 +395,7 @@ test('Docs-only and config-only sessions do not trigger the volume rule', () => 
 test('Config-pattern match still wins and names the files', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
-    writeRecentEdits(logDir, ['/app/CLAUDE.md', '/app/src/a.ts']);
+    writeRecentEdits(logDir, ['CLAUDE.md', 'src/a.ts']);
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
     assert.ok(reason.includes('Decision log'), `CLAUDE.md should trigger: ${reason}`);
@@ -395,7 +439,7 @@ function writeSkillStats(logDir, sessionId, skills) {
 test('Volume nudge fires once, then stays quiet for the rest of the session', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
-    writeRecentEdits(logDir, ['/a/x1.ts', '/a/x2.ts', '/a/x3.ts', '/a/x4.ts']);
+    writeRecentEdits(logDir, ['x1.ts', 'x2.ts', 'x3.ts', 'x4.ts']);
     const { evaluatePayload, setGuard } = loadHookWithHome(homeDir);
 
     const first = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
@@ -415,7 +459,7 @@ test('Volume nudge fires once, then stays quiet for the rest of the session', ()
 test('Config-file nudge keeps firing until a [saved] entry exists', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
-    writeRecentEdits(logDir, ['/a/skills/x/SKILL.md']);
+    writeRecentEdits(logDir, ['skills/x/SKILL.md']);
     const { evaluatePayload } = loadHookWithHome(homeDir);
 
     const first = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
@@ -433,7 +477,7 @@ test('Config-file nudge keeps firing until a [saved] entry exists', () => {
 test('Design skill lowers the bar to 2 source files', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
-    writeRecentEdits(logDir, ['/a/x1.ts', '/a/x2.ts']);
+    writeRecentEdits(logDir, ['x1.ts', 'x2.ts']);
     writeSkillStats(logDir, TEST_SESSION_ID, { 'systematic-debugging': 2 });
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
@@ -448,7 +492,7 @@ test('Design skill lowers the bar to 2 source files', () => {
 test('Non-design skills do not lower the bar', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
-    writeRecentEdits(logDir, ['/a/x1.ts', '/a/x2.ts']);
+    writeRecentEdits(logDir, ['x1.ts', 'x2.ts']);
     writeSkillStats(logDir, TEST_SESSION_ID, { 'token-efficiency': 1 });
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
@@ -462,7 +506,7 @@ test('Non-design skills do not lower the bar', () => {
 test('Skill stats from another session are never inherited', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
-    writeRecentEdits(logDir, ['/a/x1.ts', '/a/x2.ts']);
+    writeRecentEdits(logDir, ['x1.ts', 'x2.ts']);
     writeSkillStats(logDir, 'a-completely-different-session', { 'brainstorming': 3 });
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
@@ -476,7 +520,7 @@ test('Skill stats from another session are never inherited', () => {
 test('Plugin-namespaced skill names are recognised', () => {
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
-    writeRecentEdits(logDir, ['/a/x1.ts', '/a/x2.ts']);
+    writeRecentEdits(logDir, ['x1.ts', 'x2.ts']);
     writeSkillStats(logDir, TEST_SESSION_ID, { 'superpowers-optimized:brainstorming': 1 });
     const { evaluatePayload } = loadHookWithHome(homeDir);
     const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
