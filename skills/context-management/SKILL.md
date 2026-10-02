@@ -171,6 +171,8 @@ Nothing else writes to this file. The Stop hook reads it and reminds you to save
 
 4. **Capture critical constraints:** The highest-value section. These are non-obvious facts that are not visible in the code itself — quoting rules, platform differences, version sync requirements, things that caused bugs before. Pull these from `session-log.md` `[saved]` entries and from `known-issues.md` if they exist.
 
+   **Never repeat what `CLAUDE.md` or `AGENTS.md` already says.** Those files are loaded into every session; the map is injected alongside them, so a duplicated constraint costs tokens twice and adds nothing. Read them first and leave out anything they cover — in this section and in Key Files.
+
 5. **Identify hot files:** The files that change most often — the ones most likely to need a freshness check on future sessions.
    ```bash
    git log --name-only --pretty=format: --since=6.months | grep -v '^$' | sort | uniq -c | sort -rn | head -15
@@ -208,6 +210,8 @@ When the staleness check in the entry sequence flags changed files:
 4. If any new critical constraints were discovered this session, add them.
 
 **Size: 150 lines is the authoring target, 200 is the hard limit.** Under 150, the map is doing its job. Between 150 and 200 it is still injected in full, but it has stopped being a map and become documentation — prune file entries whose purpose is now obvious. At 200+ the session-start hook stops injecting the full file and falls back to Critical Constraints and Hot Files only, so anything you wrote in Key Files silently stops reaching future sessions. Never let it cross 200.
+
+Lines are not the only limit. All project memory shares one ~9,500-character injection budget, filled in order: `state.md` → Critical Constraints → open known issues → the latest session-log entries → the rest of the map. A 4,000-character Critical Constraints section pushes the latest decisions out of every session. Keep each constraint to one line and the section under ~1,500 characters; `node tools/memory-health.js` shows what was cut.
 
 ## Guardrails
 

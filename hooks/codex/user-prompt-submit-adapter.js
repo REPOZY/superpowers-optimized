@@ -39,7 +39,7 @@ function evaluatePayload(data) {
   }
 
   const matches = matchSkills(prompt);
-  const keywords = extractKeywords(prompt);
+  const keywords = extractKeywords(prompt, cwd);
   const memoryEntries = searchSessionLog(cwd, keywords);
   const knownIssueEntries = searchKnownIssues(cwd, keywords);
 

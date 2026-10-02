@@ -11,7 +11,9 @@ SKILLS=(
     "systematic-debugging"
     "test-driven-development"
     "writing-plans"
-    "dispatching-parallel-agents"
+    # dispatching-parallel-agents removed: on any fixture small enough to run
+    # cheaply, the model rightly fixes 4 one-line bugs inline (0/6 runs at both
+    # v6.8.1 and v6.9.0) — the test could only pass by rewarding waste.
     "executing-plans"
     "requesting-code-review"
 )
@@ -33,7 +35,7 @@ for skill in "${SKILLS[@]}"; do
 
     echo "Testing: $skill"
 
-    if "$SCRIPT_DIR/run-test.sh" "$skill" "$prompt_file" 3 2>&1 | tee /tmp/skill-test-$skill.log; then
+    if "$SCRIPT_DIR/run-test.sh" "$skill" "$prompt_file" 6 2>&1 | tee /tmp/skill-test-$skill.log; then
         PASSED=$((PASSED + 1))
         RESULTS+=("✅ $skill")
     else

@@ -237,6 +237,137 @@ test('Large project-map.md (>200 lines) → truncated to key sections', () => {
   } finally { cleanup(dir); }
 });
 
+// ── Parity with hooks/session-start ───────────────────────────────────────────
+
+console.log('\nParity with hooks/session-start');
+
+const { spawnSync } = require('child_process');
+const NOW = Math.floor(Date.now() / 1000);
+
+function gitRepo() {
+  const dir = makeTempDir();
+  spawnSync('git', ['init', '--quiet'], { cwd: dir });
+  return dir;
+}
+
+function commitAt(dir, epochSeconds) {
+  fs.writeFileSync(path.join(dir, 'a.txt'), String(Math.random()));
+  const date = `${epochSeconds} +0000`;
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t',
+    GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date,
+  };
+  spawnSync('git', ['add', 'a.txt'], { cwd: dir, env });
+  spawnSync('git', ['commit', '--quiet', '-m', 'c'], { cwd: dir, env });
+}
+
+function writeStateAt(dir, body, epochSeconds) {
+  const p = path.join(dir, 'state.md');
+  fs.writeFileSync(p, body);
+  fs.utimesSync(p, epochSeconds, epochSeconds);
+}
+
+test('state.md older than the last commit is framed as possibly stale, not ACTIVE', () => {
+  const dir = gitRepo();
+  try {
+    writeStateAt(dir, 'Current Goal: ship v1', NOW - 3600);
+    commitAt(dir, NOW - 1800);
+    const ctx = runAdapter({}, dir)._rawPlainText;
+    assert.ok(!ctx.includes('ACTIVE TASK STATE'), 'finished task injected as ACTIVE TASK STATE');
+    assert.ok(ctx.includes('may be stale'), 'missing stale framing');
+  } finally { cleanup(dir); }
+});
+
+test('state.md newer than the last commit is framed as active', () => {
+  const dir = gitRepo();
+  try {
+    commitAt(dir, NOW - 7200);
+    writeStateAt(dir, 'Current Goal: task 3 of 5', NOW - 60);
+    const ctx = runAdapter({}, dir)._rawPlainText;
+    assert.ok(ctx.includes('ACTIVE TASK STATE'), 'fresh state.md lost its active framing');
+  } finally { cleanup(dir); }
+});
+
+test('"no active task" state.md gets soft framing', () => {
+  const dir = gitRepo();
+  try {
+    commitAt(dir, NOW - 7200);
+    writeStateAt(dir, 'Current Goal: No active task', NOW - 60);
+    const ctx = runAdapter({}, dir)._rawPlainText;
+    assert.ok(ctx.includes('indicates no active task'), 'cleared state lost its soft framing');
+    assert.ok(!ctx.includes('ACTIVE TASK STATE'), 'cleared state injected as active');
+  } finally { cleanup(dir); }
+});
+
+test('known-issues: fixed (struck) entries are not injected', () => {
+  const dir = makeTempDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'known-issues.md'),
+      '## ~~Old fixed error~~\nResolved long ago\n\n## Live error\nRun npm ci first\n');
+    const ctx = runAdapter({}, dir)._rawPlainText;
+    assert.ok(ctx.includes('Live error'), 'open issue missing');
+    assert.ok(!ctx.includes('Resolved long ago'), 'fixed issue injected');
+  } finally { cleanup(dir); }
+});
+
+test('known-issues: capped at the 5 most recent open entries', () => {
+  const dir = makeTempDir();
+  try {
+    const body = Array.from({ length: 7 }, (_, i) => `## Issue ${i}\nbody ${i}\n`).join('\n');
+    fs.writeFileSync(path.join(dir, 'known-issues.md'), body);
+    const ctx = runAdapter({}, dir)._rawPlainText;
+    assert.ok(!ctx.includes('body 0') && !ctx.includes('body 1'), 'oldest entries beyond the cap injected');
+    assert.ok(ctx.includes('body 6') && ctx.includes('body 2'), 'newest 5 entries missing');
+    assert.ok(ctx.includes('2 more open issues'), 'missing overflow note');
+  } finally { cleanup(dir); }
+});
+
+test('context-snapshot: never labelled "changed since last commit"', () => {
+  const dir = makeTempDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'context-snapshot.json'), JSON.stringify({
+      changed_files: ['src/a.js'], recent_commits: ['abc one'], changed_files_since: 'last-commit',
+    }));
+    const ctx = runAdapter({}, dir)._rawPlainText;
+    assert.ok(!ctx.includes('Changed since last commit'), 'false label still injected');
+    assert.ok(ctx.includes('Changed in the last commit: src/a.js'), 'missing accurate label');
+  } finally { cleanup(dir); }
+});
+
+test('context-snapshot: watermark-based snapshot labelled as since last session', () => {
+  const dir = makeTempDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'context-snapshot.json'), JSON.stringify({
+      changed_files: ['src/a.js'], recent_commits: ['abc one'],
+      changed_files_since: 'last-session', cross_session_commit_count: 1,
+    }));
+    const ctx = runAdapter({}, dir)._rawPlainText;
+    assert.ok(ctx.includes('Committed since your last session (1 commit): src/a.js'), 'missing since-last-session label');
+  } finally { cleanup(dir); }
+});
+
+test('Router: map present → fresh-project gate stripped, staleness procedure kept', () => {
+  const dir = makeTempDir();
+  try {
+    fs.writeFileSync(path.join(dir, 'project-map.md'), '# Project Map\n');
+    const ctx = runAdapter({}, dir)._rawPlainText;
+    assert.ok(!ctx.includes('Fresh project gate'), 'gate text injected although project-map.md exists');
+    assert.ok(ctx.includes('Without git:'), 'staleness procedure missing although a map exists');
+    assert.ok(!ctx.includes('sp:if-'), 'section markers leaked into context');
+  } finally { cleanup(dir); }
+});
+
+test('Router: no map → gate kept, staleness procedure stripped', () => {
+  const dir = makeTempDir();
+  try {
+    const ctx = runAdapter({}, dir)._rawPlainText;
+    assert.ok(ctx.includes('Fresh project gate'), 'gate text missing without project-map.md');
+    assert.ok(!ctx.includes('Without git:'), 'staleness procedure injected although no map exists');
+    assert.ok(!ctx.includes('sp:if-'), 'section markers leaked into context');
+  } finally { cleanup(dir); }
+});
+
 // ── Resilience ────────────────────────────────────────────────────────────────
 
 console.log('\nResilience');

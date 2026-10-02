@@ -279,6 +279,55 @@ test('Basenames that caused the worst false positives are denylisted', () => {
   }
 });
 
+// ── Snapshot records its diff base ───────────────────────────────────────────
+
+console.log('\nSnapshot records its diff base');
+
+{
+  const os = require('os');
+  const { spawnSync } = require('child_process');
+
+  function runEngine(cwd, home) {
+    spawnSync(process.execPath, [SOURCE_PATH], {
+      cwd,
+      input: JSON.stringify({ cwd }),
+      env: { ...process.env, HOME: home, USERPROFILE: home },
+      timeout: 30000,
+    });
+    return JSON.parse(fs.readFileSync(path.join(cwd, 'context-snapshot.json'), 'utf8'));
+  }
+
+  function commit(cwd, name) {
+    fs.writeFileSync(path.join(cwd, name), name);
+    const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
+    spawnSync('git', ['add', name], { cwd, env });
+    spawnSync('git', ['commit', '--quiet', '-m', name], { cwd, env });
+  }
+
+  test('changed_files_since is "last-commit" on a first session, "last-session" once a watermark exists', () => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-ce-repo-'));
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sp-ce-home-'));
+    try {
+      spawnSync('git', ['init', '--quiet'], { cwd });
+      commit(cwd, 'a.txt');
+      commit(cwd, 'b.txt');
+      const first = runEngine(cwd, home);
+      assert.strictEqual(first.changed_files_since, 'last-commit',
+        `first session must report last-commit, got ${first.changed_files_since}`);
+      assert.deepStrictEqual(first.changed_files, ['b.txt']);
+
+      commit(cwd, 'c.txt');
+      commit(cwd, 'd.txt');
+      const second = runEngine(cwd, home);
+      assert.strictEqual(second.changed_files_since, 'last-session',
+        `watermark session must report last-session, got ${second.changed_files_since}`);
+      assert.deepStrictEqual(second.changed_files.sort(), ['c.txt', 'd.txt']);
+    } finally {
+      for (const d of [cwd, home]) { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} }
+    }
+  });
+}
+
 // ── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(50)}`);

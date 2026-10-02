@@ -26,11 +26,8 @@ Request review early to catch issues before they spread.
    - **A single task or batch:** the commit recorded *before* the work started. **Not** `HEAD~1`, which silently drops all but the last commit of a multi-commit task.
    - No remote, or `origin/main` not fetched: fall back to `git merge-base main HEAD`.
    - Confirm the range is non-empty before dispatching — `git diff --stat BASE..HEAD`. An empty range produces a confident "no issues found" review of nothing.
-2. Check for `context-snapshot.json` at the project root:
-   - If present: run `git rev-parse HEAD` and compare to `git_hash` in the file.
-     - **Hashes match (fresh):** use `changed_files` and `blast_radius` as the review scope. Inject this summary into the code-reviewer prompt: *"Changed files: [list]. Also referenced by: [blast_radius callers]."*
-     - **Hashes differ (stale):** note the snapshot is from a previous commit; use `changed_files` as a starting point but do not rely on `blast_radius`.
-   - If absent: determine scope from `git diff --name-only BASE_SHA..HEAD_SHA` directly.
+2. The review scope is always `git diff --name-only BASE_SHA..HEAD_SHA`. Never take it from `context-snapshot.json`: its `changed_files` are the commits since the last session start (or the last commit), not your review range.
+   - The snapshot may add callers. If it exists and its `git_hash` equals `git rev-parse HEAD`, then for each file in the review range that has a `blast_radius` entry, add those callers to the reviewer prompt: *"Changed files: [range list]. Also referenced by: [blast_radius callers]."* If the hashes differ, ignore `blast_radius`.
 
    **What `blast_radius` means.** Each entry lists files containing a reference that *resolves* to the changed file's path — a relative import, or the repo path written out. It is deliberately incomplete: references that cannot be resolved (package-style imports, dynamic paths, aliases from `tsconfig`) are dropped rather than guessed, so an empty list means "nothing was proven," not "nothing depends on this." Never widen review scope on a name match alone; if you need dependents the snapshot does not list, grep for them and say you did.
 

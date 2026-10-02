@@ -17,7 +17,7 @@
 
 Built on the trusted obra/superpowers workflow and refined through research into LLM agent behavior, it adds automatic 3-tier workflow routing, proactive safety hooks, self-consistency verification at critical decision points, cross-session memory, and adversarial red-teaming — everything the original does, plus the discipline layer it was missing.
 
-Cross-session memory changes the experience fundamentally. Without it, every session starts blind: the AI re-explores structure it already mapped, re-proposes approaches that were already rejected, re-debugs errors that were already solved. With the memory stack, it arrives knowing what was tried, what was decided, and why — and with a pre-computed snapshot of exactly what changed since the last commit — and builds forward instead of sideways.
+Cross-session memory changes the experience fundamentally. Without it, every session starts blind: the AI re-explores structure it already mapped, re-proposes approaches that were already rejected, re-debugs errors that were already solved. With the memory stack, it arrives knowing what was tried, what was decided, and why — and with a pre-computed snapshot of what was committed since the last session — and builds forward instead of sideways.
 
 Five research-backed principles run throughout: *less is more* (minimal always-on instructions), *fresh context beats accumulated context* (subagents get clean scoped prompts, not polluted history), *compliance ≠ competence* (instructions must be carefully engineered, not just comprehensive), *verify your own reasoning* (multi-path self-consistency catches confident-but-wrong failures before they become expensive), and *accountability drives accuracy* (agents that know their output has real downstream consequences perform better).
 
@@ -46,7 +46,7 @@ The agent will automatically route to the correct workflow, apply safety guards,
 See [Installation](#installation) for install, update, and uninstall commands on all platforms.
 
 > [!NOTE]
-> **Codex parity boundary:** Claude Code gets the full 10-hook lifecycle. Codex now has verified live support for `SessionStart`, `UserPromptSubmit`, and `PreToolUse(Bash)` on macOS/Linux with `codex_hooks = true` and `codex-cli 0.118.0+` (tested on `0.118.0`). This repo now also ships a Codex-specific `PostToolUse(Bash)` smart-compress hook that can replace noisy Bash output after execution using the existing compression rules. `Stop` is implemented for Codex, but visible reminder surfacing should still be revalidated after install/update. Codex still does **not** expose Claude's `PostToolUse(Edit|Write|Skill)`, `SubagentStop`, `Read/Edit/Write` interception, or Claude's pre-execution Bash rewrite path, so full Claude parity is not possible today.
+> **Codex parity boundary:** Claude Code gets the full 11-hook lifecycle. Codex now has verified live support for `SessionStart`, `UserPromptSubmit`, and `PreToolUse(Bash)` on macOS/Linux with `codex_hooks = true` and `codex-cli 0.118.0+` (tested on `0.118.0`). This repo now also ships a Codex-specific `PostToolUse(Bash)` smart-compress hook that can replace noisy Bash output after execution using the existing compression rules. `Stop` is implemented for Codex, but visible reminder surfacing should still be revalidated after install/update. Codex still does **not** expose Claude's `PostToolUse(Edit|Write|Skill)`, `SubagentStop`, `Read/Edit/Write` interception, or Claude's pre-execution Bash rewrite path, so full Claude parity is not possible today.
 
 ---
 
@@ -89,8 +89,12 @@ Session starts
 │                                                           │
 │  session-start →                                          │
 │    Injects using-superpowers routing instructions         │
-│    Injects project-map.md content (if exists)             │
 │    Checks for available plugin update                     │
+│                                                           │
+│  session-memory.js →                                      │
+│    Injects state.md, project-map.md, known-issues.md,     │
+│    the last saved session-log entries, the snapshot —     │
+│    in priority order, under a size budget                 │
 └───────────────────────────────────────────────────────────┘
         │
         ▼
@@ -109,10 +113,9 @@ User sends a prompt
 ┌─ using-superpowers (always loaded at SessionStart) ───────┐
 │  Entry sequence:                                          │
 │    1. token-efficiency (always)                           │
-│    2. Read state.md if resuming prior work                │
-│    3. Read known-issues.md if exists                      │
-│    4. Read project-map.md if exists → check git staleness │
-│       (only re-read files that changed since last map)    │
+│    2. Use the injected memory; read a file only when its  │
+│       block says it was shortened or left out             │
+│    3. Map stale? → re-read only the files it names        │
 │                                                           │
 │  Classify: micro / lightweight / full                     │
 │                                                           │
@@ -168,31 +171,33 @@ User sends a prompt
 
 ## Research-Informed Design
 
-The design decisions in this fork are informed by three research papers on LLM agent behavior. These papers motivated the approach:
+The design decisions in this fork are informed by three research papers on LLM agent behavior and by published experiments from 2389 Research. They motivated the approach; they were run on settings that differ from this plugin (SWE-bench-style tasks, chat logs, arithmetic and commonsense benchmarks, essay questions), so they are reasons for the design, not measurements of it.
 
-### Minimal context files outperform verbose ones
+### Context files cost more than they help
 
-**Paper:** [Evaluating AGENTS.md: Are Repository-Level Context Files Helpful for Coding Agents?](https://arxiv.org/abs/2602.11988) (AGENTbench, 138 tasks, 12 repos, 4 agents)
+**Paper:** [Evaluating AGENTS.md: Are Repository-Level Context Files Helpful for Coding Agents?](https://arxiv.org/abs/2602.11988) (v3, Sep 2026: CTXbench — 138 tasks, 12 repos — plus SWE-bench Lite; 4 agents. v1 called the benchmark AGENTbench.)
 
 Key findings that shaped this fork:
-- **LLM-generated context files decreased success rates by ~2-3%** while increasing inference costs by over 20%. More instructions made tasks *harder*, not easier.
-- **Developer-written context files only helped ~4%** — and only when kept minimal. Detailed directory enumerations and comprehensive overviews didn't help agents find relevant files faster.
-- **Agents used 14-22% more reasoning tokens** when given longer context files, suggesting cognitive overload rather than helpful guidance.
-- **Agents followed instructions compliantly** (using mentioned tools 1.6-2.5x more often) but this compliance didn't translate to better outcomes.
+- **Context files did not improve task success.** LLM-generated files changed success by −0.5% (SWE-bench) and −2% (CTXbench); developer-written files by +2.4%. None of these is statistically significant, though developer-written files did significantly beat LLM-generated ones.
+- **They raised cost by 20–23%** (and 2.4–3.9 extra steps per task), because agents follow them: tools named in a context file were used 1.6–2.5x more often. Compliance did not translate into better outcomes.
+- **Repository overviews and directory listings did not help agents reach the relevant files any sooner.** LLM-generated files mostly duplicated existing documentation — with the docs removed, they helped (+2.7%).
+- **Following them takes more thinking**: reasoning tokens rose up to 22% (GPT-5.2), suggesting the extra instructions make tasks harder. File length itself showed no clear effect — what costs is the instructions being followed.
 
-**What we changed:** Every skill was rewritten as a concise operational checklist instead of verbose prose. The `CLAUDE.md` contains only minimal requirements (specific tooling, critical constraints, conventions). The 3-tier complexity classification (micro/lightweight/full) skips unnecessary skill loading for simple tasks. The result is lower prompt overhead in every session and fewer failures from instruction overload.
+**What we changed:** Skills load on demand instead of living in always-on context, and the 3-tier complexity classification (micro/lightweight/full) skips skill loading for simple tasks. The `CLAUDE.md` contains only what an agent cannot discover (specific tooling, critical constraints, conventions), and `claude-md-creator` writes context files the same way. The always-on router drops sections that cannot apply to the current project — the fresh-project gate where a `project-map.md` exists, the map-staleness procedure where none does — and no longer asks the agent to re-read memory files the session-start hook has already injected.
 
 ### Prior assistant responses can degrade performance
 
-**Paper:** [Do LLMs Benefit from Their Own Words?](https://arxiv.org/abs/2602.24287) (4 models, real-world multi-turn conversations)
+**Paper:** [Do LLMs Benefit from Their Own Words?](https://arxiv.org/abs/2602.24287) (4 models, real-world multi-turn chat conversations from WildChat and ShareLM)
 
 Key findings that shaped this fork:
-- **Removing prior assistant responses often maintained comparable quality** while reducing context by 5-10x. Models over-condition on their own previous outputs.
-- **Context pollution is real:** models propagate errors across turns — incorrect code parameters carry over, hallucinated facts persist, and stylistic artifacts constrain subsequent responses.
-- **~36% of prompts in ongoing conversations are self-contained "new asks"** that perform equally well without assistant history.
-- **One-sentence summaries of prior responses outperformed full context**, suggesting long reasoning chains degrade subsequent performance.
+- **Much less history often works as well.** Replacing prior assistant turns with one-sentence summaries, or keeping only the last exchange, often matched full context while using roughly 8x less of it. Summaries were the best configuration — often *better* than full history. Dropping assistant turns entirely cost some quality.
+- **Context pollution is real:** in ~14% of turns, earlier assistant output leaked into later answers — an earlier task structure overriding a new instruction (the most common case), wrong code parameters carried over, hallucinated facts repeated. Replacing that history with neutral filler of the same length removed every flagged case, so it is the *content* of past answers, not context length, that misleads.
+- **36.4% of mid-conversation prompts are self-contained "new asks"** that need no assistant history.
+- **Filter by relevance, not recency.** The authors recommend keeping what is relevant to the current turn rather than compacting once a length threshold is hit.
 
-**What we changed:** The `context-management` skill actively prunes noisy history and persists only durable state across sessions. Subagent prompts request only task-local constraints and evidence rather than carrying forward full conversation history. Execution skills avoid long historical carryover unless required for correctness. The `token-efficiency` standard enforces these rules as an always-on operational baseline.
+**What we changed:** Subagents are built from scratch with only their task brief, the interfaces they touch, and global constraints — never the conversation, prior reasoning, or "state after task N" summaries. Cross-session memory is stored as short summaries (`[saved]` entries capped at 250 words) and recalled per prompt by relevance (session start also injects the two most recent entries when the memory budget allows). The `context-management` skill writes durable state to `state.md` so a fresh session can replace an accumulated one; it cannot remove turns from a live conversation. Injected memory is gated against stale instructions: a `state.md` older than the latest commit is framed as possibly stale rather than "resume from here".
+
+*Caveat:* the paper studied chat conversations, not agentic tool loops. Applying it here is an extrapolation.
 
 ### Single reasoning chains fail on hard problems
 
@@ -200,31 +205,33 @@ Key findings that shaped this fork:
 
 Key findings that shaped this fork:
 - **A single chain-of-thought can be confident but wrong** — the model picks one reasoning path and commits, even when that path contains an arithmetic slip, wrong assumption, or incorrect causal direction.
-- **Generating multiple independent reasoning paths and taking majority vote significantly improves accuracy** across arithmetic, commonsense, and symbolic reasoning tasks.
-- **Consistency correlates with accuracy** — when paths agree, the answer is almost always correct. When they scatter, the problem is genuinely hard or ambiguous, which is itself a useful signal.
-- **Diversity of reasoning matters more than quantity** — 5 genuinely different paths outperform 10 paths that all reason the same way.
+- **Sampling several independent reasoning paths and taking a majority vote significantly improves accuracy** across arithmetic and commonsense benchmarks (e.g. +17.9% on GSM8K). More samples kept helping up to 40; 5–10 capture most of the gain.
+- **Consistency correlates with accuracy** — low agreement signals the model does not know, which is itself useful.
+- **Diversity of reasoning paths is what drives the gain.**
 
-**What we changed:** The `systematic-debugging` skill now applies self-consistency during root cause diagnosis (Phase 3): before committing to a hypothesis, the agent generates 3-5 independent root cause hypotheses via different reasoning approaches, takes a majority vote, and reports confidence. Low-confidence diagnoses (<= 50% agreement) trigger a hard stop — gather more evidence before touching code. The `verification-before-completion` skill applies the same technique when evaluating whether evidence actually proves the completion claim, catching the failure mode where evidence is interpreted through a single (potentially wrong) lens. The underlying technique lives in `self-consistency-reasoner` and fires only during these high-stakes reasoning moments, keeping the token cost targeted.
+**What we changed:** `systematic-debugging` (Phase 3) and `verification-before-completion` apply an in-context version of the technique: before committing to a root cause or a completion verdict, the agent reaches an answer from 3–5 deliberately different starting points and votes. No majority means a hard stop — gather more evidence before touching code. This is an *approximation*: the paper's paths are separate samples, while these are written in one response and share the agent's blind spots. So the skills treat disagreement as strong evidence and agreement as weak, and the test or command — never the vote — proves the answer. The technique lives in `self-consistency-reasoner` and fires only at these high-stakes moments, keeping the token cost targeted.
 
-### Social accountability and iterative fixing improve agent accuracy
+### Social accountability, one-at-a-time fixing, and deliberation
 
-**Research:** [2389.ai research on multi-agent collaboration](https://2389.ai/products/simmer/) and their [claude-plugins repository](https://github.com/2389-research/claude-plugins)
+**Sources (2389 Research):** [Team Spirit Matters](https://2389.ai/research/writing/team-spirit-matters/), the [Simmer](https://2389.ai/research/products/simmer/) refinement loop, [Deliberation: Perspectives, Not Answers](https://2389.ai/research/writing/deliberation-perspectives-not-answers/), and their [claude-plugins repository](https://github.com/2389-research/claude-plugins). These are small practitioner experiments and design write-ups, not controlled studies — treat them as directional.
 
-Key findings that shaped this fork:
-- **Social accountability language in agent prompts significantly improves accuracy.** Agents told that downstream work depends on their output (e.g. "the fix pipeline acts on your findings — a false positive wastes a full cycle, a missed bug ships") perform measurably better than agents given identical tasks without this framing.
-- **Sequential batch fixing is fragile when findings share code.** Fixing all Critical/High findings in one pass without re-assessing between fixes can cause conflicts when multiple findings touch the same functions. An ASI (Actionable Side Information) approach — fix one finding, re-check affected files only, re-prioritize, repeat — prevents fix collisions and converges faster.
-- **Deliberation before brainstorming improves architectural decisions.** When the problem itself may be mis-framed or the options aren't well-defined yet, convening named stakeholder perspectives (each speaks once, without debate) surfaces convergence and live tension without forcing a premature choice. This prevents committing to solutions before the right question has been asked.
+Key ideas that shaped this fork:
+- **Social accountability framing.** Adding one sentence — "other team members are relying on you and the quality of your work" — to multi-agent prompts won 24 of 33 LLM-judged comparisons against the same prompts without it (11 open-ended questions, GPT-4o-mini, three judges). Judges cited thoroughness, evidence and structure. The experiment did not measure accuracy, and was not run on code.
+- **One directive per iteration.** Simmer refines an artifact by having a judge name the single most important fix (ASI, "Actionable Side Information") each round, keeping the best version so far so regressions do not carry forward. Applying fixes one at a time with re-assessment in between is this fork's adaptation for code review findings that share code; the speed and collision benefits are a design rationale, not a measured result.
+- **Deliberation before deciding.** For half-formed decisions, hearing named stakeholder perspectives — each speaking once, without debate — can surface a reframing that a premature list of options would hide. The source is one practitioner's account.
 
-**What we changed:** Social accountability framing was added to the `code-reviewer`, `red-team`, and `implementer` prompts. The auto-fix pipeline in `requesting-code-review` was rewritten as an ASI-guided iterative loop (fix one finding → targeted re-check of affected files only → re-assess remaining, identify new ASI → repeat). A new `deliberation` skill was added for complex architectural decisions where the problem needs reframing before brainstorming begins.
+**What we changed:** Accountability framing tells the `code-reviewer`, `red-team`, and implementer prompts what depends on their output (the red team is also told that accuracy matters more than volume, since a thoroughness nudge can inflate false positives). The auto-fix pipeline in `requesting-code-review` fixes one finding at a time: fix → targeted re-check of the touched files → re-assess the remaining findings → repeat. The `deliberation` skill handles decisions whose framing is still unclear.
 
-### Combined impact
+### Combined principles
 
-These research insights drive five core principles throughout the fork:
-1. **Less is more** — concise skills, minimal always-on instructions, and explicit context hygiene
+These sources motivate five principles throughout the fork:
+1. **Less is more** — on-demand skills, minimal always-on instructions, and no injected instructions that cannot apply
 2. **Fresh context beats accumulated context** — subagents get clean, task-scoped prompts instead of inheriting polluted history
 3. **Compliance != competence** — agents follow instructions reliably, so the instructions themselves must be carefully engineered (rationalization tables, red flags, forbidden phrases) rather than simply comprehensive
-4. **Verify your own reasoning** — multi-path self-consistency at critical decision points (diagnosis, verification) catches confident-but-wrong single-chain failures before they become expensive mistakes
-5. **Accountability and iteration** — agents told that their output has real downstream consequences are more accurate; fixing findings one at a time with re-assessment between fixes prevents collisions and converges faster than batch processing
+4. **Check your own reasoning, and know its limits** — multi-path checks at critical decision points catch some confident-but-wrong chains; disagreement stops work, agreement still needs proof
+5. **Accountability and iteration** — tell agents what depends on their output, and fix findings one at a time with re-assessment in between
+
+None of these effects has been measured on this plugin yet. Changes motivated by them are checked for regressions by the test suites, not proven to improve outcomes.
 
 
 ---
@@ -244,7 +251,9 @@ state.md               ← current task snapshot (never lose mid-work progress)
 
 ### project-map.md — What exists and what it does
 
-Generate once with "map this project". After that, the session-start hook injects its content directly into every session — no instruction-following required. The AI has the map before your first message arrives.
+Generate once with "map this project". After that, the session-memory hook injects its content directly into every session — no instruction-following required. The AI has the map before your first message arrives.
+
+**Memory is injected under a size budget.** Claude Code caps each hook's injected context at 10,000 characters; past that, the model receives a file path and a 2,000-character preview it is not told to read. The router and the memory therefore run as two hooks with a field each, and the memory hook fills its ~9,500-character budget in priority order: `state.md` → map staleness → the map's Critical Constraints → open known issues → the two latest session-log entries → the rest of the map → the snapshot. Whatever does not fit is named in the output (*"omitted: Directory Structure, Key Files…"*, *"Not shown for size — read when relevant: session-log.md…"*), so the model knows to open the file instead of assuming it saw everything. Keep Critical Constraints short — it is the map section that always gets in.
 
 ```markdown
 # Project Map
@@ -280,6 +289,7 @@ Written automatically by the `context-engine` hook on every session start. No se
 {
   "git_hash": "9636c5c",
   "changed_files": ["hooks/context-engine.js", "hooks/hooks.json"],
+  "changed_files_since": "last-session",
   "change_stat": "2 files changed, 140 insertions(+)",
   "recent_commits": ["9636c5c Check context-snapshot.json in Phase 1", "..."],
   "blast_radius": {
@@ -288,7 +298,7 @@ Written automatically by the `context-engine` hook on every session start. No se
 }
 ```
 
-Skills that need to know what changed — code review, systematic debugging — read this file first instead of running `git diff` and `git log` themselves. If the snapshot is fresh (git hash matches HEAD), the review scope is pre-verified before the agent starts. If it's stale or absent, skills fall back to git commands directly.
+`changed_files` are committed changes, never uncommitted work: everything committed since the previous session started (`changed_files_since: "last-session"`), or the last commit on a first session (`"last-commit"`). Systematic debugging reads it to answer "what changed since it last worked?" without running `git log`. Code review does not take its scope from here — the review range is always `BASE..HEAD` — but uses `blast_radius` to add callers of the files in that range when the snapshot is fresh (git hash matches HEAD).
 
 `blast_radius` lists a file only when it contains a reference that **resolves** to the changed file's path — a relative import, or the repo path written out. References that can't be resolved (package-style imports, aliases, dynamic paths) are dropped rather than guessed, so the list is deliberately incomplete: an empty list means "nothing proven," not "no dependents." That trade is intentional. A half-right impact list is worse than none, because the agent learns to ignore it.
 
@@ -313,7 +323,7 @@ Key facts: hooks.json requires \" not ' around ${CLAUDE_PLUGIN_ROOT} — single 
 Open: Monitor whether [saved] entries get used in practice; if not, consider folding key facts into project-map.md Critical Constraints instead
 ```
 
-Write an entry by invoking `context-management`. The two most recent live entries are injected at session start; entries marked `[superseded by ...]` are never injected, because an overturned decision reads as current and is worse than no decision at all.
+Write an entry by invoking `context-management`. The two most recent live entries are injected at session start when the memory budget has room for them (state, constraints, and open issues come first); entries marked `[superseded by ...]` are never injected, because an overturned decision reads as current and is worse than no decision at all.
 
 Older entries surface automatically as you work. On every prompt the activator ranks the log by IDF-weighted relevance — a distinctive term outweighs a common one — and injects only entries that clear both a relevance and a coverage gate, with recency acting as a tiebreak rather than the deciding factor. Each entry is injected **at most once per session**, so a long conversation never pays for the same history twice.
 
@@ -408,12 +418,13 @@ With this stack, sessions start with full context and zero re-discovery overhead
 - **error-recovery** — Maintains project-specific `known-issues.md` mapping recurring errors to solutions, consulted before debugging
 - **frontend-design** — Design intelligence system with industry-aware style selection, 25 UI styles, 30 product-category mappings, page structure patterns, UI state management, and 10 priority quality standards (accessibility, touch, performance, animation, forms, navigation, charts)
 
-### Hooks (10 total)
+### Hooks (11 total)
 This is the full cross-platform hook inventory for the plugin. Claude Code gets the full set. Codex currently wires the smaller `SessionStart` / `UserPromptSubmit` / `PreToolUse(Bash)` / `PostToolUse(Bash)` / `Stop` subset through `hooks/codex/*`, subject to Codex platform limits.
 
 - **context-engine** (SessionStart) — Runs git commands on every session start and writes `context-snapshot.json`: changed files, blast radius, recent commits, and change stats. Blast radius edges are **path-resolved**: a file is listed only when it contains a reference that actually resolves to the changed file's path (a relative import, or the repo path written out). References that cannot be resolved are dropped rather than guessed, so the list is deliberately incomplete — an empty list means "nothing proven", not "no dependents". Uses per-project watermarks (md5 of cwd) so multiple projects don't interfere, and a cross-session diff base so "what changed" reflects changes since your last session, not just the last commit. Zero dependencies. Silent no-op on non-git projects
-- **session-start** (SessionStart) — Injects using-superpowers routing into every session; injects `project-map.md` content directly if it exists (full content ≤200 lines, Critical Constraints + Hot Files only above that); checks for available plugin update
-- **skill-activator** (UserPromptSubmit) — Context pressure gate: reads session JSONL, blocks plan-execution triggers when context is ≥60% full (fires compact-first instruction instead of skill hints). The window defaults to 200K and is resolved per session — set `SP_CONTEXT_WINDOW=1m` if you run a 1M-token window, or the gate will block you at 12% utilization (see [Configuration](#configuration)). Also: micro-task detection + confidence-threshold skill matching + memory recall from session-log.md and known-issues.md ranked by IDF-weighted relevance (an entry must match at least 30% of the distinctive weight and 25% of the prompt's keywords; recency is only a 10% tiebreak), with each recalled entry injected at most once per session
+- **session-start** (SessionStart) — Injects using-superpowers routing into every session, without the sections that cannot apply to the project (fresh-project gate vs. map-staleness procedure); checks for available plugin update. Kept under Claude Code's 10,000-character per-hook limit, shortening the update notice if it would push past it
+- **session-memory** (SessionStart) — Injects project memory in its own hook, so it gets its own 10,000-character field: `state.md` (framed as possibly stale when a commit is newer), `project-map.md` (Critical Constraints + Hot Files only above 200 lines), open known issues, the latest saved session-log entries, and the snapshot — admitted in priority order under a ~9,500-character budget, with cuts named in the output. Records what it injected so prompt-time recall does not repeat it, and surfaces the rest later by relevance. The Codex adapter uses the same builder
+- **skill-activator** (UserPromptSubmit) — Context pressure gate: reads session JSONL, blocks plan-execution triggers when context is ≥60% full (fires compact-first instruction instead of skill hints). The window defaults to 200K and is resolved per session — set `SP_CONTEXT_WINDOW=1m` if you run a 1M-token window, or the gate will block you at 12% utilization (see [Configuration](#configuration)). Also: micro-task detection + confidence-threshold skill matching + memory recall from session-log.md and known-issues.md ranked by IDF-weighted relevance (an entry must match at least 30% of the distinctive weight and 25% of the prompt's keywords; recency is only a 10% tiebreak; a keyword matches only words it begins, never a fragment inside a word or file name; path segments of @-mentioned files and editor wrappers are not keywords; when more than three entries tie for best, nothing is recalled), with each recalled entry injected at most once per session
 - **track-edits** (PostToolUse: Edit/Write) — Logs file changes for TDD reminders; auto-adds AI workspace artifacts (`project-map.md`, `session-log.md`, `state.md`) to `.gitignore` on first write
 - **track-session-stats** (PostToolUse: Skill) — Tracks skill invocations per session (`session-stats-<id>.json`) for progress visibility and to tell the decision-log reminder whether a design or diagnostic skill ran
 - **stop-reminders** (Stop) — Surfaces TDD reminders, commit nudges, and session summary after each response turn. Also fires the decision-log reminder when a session either touched workflow/config files (`SKILL.md`, hooks, `CLAUDE.md`, specs, plans) or reworked 4+ distinct source files — the second rule is what makes the reminder work in ordinary application projects, where none of the first patterns ever match

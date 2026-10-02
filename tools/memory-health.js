@@ -208,10 +208,41 @@ if (!stateRaw) {
   line('size', `${stateLines} lines (cap 100), ~${tokens(stateRaw)} tokens/session`);
   line('marked complete', cleared ? 'yes' : 'no');
   if (stateLines > 100) warn.push('state.md is over its 100-line cap — it is not compressed enough.');
-  if (ageDays >= 7 && !cleared) {
+  // Same drift signal hooks/session-start uses: a commit newer than state.md.
+  let lastCommit = 0;
+  try {
+    lastCommit = parseInt(require('child_process').execSync('git log --format=%ct -1',
+      { cwd: projectDir, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim(), 10) || 0;
+  } catch { /* not a git repo */ }
+  const committedAfter = lastCommit * 1000 > fs.statSync(statePath).mtimeMs;
+  line('commits after it', committedAfter ? 'yes — injected as "may be stale"' : 'no');
+  if (committedAfter && !cleared) {
+    warn.push('A commit landed after state.md was written — update it, or mark it "no active task" if that commit finished the work.');
+  } else if (ageDays >= 7 && !cleared) {
     warn.push(`state.md is ${ageDays} days old and still claims an active task — ` +
       'confirm it is real or mark it "no active task".');
   }
+}
+
+// ── 6. What session start actually injects ───────────────────────────────────
+// The per-file numbers above are what exists; this is what reaches the model,
+// built by the hook itself. Claude Code drops any hook field over 10,000 chars
+// to a file the model is not told to read.
+out.push('\nsession-start memory injection');
+try {
+  const { buildMemory, MEMORY_BUDGET } = require('../hooks/session-memory');
+  const { text, injected } = buildMemory(projectDir);
+  line('size', `${text.length} chars of a ${MEMORY_BUDGET} budget (hard cap 10000), ~${tokens(text)} tokens`);
+  line('session-log entries injected', String(injected.sessionLog.length));
+  line('known issues injected', String(injected.knownIssues.length));
+  const cuts = (text.match(/\*\((?:project-map\.md shortened|Not shown for size)[^\n]*\)\*/g) || []);
+  cuts.forEach(c => line('cut', c.replace(/^\*\(|\)\*$/g, '')));
+  if (text.length > 10000) warn.push('Session-start memory exceeds 10,000 chars — the model will see only a 2,000-char preview.');
+  if (cuts.some(c => /session-log\.md/.test(c))) {
+    warn.push('The latest session-log decisions did not fit the session-start budget — shorten state.md or the map\'s Critical Constraints.');
+  }
+} catch (e) {
+  line('status', `could not build (${e.message})`);
 }
 
 // ── Report ───────────────────────────────────────────────────────────────────

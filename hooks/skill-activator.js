@@ -65,6 +65,7 @@ const MAX_SCORING_KEYWORDS = 12; // Only the most distinctive terms get to vote
 const MIN_RELEVANCE = 0.30;      // Share of the corpus's discriminating weight an entry must match
 const MIN_COVERAGE = 0.25;       // Share of the prompt's own keywords an entry must match
 const RECENCY_WEIGHT = 0.10;     // Recency breaks ties; it must never outrank relevance
+const MAX_TIED_MATCHES = 3;      // More entries than this tied for best = the query is not specific
 
 // Common English words that produce noisy false-positive matches
 const STOP_WORDS = new Set([
@@ -92,6 +93,8 @@ const STOP_WORDS = new Set([
   'less', 'next', 'last', 'keep', 'keeps', 'made', 'give', 'gives', 'given',
   'said', 'says', 'tell', 'find', 'finds', 'able', 'lets', 'going', 'gets',
   'stated', 'thanks', 'thank',
+  // Not added, measured: generic verbs ("changes", "exactly", "needs"…). Replayed
+  // on 16 real prompts they removed as many correct recalls as wrong ones.
   // NOT stop words, deliberately: "state" (state.md), "plan", "hook", "map",
   // "memory", "context" — these are the domain nouns recall exists to match.
 ]);
@@ -204,8 +207,8 @@ function buildContext(matches) {
   return [
     '<user-prompt-submit-hook>',
     'Skill activation hint: The following skills are relevant to this prompt.',
-    'Remember: invoke superpowers-optimized:using-superpowers FIRST as the mandatory entry point,',
-    'then follow its routing to these suggested skills:',
+    'The using-superpowers routing guide is already loaded from session start — do not invoke it again.',
+    'Classify the task with it, then invoke the fitting skill via the Skill tool:',
     skillList,
     'IMPORTANT: If the user names a skill directly (e.g. "use brainstorming"), invoke it via the Skill tool.',
     'Do NOT re-implement the skill\'s purpose with ad-hoc agents or manual steps.',
@@ -220,15 +223,23 @@ function buildContext(matches) {
  * Strips stop words, punctuation (preserving hyphens), and short tokens.
  * Returns a deduplicated array of lowercase keyword strings.
  */
-function extractKeywords(prompt) {
+function extractKeywords(prompt, cwd) {
   if (!prompt || typeof prompt !== 'string') return [];
 
+  // Segments of the project's own path ("users", "documents", the repo name)
+  // appear in any absolute path the user types and say nothing about the topic.
+  const pathWords = new Set(String(cwd || '').toLowerCase().split(/[\\/\s]+/));
+
   const tokens = prompt
+    // Editor and system wrappers are not the user's words
+    .replace(/<(ide_[a-z_]+|system-reminder)>[\s\S]*?<\/\1>/g, ' ')
+    // An @-mentioned file contributes its name, not its directories
+    .replace(/@"([^"]+)"/g, (_, p) => ` ${p.split(/[\\/]/).pop()} `)
     .toLowerCase()
     // Remove punctuation except hyphens (preserves compound terms like "session-log")
     .replace(/[^\w\s-]/g, ' ')
     .split(/\s+/)
-    .filter(t => t.length >= MIN_KEYWORD_LENGTH && !STOP_WORDS.has(t));
+    .filter(t => t.length >= MIN_KEYWORD_LENGTH && !STOP_WORDS.has(t) && !pathWords.has(t));
 
   return [...new Set(tokens)];
 }
@@ -245,17 +256,29 @@ function extractKeywords(prompt) {
  *
  * Returns [{ entry, relevance, score }] sorted best-first.
  */
+/**
+ * An entry's words, tokenized exactly like a prompt (hyphenated compounds stay
+ * one word). A keyword matches a word it begins: "debug" matches "debugging",
+ * "save" matches "saved". It never matches from the middle of a word: "wait"
+ * used to match inside condition-based-waiting-example.ts, and because that
+ * fragment was the rarest term, it alone decided the recall.
+ */
+function entryWords(text) {
+  return [...new Set(text.toLowerCase().replace(/[^\w\s-]/g, ' ').split(/\s+/).filter(Boolean))];
+}
+
 function rankEntries(entries, keywords) {
   if (!entries || entries.length === 0) return [];
   if (!keywords || keywords.length === 0) return [];
 
-  const lower = entries.map(e => e.toLowerCase());
+  const words = entries.map(entryWords);
   const n = entries.length;
+  const has = (i, kw) => words[i].some(w => w.startsWith(kw));
 
   // Smoothed IDF: always positive (no divide-by-zero, no dropped terms), but a
   // term present in every entry scores near zero while a unique term scores high.
   const weighted = keywords.map(kw => {
-    const df = lower.reduce((count, text) => count + (text.includes(kw) ? 1 : 0), 0);
+    const df = words.reduce((count, _, i) => count + (has(i, kw) ? 1 : 0), 0);
     return { kw, df, weight: Math.log((n + 1) / (df + 0.5)) };
   });
 
@@ -276,8 +299,7 @@ function rankEntries(entries, keywords) {
 
   const scored = [];
   for (let i = 0; i < entries.length; i++) {
-    const text = lower[i];
-    const matchedTerms = terms.filter(t => text.includes(t.kw));
+    const matchedTerms = terms.filter(t => has(i, t.kw));
     if (matchedTerms.length === 0) continue;
 
     const matchedWeight = matchedTerms.reduce((sum, t) => sum + t.weight, 0);
@@ -292,6 +314,15 @@ function rankEntries(entries, keywords) {
       coverage,
       score: relevance * (1 - RECENCY_WEIGHT) + recency * RECENCY_WEIGHT,
     });
+  }
+
+  // A query that matches many entries exactly as well identifies none of them —
+  // typically one common word ("plugin") is the only term the corpus shares.
+  // Recency would then pick the newest entries, which is a guess, not recall.
+  if (scored.length > 0) {
+    const top = Math.max(...scored.map(s => s.relevance));
+    const tied = scored.filter(s => top - s.relevance < 1e-9).length;
+    if (tied > MAX_TIED_MATCHES) return [];
   }
 
   scored.sort((a, b) => b.score - a.score);
@@ -485,7 +516,8 @@ function sessionStartSeed(cwd) {
   return seed;
 }
 
-function loadRecallLedger(cwd, sessionId) {
+/** The session's ledger as written, or null when none exists yet. */
+function readRecallLedger(sessionId) {
   try {
     const raw = JSON.parse(fs.readFileSync(recallLedgerPath(sessionId), 'utf8'));
     if (raw && typeof raw === 'object') {
@@ -495,9 +527,17 @@ function loadRecallLedger(cwd, sessionId) {
       };
     }
   } catch {
-    // Missing or corrupt — start from what SessionStart already showed
+    // Missing or corrupt
   }
-  return sessionStartSeed(cwd);
+  return null;
+}
+
+/**
+ * hooks/session-memory.js records exactly what it injected, so normally the
+ * ledger exists by the first prompt. The seed is a fallback for when it does not.
+ */
+function loadRecallLedger(cwd, sessionId) {
+  return readRecallLedger(sessionId) || sessionStartSeed(cwd);
 }
 
 function pruneRecallLedgers(dir) {
@@ -825,7 +865,7 @@ async function main() {
 
     // Run all pipelines independently
     const matches = matchSkills(prompt);
-    const keywords = extractKeywords(prompt);
+    const keywords = extractKeywords(prompt, cwd);
     const memoryEntries = searchSessionLog(cwd, keywords);
     const knownIssueEntries = searchKnownIssues(cwd, keywords);
 
@@ -887,6 +927,7 @@ if (require.main === module) {
     entryKey,
     sessionStartSeed,
     loadRecallLedger,
+    readRecallLedger,
     saveRecallLedger,
     recallLedgerPath,
     RULES,

@@ -75,7 +75,7 @@ Do not wait for context to auto-compress mid-task. Break proactively at logical 
 
 **Break context by:** invoking `context-management` to write `state.md` with discovered facts, then starting fresh with only `state.md` as input. Always save to `state.md` *before* compacting — never after.
 
-**What survives compaction** (re-injected automatically by the session-start hook):
+**What survives compaction** (re-injected automatically by the session-start hooks, under a shared size budget in which `state.md` comes first — a long `project-map.md` or `state.md` can push the session-log entries out, and the injected text says so when it does):
 
 | Survives | Lost |
 |---|---|

@@ -1,5 +1,71 @@
 # Superpowers Optimized Release Notes
 
+## v6.9.0 (2026-10-02)
+
+The routing guide and your project memory now actually reach the model. Until this release, both arrived as a 2,000-character preview.
+
+### Fixes
+
+**The router and all injected memory were invisible.** Claude Code caps each hook's injected context at 10,000 characters. Anything longer is saved to a file, and the model gets the file path plus a 2,000-character preview it is never told to read. The session-start hook sent the routing guide and the whole memory stack as one block of up to ~29,000 characters. In every session the model saw the opening lines of the router and nothing else: no complexity classification, no routing table, no red flags, no `project-map.md`, `state.md`, known issues or snapshot. Memory is now injected by a separate hook, `hooks/session-memory.js`, so each hook has its own limit. The router is about 8,200 characters and guards its own size. Memory fills a ~9,500-character budget in priority order: `state.md`, map staleness, the map's Critical Constraints, open known issues, the latest session-log entries, the rest of the map, then the snapshot. Anything that does not fit is named in the output, so the model knows to open the file rather than assume there was nothing there.
+
+**A finished task was injected as "ACTIVE TASK STATE — resume from here".** `state.md` was framed as active whenever it was recent, even when you had committed the work it described a minute later. It is now framed as possibly stale whenever a commit is newer than the file. A wrong "possibly stale" costs one confirmation; a wrong "resume from here" pulls the session back onto finished work.
+
+**The snapshot claimed files were "Changed since last commit".** They were committed changes, never uncommitted work. The label now states which they are: everything committed since your last session, or the last commit. `context-snapshot.json` records the difference in a new `changed_files_since` field.
+
+**The stop hook counted edits from other projects.** Edits outside the current project, such as files in another repository or a scratch directory, triggered its TDD and decision-log reminders. Edits are now scoped to the project directory.
+
+**Code review could take its scope from the snapshot.** The snapshot covers changes since the last session, not the change under review. Review scope is now always the `BASE..HEAD` commit range. The snapshot's blast radius only adds callers of files in that range, and only when the snapshot matches HEAD.
+
+**The prompt hint contradicted the router.** Every skill hint said "invoke using-superpowers FIRST", while session start said the router was already loaded. In headless runs, v6.8.1 loaded the router a second time in 4 of 6 sessions; v6.9.0 did not in 6 of 6.
+
+**Codex injected memory without any of these safeguards.** It had no stale-state check, injected fixed known issues, and used the false snapshot label. The Codex adapter now builds memory with the same code as Claude Code.
+
+**Recall surfaced unrelated history.**
+- A keyword matched fragments inside words, so "wait" matched `condition-based-waiting-example.ts` and alone decided a recall. A keyword now matches only words it begins.
+- The directories of an @-mentioned file ("users", "documents"…) and editor wrapper text counted as keywords. They no longer do.
+- When more than three entries tie for the best match, the prompt identifies none of them, so nothing is recalled.
+- After `/compact`, entries recalled earlier can surface again, because the conversation now holds only a summary of them.
+
+Replayed on 19 real prompts, about 11 of 14 recalled entries were relevant, up from about 7 of 11.
+
+### Changes
+
+**The router drops sections that cannot apply.** A project with a `project-map.md` no longer gets the fresh-project gate; one without a map no longer gets the map-staleness procedure. The router no longer asks the model to re-read `state.md`, `known-issues.md` or `project-map.md` when their content was just injected.
+
+**Self-consistency says what it is.** `self-consistency-reasoner`, `systematic-debugging` Phase 3 and `verification-before-completion` reason along several paths in one context. Those paths are not independent samples, so agreement between them is weak evidence. Disagreement is a real signal and stops the diagnosis. Agreement only earns a test, never a confidence percentage.
+
+**The README's research section reports what the sources measured.** The figures for context files, context compression, self-consistency and multi-agent deliberation now match the papers. A note says none of these effects has been measured on this plugin. `claude-md-creator` uses the same corrected figures.
+
+**`tools/memory-health.js` shows what a session actually receives.** It reports the injected size against the 10,000-character limit and lists what the budget cut.
+
+**Map guidance covers size in characters, not only lines.** `context-management` explains the shared budget. A long Critical Constraints section pushes the latest session-log decisions out of every session, so each constraint should stay to one line.
+
+### Measured
+
+Memory A/B, 3 runs per scenario, v6.8.1 against v6.9.0. The scenarios: resume a task recorded in `state.md`, follow a rule recorded only in `project-map.md`, and fix an error documented in `known-issues.md`.
+- **Pass rate:** every run passed on both versions. When v6.8.1 could not see the memory, the model went and read the files itself, in 7 of 9 runs.
+- **Turns:** v6.9.0 used fewer turns in all 9 paired runs: 5.7 → 3.0, 4.0 → 2.7 and 8.7 → 7.3.
+- **Cost:** unchanged within about 5%, because the injected context offsets the turns it saves.
+
+**A rule nothing in the code hints at**, 5 runs per version. The scenario asks for a 30-second request timeout, while `project-map.md` records that production's load balancer drops connections at 25 seconds.
+- **Pass rate:** 4/5 on v6.8.1, 5/5 on v6.9.0.
+- **Where v6.8.1 got the rule:** it opened `project-map.md` itself in 4 runs. In the one run where it didn't, it set the timeout to 30 seconds.
+- **Turns and cost:** v6.9.0 never had to look, using 2.4 turns against 3.8 and $0.226 against $0.271 on average.
+
+Five runs cannot show a significant difference in pass rate.
+
+These fixtures are small, so read the numbers as a direction, not a size.
+
+### Tests
+
+- **New `tests/memory-ab`.** Scenario fixtures, outcome checks, and `run-ab.sh <baseline-dir>` to compare any older version against the current checkout.
+- **Skill-triggering tests:**
+  - Prompts that name files now run in a fixture project, so the model no longer stops in an empty directory.
+  - The turn limit is 6, and `PLUGIN_DIR` selects the version under test.
+  - The headless harness passes `--verbose`, which the CLI now requires with stream-json output.
+- **dispatching-parallel-agents triggering test removed.** On any fixture cheap enough to run, the model rightly fixes four one-line bugs inline instead of dispatching agents.
+- **New `tests/codex/test-session-start.js`.** It covers router size, router/memory separation, state framing, snapshot labels, the memory budget, and the recall ledger.
+
 ## v6.8.1 (2026-09-27)
 
 Leaner plans: `writing-plans` records the decisions an implementer needs instead of writing the code out in advance. Adapted from upstream superpowers v6.4.2.

@@ -4,7 +4,7 @@
 
 meta:
   name: superpowers-optimized
-  version: "6.8.1"
+  version: "6.9.0"
   description: "Workflow skills and hooks for Claude Code and Codex"
   author: "Jesse Vincent, forked by REPOZY"
   homepage: "https://github.com/REPOZY/superpowers-optimized"
@@ -20,6 +20,14 @@ hooks:
   - event: SessionStart
     matcher: "startup|clear|compact"
     command: "{PLUGIN_ROOT}/hooks/run-hook.cmd session-start"
+    async: false
+    platforms: [claude-code]
+
+  # Claude Code: project memory. Its own hook so it gets its own 10,000-character
+  # additionalContext budget — the router and memory overflowed one field together.
+  - event: SessionStart
+    matcher: "startup|clear|compact"
+    command: "node {PLUGIN_ROOT}/hooks/session-memory.js"
     async: false
     platforms: [claude-code]
 

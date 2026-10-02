@@ -197,13 +197,17 @@ Unlike `session-log.md` (which is permanent history), `state.md` represents acti
 ## How the Three Files Work Together
 
 ```
-Session starts (session-start hook fires automatically)
+Session starts (session-memory hook fires automatically; the router is a separate hook)
     │
-    ├── Inject project-map.md (full content if ≤200 lines, else Critical Constraints + Hot Files)
-    ├── Inject state.md in full (if exists — means work is in progress)
-    ├── Inject last 2 [saved] entries from session-log.md (if exists)
-    ├── Inject up to 5 most recent OPEN entries from known-issues.md (if exists)
-    └── Inject context-snapshot.json summary (changed files + recent commits)
+    │   One ~9,500-char budget (Claude Code caps each hook field at 10,000),
+    │   admitted in this priority order; what does not fit is named in the output:
+    ├── 1. state.md (clipped at 3,000 chars; "may be stale" if a commit is newer)
+    ├── 2. project-map.md staleness notice
+    ├── 3. project-map.md Critical Constraints
+    ├── 4. up to 5 most recent OPEN entries from known-issues.md
+    ├── 5. last 2 [saved] entries from session-log.md
+    ├── 6. rest of project-map.md (only Hot Files above 200 lines)
+    └── 7. context-snapshot.json summary (changed files + recent commits)
             │
             ▼
         Work happens
@@ -235,7 +239,7 @@ Over time:
 
 **Works on existing projects.** Installing the plugin on a large existing codebase works exactly the same way — memory accumulates from the first saved session forward. `project-map.md` can be generated at any time to map the existing structure.
 
-**Token-efficient by design.** The session-start hook injects only the last two `[saved]` entries from session-log.md — not the full file. For older history, Claude greps rather than reads. The project map is capped at 150 lines. State is capped at 100 lines. known-issues.md is injected in full but stays short by design (one entry per error signature).
+**Token-efficient by design.** All injected memory shares one ~9,500-character budget per session. The hook injects at most the last two `[saved]` entries from session-log.md and five open known issues — never the full files. For older history, the prompt-time recall surfaces relevant entries, and Claude greps rather than reads. The project map targets 150 lines; state targets 100. `node tools/memory-health.js` shows what a session actually receives and what the budget cut.
 
 ---
 

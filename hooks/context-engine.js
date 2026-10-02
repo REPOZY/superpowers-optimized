@@ -3,7 +3,7 @@
  * SessionStart Hook — Context Engine
  *
  * Runs on every session start. Executes git commands to compute:
- *   - Recently changed files (last commit)
+ *   - Recently committed files (since the last session's HEAD, else the last commit)
  *   - Blast radius: tracked files whose reference to a changed file actually
  *     resolves to that file's path. Word-level matches are never counted.
  *   - Recent commit history and change statistics
@@ -270,6 +270,9 @@ async function main() {
     generated_at: new Date().toISOString(),
     git_hash: gitHash,
     changed_files: changedFiles,
+    // What changed_files is relative to. These are committed changes only — never
+    // uncommitted work — and injectors must label them accordingly.
+    changed_files_since: useWatermark ? 'last-session' : 'last-commit',
     change_stat: changeStat,
     recent_commits: recentCommits,
     blast_radius: blastRadius,

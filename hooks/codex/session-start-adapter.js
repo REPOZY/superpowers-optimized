@@ -112,94 +112,37 @@ function checkForUpdates() {
   }
 }
 
-function assembleProjectMap(cwd) {
-  const filePath = path.join(cwd, 'project-map.md');
-  const raw = readFileSafe(filePath);
-  if (!raw) return '';
+// Project memory comes from the same builder the Claude Code hook uses, so the
+// two injectors cannot drift apart (they had: no state gate, raw known-issues,
+// a false snapshot label).
+const { buildMemory } = require('../session-memory');
 
-  const lines = raw.split('\n');
-  let content;
-  if (lines.length <= 200) {
-    content = raw;
-  } else {
-    const sections = [];
-    let inSection = false;
-    for (const line of lines) {
-      if (/^## /.test(line)) {
-        inSection = /^## (Critical Constraints|Hot Files)/.test(line);
-      }
-      if (inSection) sections.push(line);
-    }
-    content = sections.length > 0
-      ? '*(project-map.md is large — showing Critical Constraints and Hot Files only. Full map at project-map.md)*\n\n' + sections.join('\n')
-      : '';
+/**
+ * Mirrors hooks/session-start: drop the router section that does not apply to
+ * this project (fresh-project gate when a map exists, map-staleness procedure
+ * when none does) and always remove the markers.
+ */
+function filterConditionalSections(text, hasMap) {
+  const out = [];
+  let skip = false;
+  for (const line of text.split('\n')) {
+    const t = line.trim();
+    if (t === '<!-- sp:if-project-map -->') { skip = !hasMap; continue; }
+    if (t === '<!-- sp:if-no-project-map -->') { skip = hasMap; continue; }
+    if (/^<!-- \/sp:if-(no-)?project-map -->$/.test(t)) { skip = false; continue; }
+    if (!skip) out.push(line);
   }
-
-  return content ? `\n\n<project-map>\n${content}\n</project-map>` : '';
+  return out.join('\n');
 }
 
-function assembleSessionLog(cwd) {
-  const filePath = path.join(cwd, 'session-log.md');
-  const raw = readFileSafe(filePath);
-  if (!raw) return '';
-
-  // [superseded ...] entries are overturned decisions and must never be
-  // injected — keyword recall already skips them, and the two paths must agree.
-  const savedEntries = [];
-  let current = null;
-  for (const line of raw.split('\n')) {
-    if (/^## /.test(line)) {
-      if (current !== null) savedEntries.push(current);
-      const isLiveSaved = /\[saved\]/.test(line) && !/\[superseded/.test(line);
-      current = isLiveSaved ? line : null;
-    } else if (current !== null) {
-      current += '\n' + line;
-    }
-  }
-  if (current !== null) savedEntries.push(current);
-
-  const last2 = savedEntries.slice(-2).join('\n\n');
-  return last2
-    ? `\n\n<session-log>\n*(Last saved decisions from session-log.md — full history at session-log.md)*\n${last2}\n</session-log>`
-    : '';
-}
-
-function assembleState(cwd) {
-  const raw = readFileSafe(path.join(cwd, 'state.md'));
-  return raw
-    ? `\n\n<state>\n**ACTIVE TASK STATE — resume from here, do not start fresh:**\n${raw}\n</state>`
-    : '';
-}
-
-function assembleKnownIssues(cwd) {
-  const raw = readFileSafe(path.join(cwd, 'known-issues.md'));
-  return raw ? `\n\n<known-issues>\n${raw}\n</known-issues>` : '';
-}
-
-function assembleContextSnapshot(cwd) {
-  try {
-    const snapshotPath = path.join(cwd, 'context-snapshot.json');
-    const raw = readFileSafe(snapshotPath);
-    if (!raw) return '';
-
-    const snapshot = JSON.parse(raw);
-    const files = (snapshot.changed_files || []).join(', ');
-    const commits = (snapshot.recent_commits || []).slice(0, 3).join('\n  ');
-    if (!files) return '';
-
-    return `\n\n<context-snapshot>\nChanged since last commit: ${files}\nRecent commits:\n  ${commits}\n</context-snapshot>`;
-  } catch {
-    return '';
-  }
-}
-
-function assembleUsingSuperpowers() {
+function assembleUsingSuperpowers(cwd) {
   const skillPath = path.join(SKILLS_DIR, 'using-superpowers', 'SKILL.md');
   const raw = readFileSafe(skillPath);
   if (!raw) return 'Error reading using-superpowers skill';
 
+  const hasMap = Boolean(cwd) && fs.existsSync(path.join(cwd, 'project-map.md'));
   const lines = raw.split('\n');
-  if (lines[0]?.trim() !== '---') return raw;
+  if (lines[0]?.trim() !== '---') return filterConditionalSections(raw, hasMap);
 
   let endIndex = -1;
   for (let i = 1; i < lines.length; i++) {
@@ -209,7 +152,8 @@ function assembleUsingSuperpowers() {
     }
   }
 
-  return endIndex === -1 ? raw : lines.slice(endIndex + 1).join('\n').trim();
+  const body = endIndex === -1 ? raw : lines.slice(endIndex + 1).join('\n').trim();
+  return filterConditionalSections(body, hasMap);
 }
 
 function gitNotice(cwd) {
@@ -232,6 +176,11 @@ function spawnContextEngine(cwd) {
   } catch {}
 }
 
+function memoryBlock(cwd) {
+  const { text } = buildMemory(cwd);
+  return text ? `\n\n${text}` : '';
+}
+
 function buildSessionContext(cwd) {
   return [
     '<EXTREMELY_IMPORTANT>',
@@ -244,15 +193,11 @@ function buildSessionContext(cwd) {
     '2. Classify the task complexity (micro/lightweight/full) per the Entry Sequence below',
     '3. If the user names a specific skill (e.g. use brainstorming, use context management), that IS a Skill tool invocation — call `Skill` with that skill name. Do NOT re-implement the skill\'s purpose with ad-hoc agents or manual steps.',
     '',
-    assembleUsingSuperpowers(),
+    assembleUsingSuperpowers(cwd),
     checkForUpdates(),
     gitNotice(cwd),
     '</EXTREMELY_IMPORTANT>',
-    assembleProjectMap(cwd),
-    assembleSessionLog(cwd),
-    assembleState(cwd),
-    assembleKnownIssues(cwd),
-    assembleContextSnapshot(cwd),
+    memoryBlock(cwd),
   ].join('');
 }
 
@@ -269,13 +214,10 @@ if (require.main === module) {
   main();
 } else {
   module.exports = {
-    assembleContextSnapshot,
-    assembleKnownIssues,
-    assembleProjectMap,
-    assembleSessionLog,
-    assembleState,
+    memoryBlock,
     assembleUsingSuperpowers,
     buildSessionContext,
+    filterConditionalSections,
     checkForUpdates,
     gitNotice,
     main,

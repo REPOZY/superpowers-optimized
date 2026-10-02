@@ -9,7 +9,7 @@ set -e
 
 SKILL_NAME="$1"
 PROMPT_FILE="$2"
-MAX_TURNS="${3:-3}"
+MAX_TURNS="${3:-6}"
 
 if [ -z "$SKILL_NAME" ] || [ -z "$PROMPT_FILE" ]; then
     echo "Usage: $0 <skill-name> <prompt-file> [max-turns]"
@@ -19,8 +19,9 @@ fi
 
 # Get the directory where this script lives (should be tests/skill-triggering)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Get the superpowers plugin root (two levels up from tests/skill-triggering)
-PLUGIN_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# Plugin under test: this checkout by default. Override with PLUGIN_DIR to run
+# the same tests against another version (e.g. an export of HEAD for an A/B).
+PLUGIN_DIR="${PLUGIN_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 
 TIMESTAMP=$(date +%s)
 OUTPUT_DIR="/tmp/superpowers-tests/${TIMESTAMP}/skill-triggering/${SKILL_NAME}"
@@ -39,6 +40,16 @@ echo ""
 # Copy prompt for reference
 cp "$PROMPT_FILE" "$OUTPUT_DIR/prompt.txt"
 
+# A prompt that names files needs those files: in an empty directory the model
+# looks, finds nothing, and correctly stops. <prompt>.fixture/ becomes the
+# project the test runs in, committed so git-based hooks see a real repo.
+FIXTURE_DIR="${PROMPT_FILE%.txt}.fixture"
+if [ -d "$FIXTURE_DIR" ]; then
+    cp -r "$FIXTURE_DIR"/. "$OUTPUT_DIR"/
+    (cd "$OUTPUT_DIR" && git init --quiet && git add -A . ':!prompt.txt' \
+        && git -c user.name=test -c user.email=test@test commit --quiet -m fixture)
+fi
+
 # Run Claude
 LOG_FILE="$OUTPUT_DIR/claude-output.json"
 cd "$OUTPUT_DIR"
@@ -49,7 +60,7 @@ timeout 300 claude -p "$PROMPT" \
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns "$MAX_TURNS" \
-    --output-format stream-json \
+    --output-format stream-json --verbose \
     > "$LOG_FILE" 2>&1 || true
 
 echo ""

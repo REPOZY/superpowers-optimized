@@ -82,12 +82,12 @@ This is non-negotiable. Every fix must trace back to a proven root cause. A fix 
 
 **Self-Consistency Gate** — Before committing to a hypothesis, apply multi-path reasoning (see `self-consistency-reasoner`):
 
-1. Generate 3-5 **independent** root cause hypotheses. Vary your approach: trace forward from inputs, backward from the error, from recent changes, from similar past bugs.
-2. For each path, reason independently to a conclusion — do not let earlier hypotheses contaminate later ones.
-3. Take the majority-vote diagnosis. Report confidence:
-   - **High** (80-100% agreement): proceed to test the majority hypothesis.
-   - **Moderate** (60-79%): proceed but note the minority hypothesis — test it next if the majority fails.
-   - **Low** (<=50%): **STOP.** Do not pick a hypothesis. The bug is ambiguous or multi-causal. Gather more evidence (add logging, reproduce under different conditions) before choosing a direction.
+1. Make 3-5 attempts at **the** root cause, each from a different starting point: trace forward from inputs, backward from the error, from recent changes, from similar past bugs. Each attempt names the one cause it arrives at — you are not brainstorming alternatives, you are checking whether different routes converge.
+2. Group attempts that name the same cause, then take the majority. Report agreement as a count (e.g. 4/5):
+   - **Unanimous**: test the majority hypothesis.
+   - **Majority** (more than half, not all): test the majority hypothesis; name the minority one and test it next if the majority fails.
+   - **No majority** (half or fewer): **STOP.** Do not pick a hypothesis. The bug is ambiguous or multi-causal. Gather more evidence (add logging, reproduce under different conditions) before choosing a direction.
+3. These attempts share your context and your blind spots, so agreement is weak evidence and disagreement is strong evidence. The smallest test below — not the vote — is what proves the hypothesis.
 
 Then for the selected hypothesis:
 - State it clearly before testing it.

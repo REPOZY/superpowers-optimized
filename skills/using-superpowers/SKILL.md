@@ -18,24 +18,17 @@ If you were dispatched as a subagent to execute a specific task, skip this skill
 
 ## Trigger Conditions
 
-This skill MUST be invoked when any of the following occur:
+Apply this router when a session starts with a technical request, when the user gives a new task or changes topic, when technical work is about to begin without a skill selected, or when the user asks which workflow to use.
 
-- A new session starts with a technical request
-- The user gives a new task or changes topic mid-session
-- Any technical work is about to begin without a skill selected
-- The user asks "what should I use" or "which workflow"
-
-**Exception:** Micro tasks (typo fix, single variable rename, 1-line config change) can skip the entry sequence entirely. Just do them.
+**Exception:** Micro tasks (typo fix, single variable rename, 1-line config change) skip the entry sequence entirely. Just do them.
 
 ## When the User Names a Specific Skill
 
-If the user's prompt references a skill by name (e.g., "use brainstorming," "use context management," "run verification"), that is a **Skill tool invocation request**:
+A prompt that names a skill ("use brainstorming", "use context management", "run verification") is a **Skill tool invocation request** — never a goal to achieve creatively:
 
-1. Still complete Entry Sequence steps 1–6 (token-efficiency, staleness check, etc.) — these are always-on prerequisites, not routing.
-2. **Invoke the named skill via the `Skill` tool.** Do not re-implement the skill's purpose with ad-hoc agents, manual file reads, or improvised workflows. The skill contains tested, structured logic — use it.
+1. Still complete Entry Sequence steps 1–6 — they are always-on prerequisites, not routing.
+2. **Invoke the named skill via the `Skill` tool.** Do not re-implement its purpose with ad-hoc agents, manual file reads, or improvised workflows.
 3. Skip complexity classification and routing (step 7) — the user already chose the route.
-
-This is the most common cause of entry sequence bypass: the AI interprets "use X skill" as a goal to achieve creatively rather than as a tool invocation. It is always a tool invocation.
 
 ## Instruction Priority (highest to lowest)
 
@@ -54,42 +47,34 @@ Technical execution includes code edits, debugging, planning, review, test statu
 ## Entry Sequence
 
 1. Invoke `token-efficiency` at session start — applies to all sessions, always.
+<!-- sp:if-no-project-map -->
 2. **Fresh project gate** — evaluate both conditions in order:
    - The user's request contains creation/build intent: any of "build", "create", "make", "implement", "scaffold", "set up", "write", "generate", "develop", "start"
    - Run a filesystem check: `ls project-map.md 2>/dev/null` — gate only fires if the file does **not** exist
 
    If both are true, **pause before proceeding** and tell the user exactly this:
 
-   > Before I start: this directory has no memory files set up yet. That matters for how well I perform across sessions.
+   > Before I start: this directory has no memory files yet, so every future session here starts from scratch — re-exploring the structure, re-reading files, and possibly re-proposing approaches that were already rejected.
    >
-   > **Without setup, every future session on this project starts from scratch:**
-   > - I re-explore the project structure even if I mapped it last session
-   > - I re-read files I already understood
-   > - I may re-propose approaches that were already tried and rejected
-   > - I lose the "why" behind every decision the moment the session ends
-   >
-   > **A ~30-second setup changes that permanently:**
-   > - `git init` — enables staleness tracking so I only re-read files that actually changed *(creates `.git` only, nothing else)*
-   > - `project-map.md` — I read this at every future session start instead of re-exploring blind
-   > - `session-log.md` — auto-captures what was built and decided, so future sessions start with: *"I see from last session that X was rejected because Y — building with that constraint already applied"* instead of rediscovering it
+   > A ~30-second setup fixes that: `git init` (staleness tracking — creates `.git` only), `project-map.md` (orientation at every session start), and `session-log.md` (decisions and rejected approaches, saved when we record them).
    >
    > **Set this up before we build, or start immediately?**
 
    Wait for the user's answer before continuing.
-   - **If they confirm:** run `git init --quiet` directly (do not ask again — the user just confirmed), then invoke `context-management` for map generation only. Return to step 3 when done. Note: `context-snapshot.json` will not be created in this session — the context-engine hook already ran at session start before git existed. It will be created on the next session start, provided the session is opened from this project's root directory. If no commits exist yet it will be mostly empty; it populates fully after the first commit.
+   - **If they confirm:** run `git init --quiet` directly (do not ask again), then invoke `context-management` for map generation only, and return to step 3. `context-snapshot.json` first appears next session — its hook ran before git existed.
    - **If they decline:** proceed to step 3.
 
-   **Step 2b — Existing project memory check** (runs only when step 2 did NOT fire):
-   If the user's request is non-trivial (not micro) AND `project-map.md` does not exist AND the project has 10+ files:
-   - Mention once (do not block): *"Note: this project has no project-map.md. I'll work fine without it, but if you want faster orientation in future sessions, I can generate one after this task. Just say 'map this project'."*
-   - Do not repeat this notice in subsequent tasks within the same session.
+   **Step 2b** (only when step 2 did NOT fire): if the request is non-trivial, `project-map.md` does not exist, and the project has 10+ files, mention once, without blocking: *"This project has no project-map.md. Say 'map this project' after this task if you want faster orientation in future sessions."*
+<!-- /sp:if-no-project-map -->
 
 3. Classify the task as **micro**, **lightweight**, or **full** (see Complexity Classification below).
-4. If resuming work from a prior session, read `state.md` if it exists. Before ending any session where significant decisions were made (design choices, rejected approaches, non-obvious constraints discovered), invoke `context-management` to write a `[saved]` entry — even if the work is complete. This is the only mechanism that preserves the "why" across sessions.
-5. If `known-issues.md` exists at the project root, read it to avoid rediscovering known error→solution mappings.
-6. If `project-map.md` exists at the project root, read it to orient to the project structure without re-globbing or re-reading known files. The map tells you what exists and where — when you need a file's actual content (for modification, comparison, or debugging), read it directly with the Read tool. Staleness is detected automatically by the session-start hook: if the map is stale, a `<project-map-stale>` tag is injected into session context with the mismatched hashes. When you see that tag:
-   - **With git:** run `git diff --name-only <map_hash> HEAD` to find changed files. Re-read only those; everything else in the map is still valid. Update the corresponding Key Files entries in `project-map.md` and refresh the git hash and date in the header.
-   - **Without git:** compare the map's generation timestamp to the modification time of files listed in the map's Hot Files section. Re-read any that are newer than the map. Then update their Key Files entries and refresh the generation timestamp in the header.
+4. When resuming prior work, read `state.md` if it exists — unless a `<state>` block is already in your context (that is the file). Before ending a session that made significant decisions (design choices, rejected approaches, non-obvious constraints), invoke `context-management` to write a `[saved]` entry, even if the work is complete — nothing else preserves the "why".
+5. Read `known-issues.md` if it exists — unless a `<known-issues>` block is already in your context; then open the file only when debugging and the block says more entries exist.
+<!-- sp:if-project-map -->
+6. Orient from `project-map.md` instead of re-globbing. A `<project-map>` block in your context is that file — Read it again only if the block says it was shortened. For a file's actual logic, read the file itself. Staleness:
+   - **With git:** a `<project-map-stale>` tag lists the documented files that changed. Re-read only those, update their Key Files entries, and refresh the header hash and date.
+   - **Without git:** re-read Hot Files newer than the map's generation timestamp, update their Key Files entries, and refresh the timestamp.
+<!-- /sp:if-project-map -->
 7. Follow the path for the classified complexity level.
 
 ## Complexity Classification
@@ -136,20 +121,6 @@ If Claude is about to enter plan mode (`EnterPlanMode`), check whether brainstor
 - **No brainstorming done for this task**: invoke `brainstorming` first — plan mode without a validated design leads to plans built on unexamined assumptions.
 - **Brainstorming already completed and design approved**: proceed to plan mode / `writing-plans`.
 
-```dot
-digraph planmode_intercept {
-    "About to EnterPlanMode?" [shape=doublecircle];
-    "Already brainstormed?" [shape=diamond];
-    "Invoke brainstorming skill" [shape=box];
-    "Proceed to writing-plans" [shape=box];
-
-    "About to EnterPlanMode?" -> "Already brainstormed?";
-    "Already brainstormed?" -> "Invoke brainstorming skill" [label="no"];
-    "Already brainstormed?" -> "Proceed to writing-plans" [label="yes"];
-    "Invoke brainstorming skill" -> "Proceed to writing-plans";
-}
-```
-
 ## Routing Guide
 
 - Uncertain whether work should exist at all: `premise-check` (run before brainstorming or planning)
@@ -170,7 +141,7 @@ digraph planmode_intercept {
 - Dependency updates, security vulnerabilities, migrations: `dependency-management` (audit → assess impact → update incrementally → verify)
 - UI/frontend implementation: apply `frontend-design` standards
 - CLAUDE.md / AGENTS.md creation or update: `claude-md-creator` (applies at any complexity level — never implement directly)
-- *(Internal skills — not directly routed):* `self-consistency-reasoner` is invoked internally by `systematic-debugging` and `verification-before-completion`; do not invoke it directly. `token-efficiency` is always-on and invoked at step 1 of the Entry Sequence.
+- *(Internal — never route directly):* `self-consistency-reasoner` (used inside `systematic-debugging` and `verification-before-completion`); `token-efficiency` (always on, step 1).
 
 ## Context Hygiene
 

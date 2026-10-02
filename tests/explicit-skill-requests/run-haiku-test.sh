@@ -56,7 +56,7 @@ claude -p "I want to add user authentication to my app. Help me think through th
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 3 \
-    --output-format stream-json \
+    --output-format stream-json --verbose \
     > "$OUTPUT_DIR/turn1.json" 2>&1 || true
 echo "Done."
 
@@ -68,7 +68,7 @@ claude -p "Let's use JWT tokens with 24-hour expiry. Email/password registration
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 3 \
-    --output-format stream-json \
+    --output-format stream-json --verbose \
     > "$OUTPUT_DIR/turn2.json" 2>&1 || true
 echo "Done."
 
@@ -80,7 +80,7 @@ claude -p "Great, write this up as an implementation plan." \
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 3 \
-    --output-format stream-json \
+    --output-format stream-json --verbose \
     > "$OUTPUT_DIR/turn3.json" 2>&1 || true
 echo "Done."
 
@@ -92,7 +92,7 @@ claude -p "The plan looks good. What are my options for executing it?" \
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 2 \
-    --output-format stream-json \
+    --output-format stream-json --verbose \
     > "$OUTPUT_DIR/turn4.json" 2>&1 || true
 echo "Done."
 
@@ -105,7 +105,7 @@ claude -p "subagent-driven-development, please" \
     --plugin-dir "$PLUGIN_DIR" \
     --dangerously-skip-permissions \
     --max-turns 2 \
-    --output-format stream-json \
+    --output-format stream-json --verbose \
     > "$FINAL_LOG" 2>&1 || true
 echo "Done."
 echo ""
