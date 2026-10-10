@@ -1006,7 +1006,42 @@ test('SP_CONTEXT_WINDOW overrides everything', () => {
 });
 test('Detects the [1m] model marker', () => {
   assert.strictEqual(resolveContextWindow({ model: 'claude-sonnet-4-5[1m]' }, {}), LARGE_CONTEXT_WINDOW);
-  assert.strictEqual(resolveContextWindow({ model: 'claude-opus-5' }, {}), DEFAULT_CONTEXT_WINDOW);
+  assert.strictEqual(resolveContextWindow({ model: 'claude-opus-4-6' }, {}), DEFAULT_CONTEXT_WINDOW);
+});
+test('Native 1M models resolve to 1M without a marker or env var', () => {
+  for (const model of [
+    'claude-opus-5-5', 'claude-opus-5', 'claude-opus-4-7', 'claude-opus-4-8',
+    'claude-sonnet-5', 'claude-sonnet-5-5', 'claude-fable-5', 'claude-fable-5-1', 'claude-mythos-5-1',
+    'anthropic.claude-opus-5-5', 'us.anthropic.claude-sonnet-5-v1:0',
+    'claude-opus-4-7@20260101', 'claude-opus-5-20260401',
+  ]) {
+    assert.strictEqual(resolveContextWindow({ model }, {}), LARGE_CONTEXT_WINDOW, model);
+  }
+});
+test('200K models and unknown ids keep the conservative default', () => {
+  for (const model of [
+    'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-sonnet-4-5-20250929', 'claude-opus-4-1-20250805',
+    'claude-haiku-4-5', 'claude-3-5-sonnet-20241022', 'gpt-5', '',
+  ]) {
+    assert.strictEqual(resolveContextWindow({ model }, {}), DEFAULT_CONTEXT_WINDOW, model || '(empty)');
+  }
+});
+test('CLAUDE_CODE_DISABLE_1M_CONTEXT forces 200K on 1M models', () => {
+  const env = { CLAUDE_CODE_DISABLE_1M_CONTEXT: '1' };
+  assert.strictEqual(resolveContextWindow({ model: 'claude-opus-5-5' }, env), DEFAULT_CONTEXT_WINDOW);
+  assert.strictEqual(resolveContextWindow({ model: 'claude-sonnet-4-6[1m]' }, env), DEFAULT_CONTEXT_WINDOW);
+  assert.strictEqual(
+    resolveContextWindow({ model: 'claude-opus-5-5' }, { ...env, SP_CONTEXT_WINDOW: '1m' }),
+    LARGE_CONTEXT_WINDOW,
+    'explicit SP_CONTEXT_WINDOW still wins'
+  );
+});
+test('CLAUDE_CODE_MAX_CONTEXT_TOKENS sizes unrecognized models only', () => {
+  const env = { CLAUDE_CODE_MAX_CONTEXT_TOKENS: '500000' };
+  assert.strictEqual(resolveContextWindow({ model: 'my-gateway-model' }, env), 500000);
+  assert.strictEqual(resolveContextWindow({ model: 'claude-opus-5-5' }, env), LARGE_CONTEXT_WINDOW);
+  assert.strictEqual(resolveContextWindow({ model: 'claude-haiku-4-5' }, env), DEFAULT_CONTEXT_WINDOW,
+    'a recognized Claude model keeps its own window');
 });
 test('Auto-escalates when observed context exceeds the default', () => {
   assert.strictEqual(resolveContextWindow({ observedMax: 250000 }, {}), LARGE_CONTEXT_WINDOW);
@@ -1061,6 +1096,11 @@ test('125K on a 1M window is NOT over threshold (the D7 bug)', () => {
 test('[1m] model marker widens the window without any env var', () => {
   const r = pressureWithEnv(TURN_125K, {}, 'claude-sonnet-4-5[1m]');
   assert.strictEqual(r.overThreshold, false);
+  assert.strictEqual(r.windowK, 1000);
+});
+test('Native 1M model does not block at 125K (no env var needed)', () => {
+  const r = pressureWithEnv(TURN_125K, {}, 'claude-opus-5-5');
+  assert.strictEqual(r.overThreshold, false, '125K of 1M is 13% — must not block');
   assert.strictEqual(r.windowK, 1000);
 });
 test('Observed context above 200K auto-escalates the window', () => {
