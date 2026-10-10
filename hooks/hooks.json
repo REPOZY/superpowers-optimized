@@ -108,6 +108,15 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/bash-compress-hook.js\""
           }
         ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/subagent-guard.js\""
+          }
+        ]
       }
     ]
   }

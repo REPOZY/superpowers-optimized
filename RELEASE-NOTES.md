@@ -1,5 +1,23 @@
 # Superpowers Optimized Release Notes
 
+## v6.10.0 (2026-10-10)
+
+The context pressure gate no longer blocks users of 1M-token models at 12% of their window, and subagents are stopped from using this plugin's skills at the moment they try, instead of being made to redo their work afterwards.
+
+### New Features
+
+**Subagent skill calls are blocked before they run.** Inside a subagent, a call to one of this plugin's skills is now denied on the spot: the subagent gets a one-line reason and carries on with its task. Until now the guard only acted when the subagent finished, and then forced it to redo its whole task, doubling the time and tokens. Requires Claude Code 2.1.100 or later; the main session and other plugins' or your own skills are unaffected. Verified live: the denied subagent continued and returned the correct result.
+
+### Changes
+
+**The after-the-fact subagent check reads what actually happened.** When a subagent finishes, the guard now checks its transcript and forces a redo only if one of this plugin's skills actually ran. Before, it matched words in the subagent's final message, so a subagent that merely mentioned a skill ("running the systematic-debugging checks") was made to redo good work. Matching the wording remains only as a fallback when no transcript is available.
+
+### Fixes
+
+**1M-token models are recognized without any setting.** The context pressure gate assumed a 200K window unless the model id carried a `[1m]` marker, but Opus 4.7 and later, Sonnet 5 and later, and Fable have 1M natively with no marker. On those models the gate treated 120K tokens as "60% full" and blocked plan execution at 12% of the real window. These models are now detected by id; Claude Code's own `CLAUDE_CODE_DISABLE_1M_CONTEXT` and `CLAUDE_CODE_MAX_CONTEXT_TOKENS` are respected; unknown models keep the safe 200K default. `SP_CONTEXT_WINDOW` is no longer needed for current models and still overrides everything.
+
+**Running the hook tests no longer writes to your real violation log.** The subagent-guard tests ran the hook against your actual home folder, so every test run added fake entries to `~/.claude/hooks-logs/subagent-violations.jsonl` (169 of 228 entries on one machine), making leakage look about four times more common than it is. The tests now use a temporary home folder.
+
 ## v6.9.0 (2026-10-02)
 
 The routing guide and your project memory now actually reach the model. Until this release, both arrived as a 2,000-character preview.

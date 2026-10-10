@@ -46,7 +46,7 @@ The agent will automatically route to the correct workflow, apply safety guards,
 See [Installation](#installation) for install, update, and uninstall commands on all platforms.
 
 > [!NOTE]
-> **Codex parity boundary:** Claude Code gets the full 11-hook lifecycle. Codex now has verified live support for `SessionStart`, `UserPromptSubmit`, and `PreToolUse(Bash)` on macOS/Linux with `codex_hooks = true` and `codex-cli 0.118.0+` (tested on `0.118.0`). This repo now also ships a Codex-specific `PostToolUse(Bash)` smart-compress hook that can replace noisy Bash output after execution using the existing compression rules. `Stop` is implemented for Codex, but visible reminder surfacing should still be revalidated after install/update. Codex still does **not** expose Claude's `PostToolUse(Edit|Write|Skill)`, `SubagentStop`, `Read/Edit/Write` interception, or Claude's pre-execution Bash rewrite path, so full Claude parity is not possible today.
+> **Codex parity boundary:** Claude Code gets the full 11-hook lifecycle. Codex now has verified live support for `SessionStart`, `UserPromptSubmit`, and `PreToolUse(Bash)` on macOS/Linux with `codex_hooks = true` and `codex-cli 0.118.0+` (tested on `0.118.0`). This repo now also ships a Codex-specific `PostToolUse(Bash)` smart-compress hook that can replace noisy Bash output after execution using the existing compression rules. `Stop` is implemented for Codex, but visible reminder surfacing should still be revalidated after install/update. Codex still does **not** expose Claude's `PostToolUse(Edit|Write|Skill)`, `PreToolUse(Skill)`, `SubagentStop`, `Read/Edit/Write` interception, or Claude's pre-execution Bash rewrite path, so full Claude parity is not possible today.
 
 ---
 
@@ -149,12 +149,13 @@ User sends a prompt
 │  track-session-stats.js → logs skill invocations          │
 └───────────────────────────────────────────────────────────┘
         │
-        ▼  (when Claude stops responding)
-┌─ Subagent Guard (SubagentStop) ──────────────────────────┐
+        ▼  (subagent Skill call, and when a subagent stops)
+┌─ Subagent Guard (PreToolUse: Skill + SubagentStop) ───────┐
 │  subagent-guard.js →                                      │
-│    Detects skill leakage in subagent output                │
-│    Blocks stop + forces redo if violation found            │
-│    Logs violations for visibility                          │
+│    Denies plugin skills inside subagents before they run  │
+│    On stop: blocks + forces redo only if one actually ran │
+│      (transcript check; text match only as fallback)      │
+│    Logs violations for visibility                         │
 └───────────────────────────────────────────────────────────┘
         │
         ▼  (when Claude stops responding)
@@ -424,14 +425,14 @@ This is the full cross-platform hook inventory for the plugin. Claude Code gets 
 - **context-engine** (SessionStart) — Runs git commands on every session start and writes `context-snapshot.json`: changed files, blast radius, recent commits, and change stats. Blast radius edges are **path-resolved**: a file is listed only when it contains a reference that actually resolves to the changed file's path (a relative import, or the repo path written out). References that cannot be resolved are dropped rather than guessed, so the list is deliberately incomplete — an empty list means "nothing proven", not "no dependents". Uses per-project watermarks (md5 of cwd) so multiple projects don't interfere, and a cross-session diff base so "what changed" reflects changes since your last session, not just the last commit. Zero dependencies. Silent no-op on non-git projects
 - **session-start** (SessionStart) — Injects using-superpowers routing into every session, without the sections that cannot apply to the project (fresh-project gate vs. map-staleness procedure); checks for available plugin update. Kept under Claude Code's 10,000-character per-hook limit, shortening the update notice if it would push past it
 - **session-memory** (SessionStart) — Injects project memory in its own hook, so it gets its own 10,000-character field: `state.md` (framed as possibly stale when a commit is newer), `project-map.md` (Critical Constraints + Hot Files only above 200 lines), open known issues, the latest saved session-log entries, and the snapshot — admitted in priority order under a ~9,500-character budget, with cuts named in the output. Records what it injected so prompt-time recall does not repeat it, and surfaces the rest later by relevance. The Codex adapter uses the same builder
-- **skill-activator** (UserPromptSubmit) — Context pressure gate: reads session JSONL, blocks plan-execution triggers when context is ≥60% full (fires compact-first instruction instead of skill hints). The window defaults to 200K and is resolved per session — set `SP_CONTEXT_WINDOW=1m` if you run a 1M-token window, or the gate will block you at 12% utilization (see [Configuration](#configuration)). Also: micro-task detection + confidence-threshold skill matching + memory recall from session-log.md and known-issues.md ranked by IDF-weighted relevance (an entry must match at least 30% of the distinctive weight and 25% of the prompt's keywords; recency is only a 10% tiebreak; a keyword matches only words it begins, never a fragment inside a word or file name; path segments of @-mentioned files and editor wrappers are not keywords; when more than three entries tie for best, nothing is recalled), with each recalled entry injected at most once per session
+- **skill-activator** (UserPromptSubmit) — Context pressure gate: reads session JSONL, blocks plan-execution triggers when context is ≥60% full (fires compact-first instruction instead of skill hints). The window is resolved per session from the model id: models with a native 1M window (Opus 4.7+, Sonnet 5+, Fable, Mythos) and `[1m]` models get 1M, everything else the conservative 200K (see [Configuration](#configuration)). Also: micro-task detection + confidence-threshold skill matching + memory recall from session-log.md and known-issues.md ranked by IDF-weighted relevance (an entry must match at least 30% of the distinctive weight and 25% of the prompt's keywords; recency is only a 10% tiebreak; a keyword matches only words it begins, never a fragment inside a word or file name; path segments of @-mentioned files and editor wrappers are not keywords; when more than three entries tie for best, nothing is recalled), with each recalled entry injected at most once per session
 - **track-edits** (PostToolUse: Edit/Write) — Logs file changes for TDD reminders; auto-adds AI workspace artifacts (`project-map.md`, `session-log.md`, `state.md`) to `.gitignore` on first write
 - **track-session-stats** (PostToolUse: Skill) — Tracks skill invocations per session (`session-stats-<id>.json`) for progress visibility and to tell the decision-log reminder whether a design or diagnostic skill ran
 - **stop-reminders** (Stop) — Surfaces TDD reminders, commit nudges, and session summary after each response turn. Also fires the decision-log reminder when a session either touched workflow/config files (`SKILL.md`, hooks, `CLAUDE.md`, specs, plans) or reworked 4+ distinct source files — the second rule is what makes the reminder work in ordinary application projects, where none of the first patterns ever match
 - **block-dangerous-commands** (PreToolUse: Bash) — 30+ patterns blocking destructive commands with 3-tier severity
 - **protect-secrets** (PreToolUse: Read/Edit/Write/Bash) — 50+ file patterns protecting sensitive files + 14 content patterns detecting hardcoded secrets (API keys, tokens, PEM blocks, connection strings) in source code with actionable env var guidance
 - **bash-compress-hook** (PreToolUse: Bash) — smart-compress: automatically removes noise from Bash output before it enters context. Covers 17 command types across two tiers: near-lossless summaries for install/push/pull commands (e.g. `npm install` → `ok, added 150 packages, in 12s`), and smart filtering for commands like `git status` (hint lines removed) and passing test runs (individual lines collapsed to summary). Hard safety rules: diffs, file reads, piped commands, `--verbose`/`--debug` output, and any failed command always pass through raw — no information loss on errors. Every filtered output gets a `[compressed: X->Y lines | type]` marker so Claude always knows compression occurred and can re-run if it needs more detail. If Claude does re-run the same command within 60 seconds, the hook automatically passes through the full uncompressed output on that second run. ~76% token savings on mixed sessions. Disable per-project with a `.sp-no-compress` file or globally with `SP_NO_COMPRESS=1`. See `docs/architecture/smart-compress.md` for full details
-- **subagent-guard** (SubagentStop) — Detects and blocks subagent skill leakage (12 action verbs + Skill tool invocation patterns) with automatic recovery
+- **subagent-guard** (PreToolUse: Skill + SubagentStop) — Keeps subagents from using this plugin's skills. Inside a subagent, a call to one is denied before it runs and the subagent continues its task (Claude Code 2.1.100+; the main session and other plugins' skills are untouched). On stop, it forces a redo only if the subagent's transcript shows one of these skills actually ran; matching the final message's wording (12 action verbs + Skill tool patterns) is the fallback when no transcript is available
 
 ### Checking memory health
 
@@ -447,19 +448,19 @@ Everything works out of the box. These environment variables exist for cases whe
 
 | Variable | Default | What it does |
 |---|---|---|
-| `SP_CONTEXT_WINDOW` | `200k` | Size of your model's context window. Accepts `1m`, `200k`, or a raw token count. **Set this to `1m` if you run a 1M-token window** — otherwise the context pressure gate treats 120K as "60% full" and blocks plan execution at 12% of your real capacity. |
+| `SP_CONTEXT_WINDOW` | detected | Size of your model's context window. Accepts `1m`, `200k`, or a raw token count. Overrides detection — only needed for a model the plugin cannot recognize (see below). |
 | `SP_CONTEXT_PRESSURE_THRESHOLD` | `0.60` | How full the window must be before plan execution is gated. Accepts `0.75` or `75`. |
 | `SP_NO_COMPRESS` | unset | Set to `1` to disable smart-compress globally. Per-project: add a `.sp-no-compress` file. |
 | `SUPERPOWERS_AUTO_UPDATE` | on | Set to `0` to stop the session-start update check. |
 
-Without `SP_CONTEXT_WINDOW`, the gate still self-corrects in two cases: a model id carrying the `[1m]` marker, or any turn whose measured context already exceeds 200K (which proves the window is larger). Both only help *after* the first misfire, so set the variable explicitly.
+Without `SP_CONTEXT_WINDOW`, the gate reads the model id from the session transcript. Models with a native 1M window in Claude Code (Opus 4.7 and later, Sonnet 5 and later, Fable, Mythos) and any model carrying the `[1m]` marker get 1M; Haiku, Opus 4.6, Sonnet 4.6 and older get 200K. Claude Code's own `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` caps every model at 200K, and `CLAUDE_CODE_MAX_CONTEXT_TOKENS` sizes a non-Claude gateway model; the gate follows both. An unrecognized model stays at 200K until a turn exceeds 200K (which proves the window is larger) — set `SP_CONTEXT_WINDOW` for such a model to avoid that first early block.
 
 In Claude Code, set these under `env` in `.claude/settings.json` (project) or `~/.claude/settings.json` (global):
 
 ```json
 {
   "env": {
-    "SP_CONTEXT_WINDOW": "1m"
+    "SP_CONTEXT_PRESSURE_THRESHOLD": "0.75"
   }
 }
 ```

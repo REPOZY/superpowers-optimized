@@ -669,18 +669,39 @@ function getPressureThreshold(env) {
 }
 
 /**
+ * True for model ids whose 1M window is native in Claude Code on every plan and
+ * provider: Fable, Mythos, Sonnet 5+, Opus 4.7+. Opus 4.6 and Sonnet 4.6 reach
+ * 1M only through the [1m] marker, and Haiku is 200K. Matches inside provider
+ * spellings (anthropic.claude-opus-5-5, ...-v1:0, @date); the minor version
+ * never swallows a date suffix (claude-opus-5-20260401 is Opus 5).
+ */
+function isNative1MModel(model) {
+  const m = /claude-(opus|sonnet|fable|mythos)-(\d+)(?:-(\d{1,2})(?!\d))?/i.exec(model || '');
+  if (!m) return false;
+  const family = m[1].toLowerCase();
+  const major = parseInt(m[2], 10);
+  const minor = m[3] ? parseInt(m[3], 10) : 0;
+  if (family === 'fable' || family === 'mythos') return true;
+  if (family === 'sonnet') return major >= 5;
+  return major > 4 || (major === 4 && minor >= 7);
+}
+
+/**
  * Resolve the effective context window in tokens.
  *
  * Priority:
  *   1. SP_CONTEXT_WINDOW env var — explicit, always wins ("1m", "200k", raw count)
- *   2. a [1m] marker in the model id recorded in the session transcript
- *   3. auto-escalation — a turn has already exceeded the default window, so the
+ *   2. CLAUDE_CODE_DISABLE_1M_CONTEXT=1 — Claude Code caps every model at 200K
+ *   3. a [1m] marker in the model id recorded in the session transcript
+ *   4. a model whose 1M window is native (see isNative1MModel)
+ *   5. CLAUDE_CODE_MAX_CONTEXT_TOKENS — the window Claude Code assumes for a
+ *      model it does not recognize, so only reached for unrecognized ids
+ *   6. auto-escalation — a turn has already exceeded the default window, so the
  *      default is provably wrong; step up to the smallest tier that fits
- *   4. DEFAULT_CONTEXT_WINDOW
+ *   7. DEFAULT_CONTEXT_WINDOW
  *
- * Auto-escalation only rescues the gate after 200K has been crossed, by which
- * point it has already misfired once. Users on a larger window should set
- * SP_CONTEXT_WINDOW so the gate is correct from turn one.
+ * An unknown model stays at the conservative 200K: assuming 1M there would put
+ * the gate at 600K on a 200K window, where it can never fire.
  */
 function resolveContextWindow(observed, env) {
   const e = env || process.env;
@@ -689,7 +710,14 @@ function resolveContextWindow(observed, env) {
   const configured = parseWindowSetting(e.SP_CONTEXT_WINDOW);
   if (configured) return configured;
 
+  if (e.CLAUDE_CODE_DISABLE_1M_CONTEXT === '1') return DEFAULT_CONTEXT_WINDOW;
+
   if (o.model && /\[1m\]/i.test(o.model)) return LARGE_CONTEXT_WINDOW;
+
+  if (isNative1MModel(o.model)) return LARGE_CONTEXT_WINDOW;
+
+  const assumed = parseWindowSetting(e.CLAUDE_CODE_MAX_CONTEXT_TOKENS);
+  if (assumed && !/claude-/i.test(o.model || '')) return assumed;
 
   if (o.observedMax && o.observedMax > DEFAULT_CONTEXT_WINDOW) {
     return o.observedMax > LARGE_CONTEXT_WINDOW

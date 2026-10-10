@@ -23,9 +23,17 @@ const assert = require('assert');
 const { execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 const HOOK_PATH = path.join(__dirname, '..', '..', 'hooks', 'subagent-guard.js');
 const source = fs.readFileSync(HOOK_PATH, 'utf8');
+
+// The hook logs violations under HOME. Point it at a throwaway home so running
+// the suite never writes test entries into the developer's real violation log.
+const TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'sg-home-'));
+const HOOK_ENV = { ...process.env, HOME: TEST_HOME, USERPROFILE: TEST_HOME };
+const VIOLATION_LOG = path.join(TEST_HOME, '.claude', 'hooks-logs', 'subagent-violations.jsonl');
+process.on('exit', () => fs.rmSync(TEST_HOME, { recursive: true, force: true }));
 
 let passed = 0;
 let failed = 0;
@@ -47,16 +55,21 @@ function test(label, fn) {
  * Returns parsed JSON output.
  */
 function runGuard(lastMessage) {
-  const input = JSON.stringify({
+  return runHook({
     last_assistant_message: lastMessage,
     agent_id: 'test-agent',
     agent_type: 'test',
   });
+}
+
+/** Run subagent-guard.js with an arbitrary hook input object. */
+function runHook(data) {
   try {
     const output = execSync(`node "${HOOK_PATH}"`, {
-      input,
+      input: JSON.stringify(data),
       encoding: 'utf8',
       timeout: 5000,
+      env: HOOK_ENV,
     });
     return JSON.parse(output.trim());
   } catch (err) {
@@ -64,6 +77,42 @@ function runGuard(lastMessage) {
     if (err.stdout) return JSON.parse(err.stdout.trim());
     throw err;
   }
+}
+
+/** A PreToolUse(Skill) input; agentId undefined means the main session. */
+function skillCall(skill, agentId) {
+  const data = { hook_event_name: 'PreToolUse', tool_name: 'Skill', tool_input: { skill } };
+  if (agentId) Object.assign(data, { agent_id: agentId, agent_type: 'general-purpose' });
+  return data;
+}
+
+/**
+ * Write a subagent transcript holding one Skill call and its result, in the
+ * shape Claude Code stores (tool_use in an assistant row, tool_result in a
+ * user row; a hook-denied call's result has is_error: true).
+ */
+function writeTranscript(skill, isError) {
+  const file = path.join(TEST_HOME, `agent-${Math.random().toString(36).slice(2)}.jsonl`);
+  const rows = [
+    { type: 'assistant', message: { role: 'assistant', content: [
+      { type: 'tool_use', id: 'toolu_1', name: 'Skill', input: { skill } },
+    ] } },
+    { type: 'user', message: { role: 'user', content: [
+      { type: 'tool_result', tool_use_id: 'toolu_1', is_error: isError, content: isError ? 'PreToolUse:Skill hook error: denied' : 'Launching skill' },
+    ] } },
+  ];
+  fs.writeFileSync(file, rows.map(r => JSON.stringify(r)).join('\n') + '\n');
+  return file;
+}
+
+function stopWithTranscript(transcriptPath, lastMessage, extra) {
+  return runHook({
+    hook_event_name: 'SubagentStop',
+    agent_id: 'a1', agent_type: 'general-purpose',
+    agent_transcript_path: transcriptPath,
+    last_assistant_message: lastMessage,
+    ...extra,
+  });
 }
 
 // ── SKILL_NAMES completeness ─────────────────────────────────────────────────
@@ -237,6 +286,75 @@ test('Handles invalid JSON input gracefully', () => {
       assert.deepStrictEqual(result, {});
     }
   }
+});
+
+// ── PreToolUse: deny this plugin's skills inside subagents ───────────────────
+
+console.log('\nPreToolUse(Skill) — block before the call runs');
+
+test('Denies a namespaced plugin skill inside a subagent', () => {
+  const result = runHook(skillCall('superpowers-optimized:brainstorming', 'a1'));
+  const out = result.hookSpecificOutput || {};
+  assert.strictEqual(out.hookEventName, 'PreToolUse');
+  assert.strictEqual(out.permissionDecision, 'deny', JSON.stringify(result));
+  assert.ok(/continue/i.test(out.permissionDecisionReason || ''), 'reason must tell the subagent to carry on');
+});
+
+test('Denies a bare plugin skill name inside a subagent', () => {
+  const result = runHook(skillCall('systematic-debugging', 'a1'));
+  assert.strictEqual((result.hookSpecificOutput || {}).permissionDecision, 'deny', JSON.stringify(result));
+});
+
+test('Allows the same skill in the main session (no agent_id)', () => {
+  assert.deepStrictEqual(runHook(skillCall('superpowers-optimized:brainstorming')), {});
+});
+
+test("Allows another plugin's or the user's own skill inside a subagent", () => {
+  assert.deepStrictEqual(runHook(skillCall('my-plugin:deploy', 'a1')), {});
+  assert.deepStrictEqual(runHook(skillCall('deploy-staging', 'a1')), {});
+});
+
+test('Allows non-Skill tools inside a subagent', () => {
+  assert.deepStrictEqual(runHook({
+    hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: 'x' }, agent_id: 'a1',
+  }), {});
+});
+
+test('Logs a denial to the violation log', () => {
+  runHook(skillCall('superpowers-optimized:test-driven-development', 'a-logged'));
+  const rows = fs.readFileSync(VIOLATION_LOG, 'utf8').trim().split('\n').map(l => JSON.parse(l));
+  const row = rows.find(r => r.agentId === 'a-logged');
+  assert.ok(row, 'denial must be logged');
+  assert.strictEqual(row.action, 'denied');
+});
+
+// ── SubagentStop: the transcript decides, not the wording ────────────────────
+
+console.log('\nSubagentStop with transcript — block only a skill that actually ran');
+
+test('Blocks when a plugin skill ran, even if the final message is clean', () => {
+  const t = writeTranscript('superpowers-optimized:brainstorming', false);
+  assert.strictEqual(stopWithTranscript(t, 'Done. Summary of findings below.').decision, 'block');
+});
+
+test('Does NOT block a skill call the PreToolUse hook already denied', () => {
+  const t = writeTranscript('superpowers-optimized:brainstorming', true);
+  assert.deepStrictEqual(stopWithTranscript(t, "I'm using the brainstorming skill... it was denied, continuing."), {});
+});
+
+test('Does NOT block a text-only mention when the transcript shows no skill ran', () => {
+  const t = writeTranscript('my-plugin:deploy', false);
+  assert.deepStrictEqual(stopWithTranscript(t, 'All green after running the systematic-debugging checks.'), {});
+});
+
+test('Does NOT block again on the forced redo (stop_hook_active)', () => {
+  const t = writeTranscript('superpowers-optimized:brainstorming', false);
+  assert.deepStrictEqual(stopWithTranscript(t, 'Redone without skills.', { stop_hook_active: true }), {});
+});
+
+test('Falls back to text patterns when the transcript cannot be read', () => {
+  const missing = path.join(TEST_HOME, 'no-such-transcript.jsonl');
+  assert.strictEqual(stopWithTranscript(missing, "I'm using the brainstorming skill.").decision, 'block');
 });
 
 // ── Summary ──────────────────────────────────────────────────────────────────
