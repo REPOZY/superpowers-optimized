@@ -2,7 +2,7 @@
 
 ## v6.11.0 (2026-11-11)
 
-> **Installed by cloning this repository (Codex, OpenCode, or a self-hosted clone)? Delete the clone and clone it again.** The repository's history was rewritten on 2026-11-11 to remove old plan and spec documents. Automatic updates only fast-forward, so an existing clone stops updating. If a Claude Code marketplace update fails after this date, remove and reinstall the plugin.
+> **Installed by cloning this repository (Codex, OpenCode, or a self-hosted clone)? Delete the clone and clone it again.** The repository's history was rewritten on 2026-11-11 to remove old plan and spec documents. Automatic updates only fast-forward, so an existing clone stops updating. Claude Code marketplace installs are not affected: updating the marketplace re-clones the repository (checked on Claude Code 2.1.318). If an update still fails, follow "If the update fails" under Installation → Claude Code in the README.
 
 Less process for small work, fewer forced extra turns, and fewer harmless commands blocked. Measured on one real build session: the stop hook blocked 33 times for 14 user prompts, 41 of 50 prompt-time injections landed on background notifications rather than on anything the user typed, and safety rules denied ordinary commands.
 

@@ -501,6 +501,15 @@ In Claude Code, set these under `env` in `.claude/settings.json` (project) or `~
 
 > **Tip:** To skip manual steps in future, enable **Auto-update** for the marketplace in step 1.
 
+**If the update fails or still shows the old version**, reinstall from a terminal (outside Claude Code):
+```
+claude plugin uninstall superpowers-optimized
+claude plugin marketplace remove superpowers-optimized
+claude plugin marketplace add REPOZY/superpowers-optimized
+claude plugin install superpowers-optimized@superpowers-optimized
+```
+Then start a new session. Your project memory (`project-map.md`, `session-log.md`, `state.md`, `known-issues.md`) lives in your projects, not in the plugin, so reinstalling does not touch it.
+
 **Uninstall**
 ```
 /plugin uninstall superpowers-optimized
@@ -561,7 +570,7 @@ Fetch and follow instructions from https://raw.githubusercontent.com/REPOZY/supe
 Fetch and follow the update instructions from https://raw.githubusercontent.com/REPOZY/superpowers-optimized/refs/heads/main/.opencode/INSTALL.md
 ```
 
-Or manually: `git pull` in your local clone of the repository.
+Or manually: `git pull` in your local clone of the repository. If your clone was made before 2026-11-11, delete it and clone again instead (see below).
 
 
 ### Available Update Notification
