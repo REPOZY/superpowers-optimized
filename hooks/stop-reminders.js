@@ -479,12 +479,15 @@ function getSessionSignificance(edits, designSkillsUsed) {
   }
 
   const sourceFiles = paths.filter(isSourceFile);
+  // Test files stay out of the design bar: brainstorming also runs for small work,
+  // and one code file plus its test is the smallest TDD change, not a design session.
+  const codeFiles = sourceFiles.filter(p => !isTestFile(p));
 
-  if (design.length > 0 && sourceFiles.length >= SIGNIFICANT_SOURCE_FILE_COUNT_WITH_DESIGN) {
+  if (design.length > 0 && codeFiles.length >= SIGNIFICANT_SOURCE_FILE_COUNT_WITH_DESIGN) {
     return {
       kind: 'design',
       repeatable: true,
-      detail: `${sourceFiles.length} source files while running ${design.join(', ')}`,
+      detail: `${codeFiles.length} source files while running ${design.join(', ')}`,
     };
   }
 

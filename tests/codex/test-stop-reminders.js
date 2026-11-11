@@ -553,6 +553,37 @@ test('Plugin-namespaced skill names are recognised', () => {
   }
 });
 
+test('Design bar ignores test files: one code file plus its test does not fire', () => {
+  // Regression (6.11.0): brainstorming now runs for small work, and every small
+  // TDD feature is one code file plus one test file. Counting the test file made
+  // each one cost an extra turn writing a session-log entry for a tiny change.
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, ['src/validation.js', 'test/validation.test.js']);
+    writeSkillStats(logDir, TEST_SESSION_ID, { 'superpowers-optimized:brainstorming': 1 });
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(!reason.includes('Decision log'),
+      `1 code file + its test is small work, not a design session: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Design bar still fires on 2 code files, and counts only the code files', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeRecentEdits(logDir, ['src/a.js', 'src/b.js', 'test/a.test.js']);
+    writeSkillStats(logDir, TEST_SESSION_ID, { 'superpowers-optimized:brainstorming': 1 });
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(reason.includes('Decision log'), `2 code files + design skill should fire: ${reason}`);
+    assert.ok(reason.includes('2 source files'), `Count should exclude the test file: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
 // ── Subagent edits and reminder repeats ──────────────────────────────────────
 // Subagent tool calls fire the parent's PostToolUse hooks with agent_id set, so
 // their edits land in the parent session's log. Subagent implementers run TDD

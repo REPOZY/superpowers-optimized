@@ -1,5 +1,13 @@
 # Superpowers Optimized Release Notes
 
+## v6.11.1 (2026-11-11)
+
+One stop-hook fix for small work.
+
+### Fixes
+
+**Small features no longer trigger a decision-log reminder.** Since 6.11.0, small changes run through `brainstorming`, and the reminder fired whenever a design skill ran and 2 source files changed. So every small test-first feature (one code file plus its test) cost an extra turn spent writing a session-log entry. Test files no longer count toward that bar; 2 or more code files changed while a design skill ran still trigger it.
+
 ## v6.11.0 (2026-11-11)
 
 > **Installed by cloning this repository (Codex, OpenCode, or a self-hosted clone)? Delete the clone and clone it again.** The repository's history was rewritten on 2026-11-11 to remove old plan and spec documents. Automatic updates only fast-forward, so an existing clone stops updating. Claude Code marketplace installs are not affected: updating the marketplace re-clones the repository (checked on Claude Code 2.1.318). If an update still fails, follow "If the update fails" under Installation → Claude Code in the README.

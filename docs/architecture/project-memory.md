@@ -80,12 +80,12 @@ A session is significant when **any** rule matches:
 | Rule | Trigger | Repeats? |
 |---|---|---|
 | **Workflow/config** | `SKILL.md`, `hooks/*.js`, `CLAUDE.md`, `AGENTS.md`, `agents/*.md`, `specs/*.md`, `plans/*.md`, `plugin.universal.yaml` changed | Once per unsaved phase |
-| **Design** | a design or diagnostic skill ran (`brainstorming`, `writing-plans`, `deliberation`, `premise-check`, `systematic-debugging`, `refactoring`, `performance-investigation`, `dependency-management`) **and** 2+ distinct source files changed | Once per unsaved phase |
+| **Design** | a design or diagnostic skill ran (`brainstorming`, `writing-plans`, `deliberation`, `premise-check`, `systematic-debugging`, `refactoring`, `performance-investigation`, `dependency-management`) **and** 2+ distinct source files changed, test files not counted | Once per unsaved phase |
 | **Volume** | 4+ distinct source files changed | No — once per session |
 
 Rule 1 alone was the original implementation, and it silently did nothing outside agent-tooling repos: a session that redesigned `src/auth/session.ts` in a React app matched none of those patterns, so the only prompt to preserve the "why" never appeared.
 
-Rule 2 uses direct evidence that decisions were made, so it triggers at a lower file count. It reads per-session skill counts from `~/.claude/hooks-logs/session-stats-<id>.json`; another session's skill usage can never trigger yours.
+Rule 2 uses direct evidence that decisions were made, so it triggers at a lower file count. Test files are left out of that count: `brainstorming` also runs for small work, and one code file plus its test is the smallest test-first change, not a design session. It reads per-session skill counts from `~/.claude/hooks-logs/session-stats-<id>.json`; another session's skill usage can never trigger yours.
 
 Rule 3 is a heuristic, so it nudges **once per session**. Without that cap, an ordinary feature session touching four files would re-fire the reminder at every turn until an entry was written — which trains you to ignore it.
 
