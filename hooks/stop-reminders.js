@@ -6,8 +6,14 @@
  * gentle reminders about TDD, verification, and commit hygiene.
  * These reminders reinforce discipline skills deterministically.
  *
- * Uses a file-based guard to fire only once per session to prevent
- * infinite loops (Stop hook returning content causes Claude to resume).
+ * Every block forces a full extra model turn, so each reminder is sent once per
+ * trigger state (per-session ledger) instead of at every stop: an identical
+ * repeat carries no new information. A 2-minute guard file additionally stops
+ * re-entry loops (Stop hook returning content causes Claude to resume).
+ *
+ * Edits logged as "<Tool>@subagent" (see track-edits.js) count toward the
+ * decision log but not toward the TDD or state.md reminders: a subagent
+ * implementer works under its own brief and reviewer.
  *
  * Input:  stdin JSON with { session_id, cwd, ... }
  * Output: stdout JSON with decision/reason continuation payload (only when
@@ -108,15 +114,20 @@ function isSourceFile(filePath) {
  * Parse a raw log line into an entry object.
  * Supports both legacy 3-field format and new 4-field format with session_id.
  */
+function splitTool(raw) {
+  const m = /^(.*)@subagent$/.exec(raw || '');
+  return m ? { tool: m[1], subagent: true } : { tool: raw, subagent: false };
+}
+
 function parseLogLine(line) {
   const parts = line.split(' | ');
   if (parts.length < 3) return null;
   if (parts.length >= 4) {
-    // New format: timestamp | session_id | tool | filePath
+    // New format: timestamp | session_id | tool[@subagent] | filePath
     return {
       timestamp: parts[0],
       sessionId: parts[1] || null,
-      tool: parts[2],
+      ...splitTool(parts[2]),
       filePath: parts.slice(3).join(' | '),
     };
   }
@@ -124,9 +135,51 @@ function parseLogLine(line) {
   return {
     timestamp: parts[0],
     sessionId: null,
-    tool: parts[1],
+    ...splitTool(parts[1]),
     filePath: parts.slice(2).join(' | '),
   };
+}
+
+/**
+ * Per-session record of what each reminder last fired for. A reminder fires
+ * again only when its trigger changed (new untested file, new state.md version,
+ * new unsaved phase, doubled uncommitted work, new session-log version).
+ */
+function reminderLedgerPath(sessionId) {
+  const safe = String(sessionId || 'nosession').replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
+  return path.join(LOG_DIR, `stop-reminders-${safe}.json`);
+}
+
+function loadReminderLedger(sessionId) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(reminderLedgerPath(sessionId), 'utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveReminderLedger(sessionId, ledger) {
+  try {
+    if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+    fs.writeFileSync(reminderLedgerPath(sessionId), JSON.stringify(ledger));
+  } catch {
+    // Never block the Stop hook on ledger writes
+  }
+}
+
+function fileVersion(filePath) {
+  try {
+    const st = fs.statSync(filePath);
+    return `${st.mtimeMs}:${st.size}`;
+  } catch {
+    return null;
+  }
+}
+
+function nameFiles(paths) {
+  const names = paths.slice(0, 3).map(p => path.basename(p));
+  return names.join(', ') + (paths.length > 3 ? ` +${paths.length - 3} more` : '');
 }
 
 /**
@@ -318,7 +371,7 @@ function getUncommittedCount(cwd) {
   }
 }
 
-function generateReminders(edits, cwd, sessionId) {
+function generateReminders(edits, cwd, sessionId, ledger = {}) {
   const reminders = [];
 
   // Session stats summary (always include if available)
@@ -331,29 +384,43 @@ function generateReminders(edits, cwd, sessionId) {
   if (edits.length === 0) return reminders;
 
   const editedPaths = [...new Set(edits.map(e => e.filePath))];
-  const sourceFiles = editedPaths.filter(isSourceFile);
+  // Any test edit counts, including a subagent's; only the main agent's own
+  // source edits can make it the main agent's TDD job.
   const testFiles = editedPaths.filter(isTestFile);
+  const ownSources = [...new Set(edits.filter(e => !e.subagent).map(e => e.filePath))]
+    .filter(p => isSourceFile(p) && !isTestFile(p));
 
-  // TDD reminder: source files changed without corresponding tests
-  const untestedSources = sourceFiles.filter(src => !isTestFile(src));
-  if (untestedSources.length > 0 && testFiles.length === 0) {
-    reminders.push(
-      `TDD reminder: ${untestedSources.length} source file(s) modified without test changes. ` +
-      `Consider running the tests covering those files, or invoking TDD workflow if behavior ` +
-      `changed. Scope the run to the change (see verification-before-completion) — not the ` +
-      `whole repo suite by reflex.`
-    );
+  // TDD reminder: source files changed without corresponding tests — once per file
+  if (ownSources.length > 0 && testFiles.length === 0) {
+    const reminded = new Set(ledger.tdd || []);
+    if (ownSources.some(p => !reminded.has(p))) {
+      ledger.tdd = [...new Set([...reminded, ...ownSources])];
+      reminders.push(
+        `TDD reminder: ${ownSources.length} source file(s) modified without test changes ` +
+        `(${nameFiles(ownSources)}). ` +
+        `Consider running the tests covering those files, or invoking TDD workflow if behavior ` +
+        `changed. Scope the run to the change (see verification-before-completion) — not the ` +
+        `whole repo suite by reflex.`
+      );
+    }
   }
 
   // Commit reminder: check actual uncommitted changes via git, not just session edits.
   // Using edit-log count was wrong — it fired even after a commit was made mid-session.
+  // Repeats only when uncommitted work doubles (5, 10, 20, ...).
   if (editedPaths.length >= 5) {
     const uncommittedCount = getUncommittedCount(cwd);
     if (uncommittedCount >= 5) {
-      reminders.push(
-        `Commit reminder: ${uncommittedCount} files with uncommitted changes. ` +
-        `Consider committing incremental progress to avoid losing work.`
-      );
+      const bucket = Math.floor(Math.log2(uncommittedCount / 5));
+      if (typeof ledger.commit !== 'number' || bucket > ledger.commit) {
+        ledger.commit = bucket;
+        reminders.push(
+          `Commit reminder: ${uncommittedCount} files with uncommitted changes. ` +
+          `Consider committing incremental progress to avoid losing work.`
+        );
+      }
+    } else {
+      delete ledger.commit;
     }
   }
 
@@ -472,7 +539,8 @@ function markVolumeNudgeSent(sessionId) {
  * Returns a reminder string if stale, null otherwise.
  *
  * Threshold: state.md older than at least 2 source-file edits that occurred
- * after it was last written. Config-only edits are excluded (noise).
+ * after it was last written. Config-only edits are excluded (noise), and so are
+ * subagent edits: the controller updates state.md at task boundaries.
  */
 function checkStateMdStaleness(cwd, recentEdits) {
   try {
@@ -481,7 +549,7 @@ function checkStateMdStaleness(cwd, recentEdits) {
 
     const stateMtime = fs.statSync(stateMdPath).mtimeMs;
     const editsAfterState = recentEdits.filter(e =>
-      new Date(e.timestamp).getTime() > stateMtime && isSourceFile(e.filePath)
+      !e.subagent && new Date(e.timestamp).getTime() > stateMtime && isSourceFile(e.filePath)
     );
 
     if (editsAfterState.length >= 2) {
@@ -564,34 +632,57 @@ function evaluatePayload(data) {
   // File-based guard prevents infinite loop for reminder injection
   if (!shouldFire()) return {};
 
-  const reminders = generateReminders(edits, cwd, sessionId);
+  const ledger = loadReminderLedger(sessionId);
+  const ledgerBefore = JSON.stringify(ledger);
+  const reminders = generateReminders(edits, cwd, sessionId, ledger);
 
   // Decision-log reminder: significant files modified since the last [saved] entry.
-  // Using "since last saved" (not "last 30 min") means long sessions with multiple
-  // work phases keep getting reminded until each phase is explicitly documented.
+  // Using "since last saved" (not "last 30 min") means each work phase gets its
+  // own reminder. Within a phase, each significance kind fires once.
   const lastSavedTime = getLastSavedEntryTime();
   const editsSinceLastSaved = scopeToProject(getEditsAfter(lastSavedTime, sessionId), cwd);
   const significance = getSessionSignificance(
     editsSinceLastSaved,
     getDesignSkillsUsed(sessionId)
   );
-  if (significance && !(significance.repeatable === false && volumeNudgeAlreadySent(sessionId))) {
-    if (significance.repeatable === false) markVolumeNudgeSent(sessionId);
-    reminders.push(
-      `Decision log: This session modified ${significance.detail}. ` +
-      'Before stopping, invoke context-management via the Skill tool to write a [saved] entry ' +
-      'capturing decisions, rationale, and rejected approaches. ' +
-      'Nothing writes session-log.md automatically — if the "why" is not saved here, it is lost.'
-    );
+  if (significance) {
+    const phaseKey = `${lastSavedTime ? lastSavedTime.toISOString() : 'none'}|${significance.kind}`;
+    const alreadySent = significance.repeatable === false
+      ? volumeNudgeAlreadySent(sessionId)
+      : (ledger.decision || []).includes(phaseKey);
+    if (!alreadySent) {
+      if (significance.repeatable === false) markVolumeNudgeSent(sessionId);
+      else ledger.decision = [...(ledger.decision || []), phaseKey].slice(-20);
+      reminders.push(
+        `Decision log: This session modified ${significance.detail}. ` +
+        'Before stopping, invoke context-management via the Skill tool to write a [saved] entry ' +
+        'capturing decisions, rationale, and rejected approaches. ' +
+        'Nothing writes session-log.md automatically — if the "why" is not saved here, it is lost.'
+      );
+    }
   }
 
-  // state.md staleness: warn if state.md exists but source files changed after it was written
+  // state.md staleness: once per state.md version overtaken by own source edits
   const stateStaleness = checkStateMdStaleness(cwd, edits);
-  if (stateStaleness) reminders.push(stateStaleness);
+  if (stateStaleness) {
+    const version = fileVersion(path.join(cwd, 'state.md'));
+    if (ledger.state !== version) {
+      ledger.state = version;
+      reminders.push(stateStaleness);
+    }
+  }
 
-  // Session-log size guard: warn if last 2 [saved] entries exceed token budget
+  // Session-log size guard: once per session-log.md version that is over budget
   const sizeWarning = checkSessionLogSize(cwd);
-  if (sizeWarning) reminders.push(sizeWarning);
+  if (sizeWarning) {
+    const version = fileVersion(path.join(cwd, 'session-log.md'));
+    if (ledger.sessionLog !== version) {
+      ledger.sessionLog = version;
+      reminders.push(sizeWarning);
+    }
+  }
+
+  if (JSON.stringify(ledger) !== ledgerBefore) saveReminderLedger(sessionId, ledger);
 
   if (reminders.length === 0) return {};
 
@@ -638,8 +729,10 @@ if (require.main === module) {
     DESIGN_SKILLS,
     SIGNIFICANT_SOURCE_FILE_COUNT_WITH_DESIGN,
     isTestFile,
+    loadReminderLedger,
     matchesSession,
     parseLogLine,
+    reminderLedgerPath,
     setGuard,
     shouldFire,
     SIGNIFICANT_SOURCE_FILE_COUNT,

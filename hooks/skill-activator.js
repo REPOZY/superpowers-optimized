@@ -100,6 +100,29 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
+ * Prompts the harness submits for the agent, not the user: background-task
+ * notifications and subagent/peer hand-backs. UserPromptSubmit fires on them
+ * too (seen in Claude Code 2.1.318–2.1.322 transcripts). Hints and recall keyed
+ * on a subagent's report are noise, and recall would also mark entries as seen
+ * in the dedupe ledger, hiding them from the user's next real prompt.
+ *
+ * Only the exact envelope at the very start counts: real user prompts can open
+ * with a tag too (<pasted_content>, <ide_opened_file>) and must still route.
+ */
+const HARNESS_PROMPT_PATTERNS = [
+  /^<task-notification>/,
+  /^<agent-message[\s>]/,
+  // The form rendered into the transcript; matched in case a version passes it on.
+  /^Another Claude session sent a message:\s*\n\s*<agent-message[\s>]/,
+];
+
+function isHarnessPrompt(prompt) {
+  if (typeof prompt !== 'string' || !prompt) return false;
+  const s = prompt.trimStart();
+  return HARNESS_PROMPT_PATTERNS.some(re => re.test(s));
+}
+
+/**
  * Detect micro-tasks that should skip skill routing entirely.
  * Returns true if the prompt is clearly a small, specific action.
  */
@@ -869,8 +892,8 @@ async function main() {
     const cwd = data.cwd || process.cwd();
     const sessionId = data.session_id || null;
 
-    // Micro-task fast path: skip all enrichment entirely
-    if (isMicroTask(prompt)) {
+    // Micro-task and harness-submitted prompts: skip all enrichment entirely
+    if (isHarnessPrompt(prompt) || isMicroTask(prompt)) {
       process.stdout.write('{}');
       return;
     }
@@ -932,6 +955,7 @@ if (require.main === module) {
     matchSkills,
     buildContext,
     isMicroTask,
+    isHarnessPrompt,
     extractKeywords,
     searchSessionLog,
     buildMemoryContext,

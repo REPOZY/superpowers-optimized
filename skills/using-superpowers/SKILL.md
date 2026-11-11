@@ -1,13 +1,12 @@
 ---
 name: using-superpowers
 description: >
-  BLOCKING REQUIREMENT — invoke this skill BEFORE writing any code, editing
-  files, debugging, planning, reviewing, or making any technical tool calls
-  beyond reading files. This is the mandatory workflow router for ALL technical
-  tasks. Matches: "implement", "build", "fix", "debug", "refactor", "optimize",
-  "add feature", "change", "update", "create", "develop", "plan", "review",
-  "test", or ANY request that involves code changes. Do NOT skip this skill
-  even if the task seems simple. Invoke FIRST, then follow its routing.
+  Workflow router for technical work: classifies a task as micro, lightweight,
+  or full and names the skill to use next. Loaded automatically at session
+  start, so invoke it only when its guidance is not already in context.
+  Applies before code changes, debugging, planning, or review — requests to
+  "implement", "build", "fix", "debug", "refactor", "optimize", "add feature",
+  "change", "update", "create", "develop", "plan", "review", or "test".
 ---
 
 # Using Superpowers
@@ -90,7 +89,7 @@ If any of the following are true, classify as **full** immediately — do not ev
 - The change modifies a file that other components depend on (routing rules, entry sequences, config registries, shared hooks)
 - The change introduces a path or outcome that didn't exist before
 
-**When in doubt, classify as full.** An unnecessary brainstorming session costs one extra round. Skipping brainstorming on a task that needed it ships a gap. The asymmetry is not equal — always err toward full.
+**When in doubt, classify as full.** Full does not mean heavy: `brainstorming` scales its paperwork to the work, so a small change costs one design in the conversation — no spec file, no plan file, and no wait when the request already fixes the behavior. Skipping the design on a task that needed one ships a gap. That asymmetry is why doubt resolves toward full.
 
 ### Micro (skip everything)
 - Typo fix, single variable rename, 1-line config change
@@ -125,7 +124,7 @@ If Claude is about to enter plan mode (`EnterPlanMode`), check whether brainstor
 
 - Uncertain whether work should exist at all: `premise-check` (run before brainstorming or planning)
 - Complex decision with unclear options or possible mis-framing: `deliberation` → `brainstorming` → `writing-plans`
-- New behavior or architecture (problem is well-framed): `brainstorming` → `writing-plans`
+- New behavior or architecture (problem is well-framed): `brainstorming` → `writing-plans` (small changes go from the design straight to implementation — see `brainstorming`)
 - Plan execution (same session, with optional parallel waves): `subagent-driven-development`
 - Plan execution (separate session): `executing-plans`
 - Experimental or risky work needing branch isolation: `using-git-worktrees` (run before implementation)

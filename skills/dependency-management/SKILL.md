@@ -1,7 +1,7 @@
 ---
 name: dependency-management
 description: >
-  MUST USE when updating, migrating, or auditing project dependencies: upgrading
+  Use when updating, migrating, or auditing project dependencies: upgrading
   packages, fixing security vulnerabilities (CVEs), resolving breaking changes,
   migrating to new major versions, or auditing outdated dependencies. Enforces
   incremental updates with verification at each step. Distinct from systematic-debugging

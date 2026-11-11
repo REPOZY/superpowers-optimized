@@ -1,7 +1,7 @@
 ---
 name: finishing-a-development-branch
 description: >
-  MUST USE when implementation is verified and you need to choose the
+  Use when implementation is verified and you need to choose the
   branch outcome: merge, PR, keep, or discard. Triggers on: "merge this",
   "create a PR", "squash and merge", "we're done with this branch",
   "clean up the branch", "push this", "get it merged", after

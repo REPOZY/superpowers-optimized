@@ -65,8 +65,12 @@ const MAX_LINES = 500;
  * Append an entry to the edit log.
  * Format: ISO-timestamp | session_id | tool | file_path
  * (Legacy format without session_id is still accepted on read)
+ *
+ * Edits made inside a subagent (the hook input carries agent_id) are logged with
+ * the tool as "Edit@subagent", keeping the line 4-field. stop-reminders uses the
+ * marker so the parent is not told to do TDD for code its subagents wrote.
  */
-function logEdit(tool, filePath, cwd, sessionId) {
+function logEdit(tool, filePath, cwd, sessionId, agentId) {
   try {
     if (!fs.existsSync(LOG_DIR)) {
       fs.mkdirSync(LOG_DIR, { recursive: true });
@@ -79,7 +83,8 @@ function logEdit(tool, filePath, cwd, sessionId) {
     }
 
     const sid = sessionId || '';
-    const entry = `${new Date().toISOString()} | ${sid} | ${tool} | ${resolved}\n`;
+    const toolField = agentId ? `${tool}@subagent` : tool;
+    const entry = `${new Date().toISOString()} | ${sid} | ${toolField} | ${resolved}\n`;
     fs.appendFileSync(EDIT_LOG, entry);
 
     // Auto-add AI workspace artifacts to .gitignore on first write
@@ -156,7 +161,7 @@ async function main() {
 
   try {
     const data = JSON.parse(input);
-    const { tool_name, tool_input, cwd, session_id } = data;
+    const { tool_name, tool_input, cwd, session_id, agent_id } = data;
 
     // Only track Edit and Write operations
     if (tool_name !== 'Edit' && tool_name !== 'Write') {
@@ -166,7 +171,7 @@ async function main() {
 
     const filePath = tool_input?.file_path;
     if (filePath) {
-      logEdit(tool_name, filePath, cwd, session_id);
+      logEdit(tool_name, filePath, cwd, session_id, agent_id);
 
       // Track when a [saved] entry is written to session-log.md so that
       // stop-reminders can ask "any significant edits since last [saved]?"

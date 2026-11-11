@@ -1,0 +1,1 @@
+node test.js fails with: Error: Cannot find module './generated/schema.js'. Fix it.

@@ -35,8 +35,10 @@ const PATTERNS = [
   { level: 'high', id: 'git-clean-f',    regex: /\bgit\s+clean\s+(-\w*f|-f)/,                                             reason: 'git clean -f deletes untracked files' },
   { level: 'high', id: 'chmod-777',      regex: /\bchmod\b.+\b777\b/,                                                     reason: 'chmod 777 is a security risk' },
   { level: 'high', id: 'cat-env',        regex: /\b(cat|less|head|tail|more)\s+\.env\b/,                                  reason: 'reading .env file exposes secrets' },
-  { level: 'high', id: 'cat-secrets',    regex: /\b(cat|less|head|tail|more)\b.+(credentials|secrets?|\.pem|\.key|id_rsa|id_ed25519)/i, reason: 'reading secrets file' },
-  { level: 'high', id: 'echo-secret',    regex: /\becho\b.+\$\w*(SECRET|KEY|TOKEN|PASSWORD|API_|PRIVATE)/i,               reason: 'echoing secret variable' },
+  // Secret reads stay inside one command segment (see protect-secrets.js): ".+"
+  // crossed | ; && and denied e.g. `pytest ... | tail` or `cat x.json | jq .key`.
+  { level: 'high', id: 'cat-secrets',    regex: /\b(cat|less|head|tail|more)\b[^;|&\r\n]*(credentials|secrets?|\.pem|\.key|id_rsa|id_ed25519)\b/i, reason: 'reading secrets file' },
+  { level: 'high', id: 'echo-secret',    regex: /\becho\b[^;|&\r\n]*\$\w*(SECRET|KEY|TOKEN|PASSWORD|API_|PRIVATE)/i,      reason: 'echoing secret variable' },
   { level: 'high', id: 'docker-vol-rm',  regex: /\bdocker\s+volume\s+(rm|prune)/,                                         reason: 'docker volume deletion loses data' },
   { level: 'high', id: 'rm-ssh',         regex: /\brm\b.+\.ssh\/(id_|authorized_keys|known_hosts)/,                       reason: 'deleting SSH keys' },
 
@@ -67,8 +69,10 @@ function log(data) {
 
 function checkCommand(cmd, safetyLevel = SAFETY_LEVEL) {
   const threshold = LEVELS[safetyLevel] || 2;
+  // Join backslash line continuations: a command split over lines is one command.
+  const normalized = String(cmd || '').replace(/\\\r?\n/g, ' ');
   for (const p of PATTERNS) {
-    if (LEVELS[p.level] <= threshold && p.regex.test(cmd)) {
+    if (LEVELS[p.level] <= threshold && p.regex.test(normalized)) {
       return { blocked: true, pattern: p };
     }
   }

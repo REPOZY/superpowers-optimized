@@ -1,5 +1,48 @@
 # Superpowers Optimized Release Notes
 
+## v6.11.0 (2026-11-11)
+
+> **Installed by cloning this repository (Codex, OpenCode, or a self-hosted clone)? Delete the clone and clone it again.** The repository's history was rewritten on 2026-11-11 to remove old plan and spec documents. Automatic updates only fast-forward, so an existing clone stops updating. If a Claude Code marketplace update fails after this date, remove and reinstall the plugin.
+
+Less process for small work, fewer forced extra turns, and fewer harmless commands blocked. Measured on one real build session: the stop hook blocked 33 times for 14 user prompts, 41 of 50 prompt-time injections landed on background notifications rather than on anything the user typed, and safety rules denied ordinary commands.
+
+### Changes
+
+**Small changes no longer need a spec file and a plan.** `brainstorming` still produces a design before any code for every change, but the paperwork now scales: a small change (one subsystem, about three files, one sitting) is designed in the conversation, then built with TDD, one code review, and verification. Larger work keeps the spec → plan → execution path. The router's "when in doubt, classify as full" rule stays — it is now cheap for small work, which is what its "one extra round" justification always assumed.
+
+**Small, fully specified requests no longer wait for an OK.** If your request already fixes the behavior ("add `isValidEmail` with these three rules"), the model states in a few lines how it read the request and starts test-first implementation in the same turn. Edge cases your rules don't mention no longer block: the model implements your rules as written and is asked to list those edge cases at the end as an offer to tighten. It still shows a design and waits for your approval when the request leaves a core choice open (such as which format, which data, or what a user sees), adds a dependency, touches data or security, or when you asked to see the design first. In headless runs of the final wording, such a request started test-first coding at once in 4 of 4 runs, against 0 of 4 before this rule. An open-ended request ("store phone numbers in one consistent format") still stopped to ask, without writing code, in 2 of 2.
+
+**Brainstorming asks about your goal first.** Clarifying questions now start with the outcome you want and what your own words mean ("normal", "cheap", "real-time") before implementation choices, and nothing you did not ask for is added unless you pick it.
+
+**The written spec comes back for review only when it adds something.** If writing the spec resolved ambiguities or added non-goals you have not approved, you are asked to review exactly those points. If it only records the design you approved, you get the path and the plan follows. The review prompt no longer says the spec was "committed".
+
+**Skill descriptions use plain "Use when …" wording.** "MUST USE", "BLOCKING REQUIREMENT", and "No exceptions" were removed from ten skill descriptions, following Anthropic's guidance that this wording makes current models over-trigger. Trigger phrases are unchanged. The router's description no longer tells the model to invoke a skill that session start has already loaded.
+
+**Subagent-driven development keeps progress updates short.** One or two lines per event; the full account goes in the final report.
+
+**Visual-only changes are verified by rendering.** TDD now states its scope: styling, layout, and static copy are checked by running the app or taking a screenshot instead of writing tests that cannot fail. Anything with logic stays test-first.
+
+**User-facing changes must be exercised in the real program.** `verification-before-completion` now requires running the program and exercising the changed path when a change affects what a user sees or does, or saying plainly that it was not run. Integration bugs pass unit tests and diff reviews.
+
+### Fixes
+
+**The stop hook repeated the same reminder at every stop.** Each reminder blocks the stop and forces a full extra model turn, and all but the volume nudge re-fired every time the 2-minute guard expired. Each reminder now fires once per trigger state: TDD once per new untested file, state.md once per file version, the decision log once per kind per unsaved phase, the commit reminder when uncommitted work doubles, and the session-log size warning once per file version.
+
+**The stop hook told you to do TDD for code your subagents wrote.** Subagent edits are logged under the parent session, so the parent got TDD and state.md reminders after every subagent batch. `track-edits` now marks edits made inside a subagent (hook input carries `agent_id`), and those reminders count only the main session's own edits. A test file edited by a subagent still counts as a test change, and subagent edits still count toward the decision-log reminder.
+
+**Skill hints and memory recall fired on background notifications.** `UserPromptSubmit` also runs on task notifications and subagent hand-backs. Hints and recall keyed on a subagent's report were noise, and recall used up the session's once-per-entry budget, hiding entries from your next real prompt. These prompts are now skipped in Claude Code and Codex, verified against every prompt in four real Claude Code sessions: all 97 harness prompts skipped, all 24 user prompts still routed, including one that starts with `<pasted_content>`.
+
+**Ordinary commands were denied as "reading secrets".** `block-dangerous-commands` matched a reader word in one command and a secret-looking word in another (`pytest tests/test_credentials.py | tail`, `cat data.json | jq '.key'`, `head …; grep "secrets"`). `protect-secrets` matched across newlines, so the standard `git commit -m "$(cat <<'EOF' … .env … EOF)"` was blocked, and `xargs`/`find` rules fired on "catch" and "category". Secret rules in both hooks now match within one command segment. Replaying the logged blocks for this repo and one app project: every block the new rules allow whose full command could be recovered was a false positive (three could not be judged — the log keeps only 100 characters and their transcripts are gone).
+
+**Two secret-exposure bypasses closed.** A bare `env` on its own line and `. ./.env` on a later line were not caught, because newlines were not treated as command separators. They are now; backslash line continuations are joined before matching, so splitting a command across lines does not slip past either.
+
+### Test fixes
+
+- **The skill-triggering summary counted every skill as passed.** `run-all.sh` piped each run through `tee`, which always exits 0. It now reads `run-test.sh`'s own exit status, so the summary matches the per-skill PASS/FAIL lines.
+- **A rate-limited run was reported as "skill NOT triggered".** A run the API refuses has no model output, so it says nothing about triggering. `run-test.sh` now reports it as an API error (exit 2), and `run-all.sh` counts those apart from failures.
+- **Two triggering tests could not measure triggering.** The executing-plans prompt names a plan file that did not exist, so the model correctly stopped. It failed on 6.10.0 the same way. The TDD prompt ran in an empty directory, where the router's fresh-project gate tells the model to stop and offer memory setup first. Both now run in a fixture project that has the named files and a project map.
+- **memory-ab scenario inputs were never committed.** The root `.gitignore` rules for memory files and `*.txt` also matched each scenario's memory file and `prompt.txt`, so the suite ran only on the machine that created it. Test inputs under `tests/` are now re-included.
+
 ## v6.10.0 (2026-10-10)
 
 The context pressure gate no longer blocks users of 1M-token models at 12% of their window, and subagents are stopped from using this plugin's skills at the moment they try, instead of being made to redo their work afterwards.

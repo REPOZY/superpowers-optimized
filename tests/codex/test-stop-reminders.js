@@ -456,7 +456,10 @@ test('Volume nudge fires once, then stays quiet for the rest of the session', ()
   }
 });
 
-test('Config-file nudge keeps firing until a [saved] entry exists', () => {
+test('Config-file nudge fires once per unsaved phase, not at every stop', () => {
+  // Each block forces a full extra model turn. Repeating an identical reminder
+  // the agent already saw adds no information (33 blocks for 14 user prompts
+  // in one real session).
   const { homeDir, cwdDir, logDir } = makeTempDirs();
   try {
     writeRecentEdits(logDir, ['skills/x/SKILL.md']);
@@ -467,8 +470,27 @@ test('Config-file nudge keeps firing until a [saved] entry exists', () => {
     const second = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
 
     assert.ok(first.includes('Decision log'), 'first should fire');
-    assert.ok(second.includes('Decision log'),
-      'precise config signal is repeatable — it must keep reminding');
+    assert.ok(!second.includes('Decision log'), `identical reminder repeated: ${second}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Decision-log nudge returns after a [saved] entry once new work accumulates', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    const t0 = Date.now() - 10 * 60 * 1000;
+    const line = (ms, p) => `${new Date(ms).toISOString()} | ${TEST_SESSION_ID} | Edit | ${p}\n`;
+    fs.writeFileSync(path.join(logDir, 'edit-log.txt'), line(t0, 'skills/x/SKILL.md'));
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    assert.ok((evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '').includes('Decision log'));
+
+    // A [saved] entry is written, then a new phase edits another config file.
+    fs.writeFileSync(path.join(logDir, 'last-saved-entry.txt'), new Date(t0 + 60000).toISOString());
+    fs.appendFileSync(path.join(logDir, 'edit-log.txt'), line(t0 + 120000, 'skills/y/SKILL.md'));
+    fs.rmSync(path.join(logDir, 'stop-hook-fired.lock'), { force: true });
+    const next = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(next.includes('Decision log'), `new phase must be able to nudge again: ${next}`);
   } finally {
     cleanup(homeDir, cwdDir);
   }
@@ -526,6 +548,203 @@ test('Plugin-namespaced skill names are recognised', () => {
     const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
     assert.ok(reason.includes('Decision log'),
       `Namespaced skill name should still count as a design signal: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+// ── Subagent edits and reminder repeats ──────────────────────────────────────
+// Subagent tool calls fire the parent's PostToolUse hooks with agent_id set, so
+// their edits land in the parent session's log. Subagent implementers run TDD
+// under their own brief and reviewer; the parent must not be told to do it.
+
+console.log('\nSubagent edits and reminder repeats');
+
+function writeEditRows(logDir, rows) {
+  const now = Date.now();
+  fs.writeFileSync(path.join(logDir, 'edit-log.txt'), rows.map((r, i) =>
+    `${new Date(now + i).toISOString()} | ${TEST_SESSION_ID} | ${r.sub ? 'Edit@subagent' : 'Edit'} | ${r.p}\n`
+  ).join(''), 'utf8');
+}
+
+function clearGuard(logDir) {
+  fs.rmSync(path.join(logDir, 'stop-hook-fired.lock'), { force: true });
+}
+
+test('parseLogLine flags subagent edits and keeps the bare tool name', () => {
+  const { homeDir } = makeTempDirs();
+  try {
+    const { parseLogLine } = loadHookWithHome(homeDir);
+    const sub = parseLogLine('2026-01-01T00:00:00.000Z | s1 | Write@subagent | /p/a.ts');
+    assert.strictEqual(sub.subagent, true);
+    assert.strictEqual(sub.tool, 'Write');
+    assert.strictEqual(sub.filePath, '/p/a.ts');
+    const own = parseLogLine('2026-01-01T00:00:00.000Z | s1 | Edit | /p/a.ts');
+    assert.strictEqual(own.subagent, false);
+    const legacy = parseLogLine('2026-01-01T00:00:00.000Z | Edit | /p/a.ts');
+    assert.strictEqual(legacy.subagent, false);
+  } finally {
+    cleanup(homeDir);
+  }
+});
+
+test('track-edits marks subagent edits; main-session edits stay unmarked', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  const trackPath = path.join(__dirname, '../../hooks/track-edits.js');
+  const prev = { home: process.env.HOME, up: process.env.USERPROFILE };
+  try {
+    process.env.HOME = homeDir;
+    process.env.USERPROFILE = homeDir;
+    delete require.cache[require.resolve(trackPath)];
+    const { logEdit } = require(trackPath);
+    logEdit('Edit', path.join(cwdDir, 'a.ts'), cwdDir, TEST_SESSION_ID, 'agent-123');
+    logEdit('Write', path.join(cwdDir, 'b.ts'), cwdDir, TEST_SESSION_ID);
+    const lines = fs.readFileSync(path.join(logDir, 'edit-log.txt'), 'utf8').trim().split('\n');
+    assert.ok(/ \| Edit@subagent \| /.test(lines[0]), lines[0]);
+    assert.ok(/ \| Write \| /.test(lines[1]), lines[1]);
+    assert.strictEqual(lines[0].split(' | ').length, 4, 'log must stay 4-field');
+  } finally {
+    process.env.HOME = prev.home;
+    process.env.USERPROFILE = prev.up;
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Subagent-only source edits trigger no TDD or state.md reminder', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    fs.writeFileSync(path.join(cwdDir, 'state.md'), '# State\n');
+    const past = new Date(Date.now() - 60000);
+    fs.utimesSync(path.join(cwdDir, 'state.md'), past, past);
+    writeEditRows(logDir, [
+      { p: path.join(cwdDir, 'src', 'a.rs'), sub: true },
+      { p: path.join(cwdDir, 'src', 'b.rs'), sub: true },
+    ]);
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(!reason.includes('TDD reminder'), `subagent work triggered TDD: ${reason}`);
+    assert.ok(!reason.includes('State.md sync'), `subagent work triggered state sync: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Subagent source edits still count toward the decision log', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeEditRows(logDir, ['a', 'b', 'c', 'd'].map(n => ({ p: path.join(cwdDir, `${n}.ts`), sub: true })));
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(reason.includes('Decision log'), `delegated work is still this session's design work: ${reason}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('A subagent test edit still counts as a test change for main-agent source edits', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    writeEditRows(logDir, [
+      { p: path.join(cwdDir, 'src', 'a.ts') },
+      { p: path.join(cwdDir, 'src', 'a.test.ts'), sub: true },
+    ]);
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const reason = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(!reason.includes('TDD reminder'), reason);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('TDD reminder fires once per untested file, and again only for a new one', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    const a = path.join(cwdDir, 'src', 'a.ts');
+    const b = path.join(cwdDir, 'src', 'b.ts');
+    writeEditRows(logDir, [{ p: a }]);
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const first = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(first.includes('TDD reminder'), first);
+    assert.ok(first.includes('a.ts'), `reminder should name the file: ${first}`);
+
+    clearGuard(logDir);
+    const repeat = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+    assert.deepStrictEqual(repeat, {}, `identical TDD reminder repeated: ${JSON.stringify(repeat)}`);
+
+    clearGuard(logDir);
+    writeEditRows(logDir, [{ p: a }, { p: b }]);
+    const grown = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(grown.includes('TDD reminder') && grown.includes('b.ts'), `new untested file must re-fire: ${grown}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('State.md sync fires once per state.md version', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    const statePath = path.join(cwdDir, 'state.md');
+    fs.writeFileSync(statePath, '# State v1\n');
+    const past = new Date(Date.now() - 60000);
+    fs.utimesSync(statePath, past, past);
+    // A test edit keeps the TDD reminder out of the way.
+    writeEditRows(logDir, [
+      { p: path.join(cwdDir, 'a.ts') }, { p: path.join(cwdDir, 'b.ts') }, { p: path.join(cwdDir, 'a.test.ts') },
+    ]);
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    assert.ok((evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '').includes('State.md sync'));
+
+    clearGuard(logDir);
+    const repeat = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(!repeat.includes('State.md sync'), `same state.md version re-nagged: ${repeat}`);
+
+    // state.md rewritten, then more source edits after it.
+    fs.writeFileSync(statePath, '# State v2\n');
+    const mid = new Date(Date.now() - 30000);
+    fs.utimesSync(statePath, mid, mid);
+    clearGuard(logDir);
+    const again = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(again.includes('State.md sync'), `new state.md version overtaken by edits should fire: ${again}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Session-log size warning fires once per session-log version', () => {
+  const { homeDir, cwdDir } = makeTempDirs();
+  try {
+    fs.writeFileSync(path.join(cwdDir, 'session-log.md'), '## 2026-04-15 [saved]\nGoal: x\n' + 'x'.repeat(1600) + '\n');
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    const first = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(first.includes('Session-log size warning'), first);
+    fs.rmSync(path.join(homeDir, '.claude', 'hooks-logs', 'stop-hook-fired.lock'), { force: true });
+    const repeat = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID });
+    assert.deepStrictEqual(repeat, {}, `unchanged session-log re-warned: ${JSON.stringify(repeat)}`);
+  } finally {
+    cleanup(homeDir, cwdDir);
+  }
+});
+
+test('Commit reminder repeats only when uncommitted work doubles', () => {
+  const { homeDir, cwdDir, logDir } = makeTempDirs();
+  try {
+    const git = (...a) => require('child_process').spawnSync('git', a, { cwd: cwdDir, encoding: 'utf8' });
+    if (git('init', '-q').status !== 0) return; // git unavailable: nothing to assert
+    const files = n => Array.from({ length: n }, (_, i) => path.join(cwdDir, `f${i}.md`));
+    for (const f of files(6)) fs.writeFileSync(f, 'x');
+    writeEditRows(logDir, files(6).map(p => ({ p })));
+    const { evaluatePayload } = loadHookWithHome(homeDir);
+    assert.ok((evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '').includes('Commit reminder'));
+
+    clearGuard(logDir);
+    for (const f of files(8)) fs.writeFileSync(f, 'x');
+    const same = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(!same.includes('Commit reminder'), `6→8 uncommitted is the same situation: ${same}`);
+
+    clearGuard(logDir);
+    for (const f of files(12)) fs.writeFileSync(f, 'x');
+    const doubled = evaluatePayload({ cwd: cwdDir, session_id: TEST_SESSION_ID }).reason || '';
+    assert.ok(doubled.includes('Commit reminder'), `12 uncommitted should remind again: ${doubled}`);
   } finally {
     cleanup(homeDir, cwdDir);
   }

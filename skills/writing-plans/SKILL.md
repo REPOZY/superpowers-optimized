@@ -1,7 +1,7 @@
 ---
 name: writing-plans
 description: >
-  MUST USE after design approval to decompose requirements into executable
+  Use after design approval to decompose requirements into executable
   task plans with verification commands and TDD ordering. Triggers on:
   "write a plan", "break this down", "plan the implementation", after
   brainstorming approval. Routed by brainstorming as the next step.

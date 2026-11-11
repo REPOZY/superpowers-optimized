@@ -66,6 +66,15 @@ timeout 300 claude -p "$PROMPT" \
 echo ""
 echo "=== Results ==="
 
+# A run the API refused (rate limit, outage) has no model output at all; it is
+# not evidence that the skill failed to trigger. Exit 2 so callers can tell.
+if grep -q '"terminal_reason":"api_error"' "$LOG_FILE"; then
+    echo "⚠️  ERROR: API error, no result (rate limit or outage) for '$SKILL_NAME'"
+    grep -o '"rateLimitType":"[a-z_]*"\|"status":"rejected"' "$LOG_FILE" | sort -u
+    echo "Full log: $LOG_FILE"
+    exit 2
+fi
+
 # Check if skill was triggered (look for Skill tool invocation)
 # In stream-json, tool invocations have "name":"Skill" (not "tool":"Skill")
 # Match either "skill":"skillname" or "skill":"namespace:skillname"

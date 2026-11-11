@@ -23,6 +23,7 @@ echo ""
 
 PASSED=0
 FAILED=0
+ERRORED=0
 RESULTS=()
 
 for skill in "${SKILLS[@]}"; do
@@ -35,13 +36,17 @@ for skill in "${SKILLS[@]}"; do
 
     echo "Testing: $skill"
 
-    if "$SCRIPT_DIR/run-test.sh" "$skill" "$prompt_file" 6 2>&1 | tee /tmp/skill-test-$skill.log; then
-        PASSED=$((PASSED + 1))
-        RESULTS+=("✅ $skill")
-    else
-        FAILED=$((FAILED + 1))
-        RESULTS+=("❌ $skill")
-    fi
+    # The pipeline's own status is tee's (always 0), which once counted every
+    # skill as passed. Read run-test.sh's status: 0 pass, 2 API error, else fail.
+    set +e
+    "$SCRIPT_DIR/run-test.sh" "$skill" "$prompt_file" 6 2>&1 | tee /tmp/skill-test-$skill.log
+    rc=${PIPESTATUS[0]}
+    set -e
+    case $rc in
+        0) PASSED=$((PASSED + 1));   RESULTS+=("✅ $skill") ;;
+        2) ERRORED=$((ERRORED + 1)); RESULTS+=("⚠️  $skill (API error, no result)") ;;
+        *) FAILED=$((FAILED + 1));   RESULTS+=("❌ $skill") ;;
+    esac
 
     echo ""
     echo "---"
@@ -56,7 +61,8 @@ done
 echo ""
 echo "Passed: $PASSED"
 echo "Failed: $FAILED"
+echo "API errors (no result): $ERRORED"
 
-if [ $FAILED -gt 0 ]; then
+if [ $FAILED -gt 0 ] || [ $ERRORED -gt 0 ]; then
     exit 1
 fi

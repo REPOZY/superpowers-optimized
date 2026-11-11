@@ -119,6 +119,14 @@ When the verification reasoning is non-trivial (multi-step inference, ambiguous 
 
 The paths are written by you in one pass, so they share your assumptions: a dissent is a real signal to act on, while unanimity only means none of your three angles found a gap. It targets the most expensive verification failure — confidently declaring "done" on evidence that doesn't prove what you think it proves — but it narrows that risk; it does not remove it.
 
+## User-Facing Change Verification
+
+When a change alters what a user sees or does in a running program — a UI, a CLI, a tray or desktop app, an extension — passing tests prove the units, not the program. Integration bugs (window events, startup registration, layout at real sizes) pass every unit test and every diff review.
+
+1. Run the real program and exercise the changed path the way a user would: click it, invoke it, resize it, restart it if startup is involved.
+2. Capture what proves it: command output, a screenshot, a log line.
+3. If you cannot run it (no display, missing credentials, platform you lack), say so in the completion claim: "unit tests pass; not run in the real app." The user then knows exactly what is still unproven.
+
 ## Configuration Change Verification
 
 When a change affects provider selection, feature flags, environment variables, or credentials:

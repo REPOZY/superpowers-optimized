@@ -69,14 +69,18 @@ saved, they are gone.
 Because capture is manual, the Stop hook's judgement about *when to ask* is what
 determines whether a project accumulates memory at all. `stop-reminders.js` looks
 at the files edited since the last `[saved]` entry — not the last 30 minutes — so
-a long session keeps being reminded until each work phase is documented.
+each work phase gets its own reminder. Within a phase, each rule fires once:
+every reminder blocks the stop and costs a full extra model turn, and repeating
+an identical reminder at every stop added nothing (one real session had 33
+blocks for 14 user prompts). Subagent edits count here — delegated work is still
+the session's design work.
 
 A session is significant when **any** rule matches:
 
 | Rule | Trigger | Repeats? |
 |---|---|---|
-| **Workflow/config** | `SKILL.md`, `hooks/*.js`, `CLAUDE.md`, `AGENTS.md`, `agents/*.md`, `specs/*.md`, `plans/*.md`, `plugin.universal.yaml` changed | Yes — until saved |
-| **Design** | a design or diagnostic skill ran (`brainstorming`, `writing-plans`, `deliberation`, `premise-check`, `systematic-debugging`, `refactoring`, `performance-investigation`, `dependency-management`) **and** 2+ distinct source files changed | Yes — until saved |
+| **Workflow/config** | `SKILL.md`, `hooks/*.js`, `CLAUDE.md`, `AGENTS.md`, `agents/*.md`, `specs/*.md`, `plans/*.md`, `plugin.universal.yaml` changed | Once per unsaved phase |
+| **Design** | a design or diagnostic skill ran (`brainstorming`, `writing-plans`, `deliberation`, `premise-check`, `systematic-debugging`, `refactoring`, `performance-investigation`, `dependency-management`) **and** 2+ distinct source files changed | Once per unsaved phase |
 | **Volume** | 4+ distinct source files changed | No — once per session |
 
 Rule 1 alone was the original implementation, and it silently did nothing outside agent-tooling repos: a session that redesigned `src/auth/session.ts` in a React app matched none of those patterns, so the only prompt to preserve the "why" never appeared.
@@ -263,5 +267,4 @@ This fork (superpowers-optimized) implements the same episodic memory concept as
 ## See Also
 
 - `skills/context-management/SKILL.md` — full procedure for generating maps, saving state, and reading history
-- `hooks/stop-reminders.js` — the stop hook that auto-appends session entries
-- `docs/superpowers-optimized/specs/2026-03-16-meta-memory-behavioral-self-evolution.md` — proposed future extension: behavioral preference distillation across sessions
+- `hooks/stop-reminders.js` — the stop hook that reminds you to save decisions (it never writes the log itself)

@@ -61,48 +61,61 @@ const SENSITIVE_FILES = [
   { level: 'strict', id: 'curlrc',               regex: /(?:^|\/)\.curlrc$/,                             reason: '.curlrc may contain auth' },
 ];
 
-// Bash patterns that expose or exfiltrate secrets
+// Bash patterns that expose or exfiltrate secrets.
+//
+// Each rule matches inside ONE command segment: `[^;|&\r\n]*` never crosses a
+// command separator or a newline, and `[;&|\r\n]` treats a newline as the
+// separator it is in shell. Without this, a reader word in one command and a
+// secret-looking word in another (or in heredoc text) were denied together —
+// e.g. the standard `git commit -m "$(cat <<'EOF' ... .env ... EOF)"`.
+// Backslash line continuations are joined before matching (checkBashCommand),
+// so splitting a command across lines does not slip past.
 const BASH_PATTERNS = [
   // CRITICAL
-  { level: 'critical', id: 'cat-env',            regex: /\b(cat|less|head|tail|more|bat|view|sed|awk|nano|vi|vim|tee|strings|od|xxd|hexdump)\s+[^|;]*\.env\b/i, reason: 'Reading .env file exposes secrets' },
-  { level: 'critical', id: 'cat-ssh-key',        regex: /\b(cat|less|head|tail|more|bat|sed|awk|nano|vi|vim|tee)\s+[^|;]*(id_rsa|id_ed25519|id_ecdsa|id_dsa|\.pem|\.key)\b/i, reason: 'Reading private key' },
-  { level: 'critical', id: 'cat-aws-creds',      regex: /\b(cat|less|head|tail|more|sed|awk|nano|vi|vim|tee)\s+[^|;]*\.aws\/credentials/i, reason: 'Reading AWS credentials' },
+  { level: 'critical', id: 'cat-env',            regex: /\b(cat|less|head|tail|more|bat|view|sed|awk|nano|vi|vim|tee|strings|od|xxd|hexdump)\s+[^;|&\r\n]*\.env\b/i, reason: 'Reading .env file exposes secrets' },
+  { level: 'critical', id: 'cat-ssh-key',        regex: /\b(cat|less|head|tail|more|bat|sed|awk|nano|vi|vim|tee)\s+[^;|&\r\n]*(id_rsa|id_ed25519|id_ecdsa|id_dsa|\.pem|\.key)\b/i, reason: 'Reading private key' },
+  { level: 'critical', id: 'cat-aws-creds',      regex: /\b(cat|less|head|tail|more|sed|awk|nano|vi|vim|tee)\s+[^;|&\r\n]*\.aws\/credentials/i, reason: 'Reading AWS credentials' },
 
   // HIGH — Environment exposure
-  { level: 'high', id: 'env-dump',               regex: /\bprintenv\b|(?:^|[;&|]\s*)env\s*(?:$|[;&|])/,                    reason: 'Environment dump may expose secrets' },
-  { level: 'high', id: 'echo-secret-var',        regex: /\becho\b[^;|&]*\$\{?[A-Za-z_]*(?:SECRET|KEY|TOKEN|PASSWORD|PASSW|CREDENTIAL|API_KEY|AUTH|PRIVATE)[A-Za-z_]*\}?/i, reason: 'Echoing secret variable' },
-  { level: 'high', id: 'printf-secret-var',      regex: /\bprintf\b[^;|&]*\$\{?[A-Za-z_]*(?:SECRET|KEY|TOKEN|PASSWORD|CREDENTIAL|API_KEY|AUTH|PRIVATE)[A-Za-z_]*\}?/i, reason: 'Printing secret variable' },
-  { level: 'high', id: 'cat-secrets-file',       regex: /\b(cat|less|head|tail|more)\s+[^|;]*(credentials?|secrets?)\.(json|ya?ml|toml)/i, reason: 'Reading secrets file' },
-  { level: 'high', id: 'cat-netrc',              regex: /\b(cat|less|head|tail|more)\s+[^|;]*\.netrc/i,                    reason: 'Reading .netrc credentials' },
-  { level: 'high', id: 'source-env',             regex: /\bsource\s+[^|;]*\.env\b|(?:^|[;&|]\s*)\.\s+[^|;]*\.env\b|^\.\s+[^|;]*\.env\b/i, reason: 'Sourcing .env loads secrets' },
-  { level: 'high', id: 'export-cat-env',         regex: /export\s+.*\$\(cat\s+[^)]*\.env/i,                                reason: 'Exporting secrets from .env' },
+  { level: 'high', id: 'env-dump',               regex: /\bprintenv\b|(?:^|[;&|\r\n]\s*)env\s*(?:$|[;&|\r\n])/,           reason: 'Environment dump may expose secrets' },
+  { level: 'high', id: 'echo-secret-var',        regex: /\becho\b[^;|&\r\n]*\$\{?[A-Za-z_]*(?:SECRET|KEY|TOKEN|PASSWORD|PASSW|CREDENTIAL|API_KEY|AUTH|PRIVATE)[A-Za-z_]*\}?/i, reason: 'Echoing secret variable' },
+  { level: 'high', id: 'printf-secret-var',      regex: /\bprintf\b[^;|&\r\n]*\$\{?[A-Za-z_]*(?:SECRET|KEY|TOKEN|PASSWORD|CREDENTIAL|API_KEY|AUTH|PRIVATE)[A-Za-z_]*\}?/i, reason: 'Printing secret variable' },
+  { level: 'high', id: 'cat-secrets-file',       regex: /\b(cat|less|head|tail|more)\s+[^;|&\r\n]*(credentials?|secrets?)\.(json|ya?ml|toml)/i, reason: 'Reading secrets file' },
+  { level: 'high', id: 'cat-netrc',              regex: /\b(cat|less|head|tail|more)\s+[^;|&\r\n]*\.netrc/i,               reason: 'Reading .netrc credentials' },
+  { level: 'high', id: 'source-env',             regex: /\bsource\s+[^;|&\r\n]*\.env\b|(?:^|[;&|\r\n]\s*)\.\s+[^;|&\r\n]*\.env\b/i, reason: 'Sourcing .env loads secrets' },
+  { level: 'high', id: 'export-cat-env',         regex: /export\s+.*\$\(cat\s+[^)\r\n]*\.env/i,                             reason: 'Exporting secrets from .env' },
 
   // HIGH — Exfiltration
-  { level: 'high', id: 'curl-upload-env',        regex: /\bcurl\b[^;|&]*(-d\s*@|-F\s*[^=]+=@|--data[^=]*=@)[^;|&]*(\.env|credentials|secrets|id_rsa|\.pem|\.key)/i, reason: 'Uploading secrets via curl' },
-  { level: 'high', id: 'curl-post-secrets',      regex: /\bcurl\b[^;|&]*-X\s*POST[^;|&]*[^;|&]*(\.env|credentials|secrets)/i, reason: 'POSTing secrets via curl' },
-  { level: 'high', id: 'wget-post-secrets',      regex: /\bwget\b[^;|&]*--post-file[^;|&]*(\.env|credentials|secrets)/i,  reason: 'POSTing secrets via wget' },
-  { level: 'high', id: 'scp-secrets',            regex: /\bscp\b[^;|&]*(\.env|credentials|secrets|id_rsa|\.pem|\.key)[^;|&]+:/i, reason: 'Copying secrets via scp' },
-  { level: 'high', id: 'rsync-secrets',          regex: /\brsync\b[^;|&]*(\.env|credentials|secrets|id_rsa)[^;|&]+:/i,    reason: 'Syncing secrets via rsync' },
-  { level: 'high', id: 'nc-secrets',             regex: /\bnc\b[^;|&]*<[^;|&]*(\.env|credentials|secrets|id_rsa)/i,       reason: 'Exfiltrating secrets via netcat' },
+  { level: 'high', id: 'curl-upload-env',        regex: /\bcurl\b[^;|&\r\n]*(-d\s*@|-F\s*[^=]+=@|--data[^=]*=@)[^;|&\r\n]*(\.env|credentials|secrets|id_rsa|\.pem|\.key)/i, reason: 'Uploading secrets via curl' },
+  { level: 'high', id: 'curl-post-secrets',      regex: /\bcurl\b[^;|&\r\n]*-X\s*POST[^;|&\r\n]*(\.env|credentials|secrets)/i, reason: 'POSTing secrets via curl' },
+  { level: 'high', id: 'wget-post-secrets',      regex: /\bwget\b[^;|&\r\n]*--post-file[^;|&\r\n]*(\.env|credentials|secrets)/i, reason: 'POSTing secrets via wget' },
+  { level: 'high', id: 'scp-secrets',            regex: /\bscp\b[^;|&\r\n]*(\.env|credentials|secrets|id_rsa|\.pem|\.key)[^;|&\r\n]+:/i, reason: 'Copying secrets via scp' },
+  { level: 'high', id: 'rsync-secrets',          regex: /\brsync\b[^;|&\r\n]*(\.env|credentials|secrets|id_rsa)[^;|&\r\n]+:/i, reason: 'Syncing secrets via rsync' },
+  { level: 'high', id: 'nc-secrets',             regex: /\bnc\b[^;|&\r\n]*<[^;|&\r\n]*(\.env|credentials|secrets|id_rsa)/i, reason: 'Exfiltrating secrets via netcat' },
 
   // HIGH — Copy/move/delete secrets
-  { level: 'high', id: 'cp-env',                 regex: /\bcp\b[^;|&]*\.env\b/i,                                           reason: 'Copying .env file' },
-  { level: 'high', id: 'cp-ssh-key',             regex: /\bcp\b[^;|&]*(id_rsa|id_ed25519|\.pem|\.key)\b/i,                 reason: 'Copying private key' },
-  { level: 'high', id: 'mv-env',                 regex: /\bmv\b[^;|&]*\.env\b/i,                                           reason: 'Moving .env file' },
-  { level: 'high', id: 'rm-ssh-key',             regex: /\brm\b[^;|&]*(id_rsa|id_ed25519|id_ecdsa|authorized_keys)/i,     reason: 'Deleting SSH key' },
-  { level: 'high', id: 'rm-env',                 regex: /\brm\b.*\.env\b/i,                                                 reason: 'Deleting .env file' },
-  { level: 'high', id: 'rm-aws-creds',           regex: /\brm\b[^;|&]*\.aws\/credentials/i,                                reason: 'Deleting AWS credentials' },
-  { level: 'high', id: 'truncate-secrets',       regex: /\btruncate\b.*\.(env|pem|key)\b|(?:^|[;&|]\s*)>\s*\.env\b/i,      reason: 'Truncating secrets file' },
+  { level: 'high', id: 'cp-env',                 regex: /\bcp\b[^;|&\r\n]*\.env\b/i,                                       reason: 'Copying .env file' },
+  { level: 'high', id: 'cp-ssh-key',             regex: /\bcp\b[^;|&\r\n]*(id_rsa|id_ed25519|\.pem|\.key)\b/i,             reason: 'Copying private key' },
+  { level: 'high', id: 'mv-env',                 regex: /\bmv\b[^;|&\r\n]*\.env\b/i,                                       reason: 'Moving .env file' },
+  { level: 'high', id: 'rm-ssh-key',             regex: /\brm\b[^;|&\r\n]*(id_rsa|id_ed25519|id_ecdsa|authorized_keys)/i, reason: 'Deleting SSH key' },
+  { level: 'high', id: 'rm-env',                 regex: /\brm\b[^;|&\r\n]*\.env\b/i,                                       reason: 'Deleting .env file' },
+  { level: 'high', id: 'rm-aws-creds',           regex: /\brm\b[^;|&\r\n]*\.aws\/credentials/i,                            reason: 'Deleting AWS credentials' },
+  { level: 'high', id: 'truncate-secrets',       regex: /\btruncate\b[^;|&\r\n]*\.(env|pem|key)\b|(?:^|[;&|\r\n]\s*)>\s*\.env\b/i, reason: 'Truncating secrets file' },
 
   // HIGH — Process environ
   { level: 'high', id: 'proc-environ',           regex: /\/proc\/[^/]*\/environ/,                                          reason: 'Reading process environment' },
-  { level: 'high', id: 'xargs-cat-env',          regex: /xargs.*cat|\.env.*xargs/i,                                         reason: 'Reading .env via xargs' },
-  { level: 'high', id: 'find-exec-cat-env',      regex: /find\b.*\.env.*-exec|find\b.*-exec.*(cat|less)/i,                 reason: 'Finding and reading .env files' },
+  { level: 'high', id: 'xargs-cat-env',          regex: /\.env\b[^;&\r\n]*\|\s*xargs\b[^;|&\r\n]*\b(cat|less|head|tail|more|bat)\b/i, reason: 'Reading .env via xargs' },
+  { level: 'high', id: 'find-exec-cat-env',      regex: /\bfind\b[^;|&\r\n]*\.env\b[^|&\r\n]*-exec\b|\bfind\b[^;|&\r\n]*-exec\s+(cat|less|head|tail|more|bat)\b/i, reason: 'Finding and reading .env files' },
 
   // STRICT
-  { level: 'strict', id: 'grep-password',        regex: /\bgrep\b[^|;]*(-r|--recursive)[^|;]*(password|secret|api.?key|token|credential)/i, reason: 'Grep for secrets may expose them' },
-  { level: 'strict', id: 'base64-secrets',       regex: /\bbase64\b[^|;]*(\.env|credentials|secrets|id_rsa|\.pem)/i,       reason: 'Base64 encoding secrets' },
+  { level: 'strict', id: 'grep-password',        regex: /\bgrep\b[^;|&\r\n]*(-r|--recursive)[^;|&\r\n]*(password|secret|api.?key|token|credential)/i, reason: 'Grep for secrets may expose them' },
+  { level: 'strict', id: 'base64-secrets',       regex: /\bbase64\b[^;|&\r\n]*(\.env|credentials|secrets|id_rsa|\.pem)/i,  reason: 'Base64 encoding secrets' },
 ];
+
+/** Join backslash line continuations so one command split over lines is still one segment. */
+function normalizeCommand(cmd) {
+  return String(cmd).replace(/\\\r?\n/g, ' ');
+}
 
 // Hardcoded secret patterns — scans content being written for leaked credentials.
 // When detected, blocks the write and instructs the agent to use environment variables instead.
@@ -172,8 +185,9 @@ function checkBashCommand(cmd, safetyLevel = SAFETY_LEVEL) {
   // because a command like "cat .env.example && cat .env" would bypass all checks.
   // Allowlist is only used for file-path checks in checkFilePath().
   const threshold = LEVELS[safetyLevel] || 2;
+  const normalized = normalizeCommand(cmd);
   for (const p of BASH_PATTERNS) {
-    if (LEVELS[p.level] <= threshold && p.regex.test(cmd)) {
+    if (LEVELS[p.level] <= threshold && p.regex.test(normalized)) {
       return { blocked: true, pattern: p };
     }
   }
@@ -267,5 +281,6 @@ if (require.main === module) {
     SENSITIVE_FILES, BASH_PATTERNS, HARDCODED_SECRET_PATTERNS, CONTENT_SCAN_ALLOWLIST,
     ALLOWLIST, LEVELS, SAFETY_LEVEL,
     check, checkFilePath, checkBashCommand, checkWriteContent, isAllowlisted, isContentScanAllowlisted,
+    normalizeCommand,
   };
 }

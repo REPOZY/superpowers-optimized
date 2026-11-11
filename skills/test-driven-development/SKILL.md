@@ -1,8 +1,8 @@
 ---
 name: test-driven-development
 description: >
-  MUST USE for any behavior change: write failing tests before production
-  code. No exceptions. Triggers on: "TDD", "write tests first", any
+  Use for any behavior change: write failing tests before production
+  code. Triggers on: "TDD", "write tests first", any
   implementation task, bug fix needing regression tests, behavior changes
   during execution. Routed by using-superpowers, or invoke directly via
   /test-driven-development.
@@ -19,6 +19,8 @@ Write failing tests first. Then write minimal code to pass.
 If code was written first, **delete it** and restart from a test. No exceptions.
 
 This is the hardest rule to follow and the most important. Every rationalization to skip it leads to untested behavior that breaks later.
+
+**Scope: behavior, not appearance.** A purely visual change — styling, layout, spacing, static copy — has no behavior a unit test can pin, and a test written for it cannot fail for a meaningful reason. Verify it by rendering the result (run the app, take a screenshot) per `verification-before-completion`, and say that is how you checked. The moment the change carries logic — a condition, a calculation, a state change, data that drives what is shown — it is behavior, and the Iron Law applies.
 
 ## Cycle
 

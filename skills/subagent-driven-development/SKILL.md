@@ -199,6 +199,10 @@ Implementer subagents report one of four statuses. Handle each appropriately:
 
 **Never** ignore an escalation or force the same model to retry without changes. If the implementer said it's stuck, something needs to change. Never silently skip or mark a blocked task complete.
 
+## Progress Updates
+
+The user follows the run through your messages between dispatches, and every task notification prompts one. Keep each to what just changed, in one or two lines — "Task 3 implemented; review found 2 issues, fix round 1 dispatched." Do not restate the plan, earlier tasks, or upcoming steps each time. The full account — adjudications, deferred findings, what was verified — belongs in the final report.
+
 ## Hard Rules
 
 - Do not execute implementation on `main`/`master` without explicit user permission.

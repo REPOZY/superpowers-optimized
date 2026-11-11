@@ -1,7 +1,7 @@
 ---
 name: executing-plans
 description: >
-  MUST USE when a plan.md exists and implementation needs to begin.
+  Use when a plan.md exists and implementation needs to begin.
   Executes in controlled batches with verification checkpoints. Triggers
   on: "execute the plan", "start building", "follow the plan", "go".
   Routed by using-superpowers or writing-plans handoff.

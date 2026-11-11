@@ -1270,6 +1270,115 @@ test('evaluatePayload does not repeat recall within one session', () => {
   assert.ok(!second.includes('session-memory-recall'), 'second turn must not repeat it');
 });
 
+// ── Harness-submitted prompts ─────────────────────────────────────────────────
+// UserPromptSubmit also fires on prompts the harness submits for the agent:
+// background-task notifications and subagent hand-backs. In one real session
+// 41 of 50 activator injections landed on those, not on anything the user typed.
+
+const { isHarnessPrompt } = require('../../hooks/skill-activator');
+
+const TASK_NOTIFICATION = [
+  '<task-notification>',
+  '<task-id>ae26a3a22291bb569</task-id>',
+  '<tool-use-id>toolu_01FiGdhTYThuY4pGMA8BP5NC</tool-use-id>',
+  '<status>completed</status>',
+  '<summary>Agent "Fix the failing test" completed</summary>',
+  '<result>Found the bug: the error came from a failing test; debug output attached. Next: execute the plan.</result>',
+  '</task-notification>',
+].join('\n');
+
+const AGENT_MESSAGE = [
+  '<agent-message from="ab4a22e6a762c2f6f">',
+  '[Subagent hand-back] The text below is the final report of a subagent.',
+  '  I fixed the bug, the failing test now passes, please review my code before merge.',
+  '</agent-message>',
+].join('\n');
+
+console.log('\nHarness prompts — isHarnessPrompt');
+
+test('Task notifications are harness prompts', () => {
+  assert.strictEqual(isHarnessPrompt(TASK_NOTIFICATION), true);
+});
+test('Subagent / peer hand-backs are harness prompts', () => {
+  assert.strictEqual(isHarnessPrompt(AGENT_MESSAGE), true);
+  assert.strictEqual(isHarnessPrompt('Another Claude session sent a message:\n' + AGENT_MESSAGE), true);
+  assert.strictEqual(isHarnessPrompt('\n  ' + TASK_NOTIFICATION), true, 'leading whitespace');
+});
+test('User prompts that start with a tag are NOT harness prompts', () => {
+  assert.strictEqual(isHarnessPrompt('<pasted_content id="1638">\nstack trace here\n</pasted_content> debug this'), false);
+  assert.strictEqual(isHarnessPrompt('<ide_opened_file>x.js</ide_opened_file> fix the bug'), false);
+});
+test('A user quoting an envelope mid-prompt is NOT a harness prompt', () => {
+  assert.strictEqual(isHarnessPrompt('why did the hook fire on this <task-notification> block?'), false);
+  assert.strictEqual(isHarnessPrompt('<agent-messages are noisy, debug the hook'), false, 'tag name must match exactly');
+});
+test('Non-strings are not harness prompts', () => {
+  assert.strictEqual(isHarnessPrompt(''), false);
+  assert.strictEqual(isHarnessPrompt(null), false);
+  assert.strictEqual(isHarnessPrompt(undefined), false);
+});
+
+console.log('\nHarness prompts — evaluatePayload');
+
+test('Task notification gets no skill hint or recall', () => {
+  const dir = makeTmpLog(['## 2026-04-01 09:00 [saved]', 'Goal: debug the failing test error', '']);
+  const result = evaluatePayload({ prompt: TASK_NOTIFICATION, cwd: dir, session_id: 'harness-1' });
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.deepStrictEqual(result, {}, `harness prompt was enriched: ${JSON.stringify(result).slice(0, 300)}`);
+});
+
+test('Subagent hand-back gets no skill hint', () => {
+  const result = evaluatePayload({ prompt: AGENT_MESSAGE, session_id: 'harness-2' });
+  assert.deepStrictEqual(result, {}, `harness prompt was enriched: ${JSON.stringify(result).slice(0, 300)}`);
+});
+
+test('Harness prompt never trips the context-pressure gate', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'cp-harness-'));
+  const cwd = path.join(tmpHome, 'myproject');
+  const sessionId = 'test-harness-' + Date.now();
+  makeJsonlSession(sessionId, cwdToProjectDir(cwd), tmpHome, [
+    { input_tokens: 5, cache_creation_input_tokens: 100000, cache_read_input_tokens: 25000, output_tokens: 2000 },
+  ]);
+  const orig = { up: process.env.USERPROFILE, home: process.env.HOME };
+  process.env.USERPROFILE = tmpHome;
+  process.env.HOME = tmpHome;
+  const result = evaluatePayload({ prompt: TASK_NOTIFICATION, session_id: sessionId, cwd });
+  process.env.USERPROFILE = orig.up;
+  process.env.HOME = orig.home;
+  fs.rmSync(tmpHome, { recursive: true, force: true });
+  assert.deepStrictEqual(result, {}, 'a subagent saying "execute the plan" is not the user starting execution');
+});
+
+test('Harness prompt does not use up recall the next user prompt needs', () => {
+  // The dedupe ledger marks every surfaced entry as seen. Recall fired on a
+  // subagent report would hide that entry from the user's own next prompt.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'harness-ledger-'));
+  fs.writeFileSync(path.join(dir, 'session-log.md'), [
+    '## 2026-04-01 09:00 [saved]', 'Goal: condition-based waiting for flaky hooks', '',
+    '## 2026-04-02 09:00 [saved]', 'Goal: unrelated release chore', '',
+    '## 2026-04-03 09:00 [saved]', 'Goal: another unrelated chore', '',
+  ].join('\n'));
+  const sid = 'harness-ledger-' + Math.random().toString(36).slice(2);
+  evaluatePayload({
+    prompt: '<agent-message from="a1">\n  report: condition-based waiting approach for hooks\n</agent-message>',
+    cwd: dir, session_id: sid,
+  });
+  const user = evaluatePayload({
+    prompt: 'help me understand the condition-based waiting approach for hooks',
+    cwd: dir, session_id: sid,
+  }).hookSpecificOutput?.additionalContext || '';
+  fs.rmSync(dir, { recursive: true, force: true });
+  assert.ok(user.includes('session-memory-recall'), 'the user prompt must still get the recall');
+});
+
+test('User prompt wrapped in <pasted_content> still routes', () => {
+  const result = evaluatePayload({
+    prompt: '<pasted_content id="1">\nTypeError: x is undefined\n</pasted_content>\nthere is a bug, help me debug this error',
+  });
+  const ctx = result.hookSpecificOutput?.additionalContext || '';
+  assert.ok(ctx.includes('systematic-debugging'), `pasted user prompt lost routing: ${ctx.slice(0, 200)}`);
+});
+
 // ── Result ────────────────────────────────────────────────────────────────────
 
 console.log(`\n${'─'.repeat(50)}`);

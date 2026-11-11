@@ -1,7 +1,7 @@
 ---
 name: refactoring
 description: >
-  MUST USE when restructuring existing code without changing behavior: extracting
+  Use when restructuring existing code without changing behavior: extracting
   functions/modules, inlining, simplifying, decoupling, reorganizing files, renaming
   across the codebase, or cleaning up code structure. Enforces behavior-locking tests
   before any structural change and incremental verification after each move. Distinct

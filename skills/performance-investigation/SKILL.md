@@ -1,7 +1,7 @@
 ---
 name: performance-investigation
 description: >
-  MUST USE when investigating or fixing performance issues: slow responses, high
+  Use when investigating or fixing performance issues: slow responses, high
   memory usage, CPU spikes, throughput degradation, or optimization requests.
   Enforces measure-first methodology — profile before guessing, baseline before
   fixing, re-measure after every change. Distinct from systematic-debugging (which

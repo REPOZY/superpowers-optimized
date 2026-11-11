@@ -9,7 +9,7 @@
 'use strict';
 
 const {
-  buildContext, isMicroTask, matchSkills,
+  buildContext, isMicroTask, isHarnessPrompt, matchSkills,
   extractKeywords, searchSessionLog, buildMemoryContext,
   searchKnownIssues, buildKnownIssuesContext, dedupeRecall,
   isExecutionTrigger, getContextPressure, buildContextPressureBlock,
@@ -20,7 +20,7 @@ function evaluatePayload(data) {
   if (!data || typeof data !== 'object') return {};
 
   const prompt = typeof data.prompt === 'string' ? data.prompt : '';
-  if (!prompt || isMicroTask(prompt)) return {};
+  if (!prompt || isHarnessPrompt(prompt) || isMicroTask(prompt)) return {};
 
   const cwd = typeof data.cwd === 'string' ? data.cwd : process.cwd();
   const sessionId = typeof data.session_id === 'string' ? data.session_id : null;

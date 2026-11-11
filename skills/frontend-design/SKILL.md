@@ -1,7 +1,7 @@
 ---
 name: frontend-design
 description: >
-  MUST USE for any frontend, UI, or web interface implementation.
+  Use for any frontend, UI, or web interface implementation.
   Enforces production-grade visual quality, accessibility, responsive
   design, and professional polish. Triggers on: "build a UI", "frontend",
   "website", "landing page", "dashboard", "make it look professional",
