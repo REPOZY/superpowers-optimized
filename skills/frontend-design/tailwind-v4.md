@@ -1,6 +1,6 @@
 # Tailwind CSS v4 Reference
 
-_Version: 4.x — Last updated: April 2026. If this stamp is >12 months old or a v5 release exists, fetch https://tailwindcss.com/docs before scaffolding._
+_Version: 4.x (covers v4.0–v4.1 features) — Last reviewed: November 2026. Later 4.x minors may add utilities not listed here. If this stamp is >12 months old or a v5 release exists, fetch https://tailwindcss.com/docs before scaffolding._
 
 **Why this file exists:** Training data is biased toward Tailwind v3 patterns. Reading this file before any Tailwind work overrides that bias with verified v4 patterns.
 
@@ -12,7 +12,7 @@ Check the project before writing any code:
 
 | Signal | Version |
 |---|---|
-| `tailwind.config.js` exists | v3 |
+| `tailwind.config.js` exists (and no `@config` pointing to it from a v4 CSS file) | v3 |
 | `@tailwind base;` in CSS | v3 |
 | `tailwindcss: "^3"` in package.json | v3 |
 | `@import "tailwindcss"` in CSS | v4 |
@@ -112,9 +112,10 @@ All customization happens in CSS. There is no `tailwind.config.js` for v4 projec
   --color-brand-light: oklch(0.85 0.12 260);
   --color-surface: oklch(0.98 0 0);
 
-  /* Fonts — creates font-* utilities */
-  --font-display: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  /* Fonts — creates font-* utilities. Placeholders: choose faces for the
+     subject (see SKILL.md → Typography), not a default family. */
+  --font-display: "Your Display Face", ui-serif, serif;
+  --font-body: "Your Body Face", ui-sans-serif, system-ui, sans-serif;
 
   /* Breakpoints */
   --breakpoint-3xl: 120rem;
@@ -152,7 +153,7 @@ All customization happens in CSS. There is no `tailwind.config.js` for v4 projec
 @theme {
   --*: initial;
   --spacing: 4px;
-  --font-body: Inter, sans-serif;
+  --font-body: "Your Body Face", sans-serif;
   --color-brand: oklch(0.72 0.19 260);
 }
 ```
@@ -191,6 +192,38 @@ All customization happens in CSS. There is no `tailwind.config.js` for v4 projec
   border-radius: 0.5rem;
   padding: 0.5rem 1rem;
   font-weight: 600;
+}
+```
+
+### Other v4 directives
+
+```css
+/* Tokens that reference other variables (e.g. next/font, shadcn/ui themes):
+   `inline` makes utilities use the value instead of a var() that resolves at the wrong scope */
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --color-background: var(--background);
+}
+
+/* Content detection is automatic (respects .gitignore). Add or exclude paths explicitly: */
+@source "../node_modules/@acme/ui-lib";
+@source not "../src/legacy";              /* v4.1+ */
+@source inline("underline md:underline"); /* v4.1+ safelist */
+/* Disable automatic detection entirely: @import "tailwindcss" source(none); */
+
+/* Plugins load from CSS — no plugins array */
+@plugin "@tailwindcss/typography";
+@plugin "@tailwindcss/forms";
+
+/* Legacy JS config (migration bridge only — avoid in new projects) */
+@config "../tailwind.config.js";
+
+/* Apply a variant inside your own CSS */
+.prose-callout {
+  background: var(--color-surface);
+  @variant dark {
+    background: var(--color-surface-dark);
+  }
 }
 ```
 
@@ -274,6 +307,36 @@ These are the classes training data will get wrong. Check every instance.
 ### Hover variant scope
 - v4 `hover:` only fires on devices that support hover (`@media (hover: hover)`)
 - Override: `@custom-variant hover (&:hover);`
+
+---
+
+## Dark Mode (class or attribute toggle)
+
+v3's `darkMode: 'class'` config **does not exist in v4**. By default `dark:` follows `prefers-color-scheme`. For a user-controlled toggle, redefine the variant in CSS:
+
+```css
+@import "tailwindcss";
+
+/* Class strategy: <html class="dark"> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* — or — data-attribute strategy: <html data-theme="dark"> */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+```
+
+Apply the stored preference before first paint to avoid a flash of the wrong theme:
+
+```html
+<script>
+  document.documentElement.classList.toggle(
+    "dark",
+    localStorage.theme === "dark" ||
+      (!("theme" in localStorage) && matchMedia("(prefers-color-scheme: dark)").matches)
+  );
+</script>
+```
+
+Prefer semantic theme tokens (`--color-surface`, `--color-text`) switched per theme over sprinkling `dark:` on every element.
 
 ---
 
@@ -419,6 +482,34 @@ New: `rotate-x-*`, `rotate-y-*`, `rotate-z-*`, `scale-z-*`, `translate-z-*`, `pe
 ```html
 <input class="ring-1 ring-slate-300 inset-ring-2 inset-ring-blue-500 focus:inset-ring-blue-600">
 ```
+
+### v4.1 additions
+
+```html
+<!-- Text shadows, with color and opacity -->
+<h1 class="text-shadow-lg text-shadow-sky-950/20">
+
+<!-- Masks: fade edges without extra gradient elements -->
+<img class="mask-b-from-60% mask-b-to-100%">
+<div class="mask-radial-from-40% mask-radial-to-80%">
+
+<!-- Colored drop shadows -->
+<svg class="drop-shadow-xl drop-shadow-cyan-500/50">
+
+<!-- Overflow wrapping for long URLs/identifiers -->
+<p class="wrap-break-word">   <!-- also: wrap-anywhere -->
+
+<!-- Input-device variants -->
+<button class="p-2 pointer-coarse:p-4">   <!-- also: pointer-fine, any-pointer-* -->
+
+<!-- Validation styling only after the user interacts -->
+<input class="user-invalid:border-red-600 user-valid:border-green-600">
+
+<!-- Safe alignment: centers, but falls back to start instead of overflowing -->
+<div class="flex justify-center-safe">
+```
+
+Also new in 4.1: `noscript:`, `details-content:`, `inverted-colors:` variants, and `items-baseline-last` / `self-baseline-last`.
 
 ---
 

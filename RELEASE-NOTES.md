@@ -1,5 +1,35 @@
 # Superpowers Optimized Release Notes
 
+## v6.12.0 (2026-11-26)
+
+`frontend-design` reworked to produce distinctive, current-looking UIs instead of the category average, and to check its own output visually.
+
+### New Features
+
+**The model now looks at the UI it built.** For anything visible, `frontend-design` requires rendering the page, capturing screenshots at 375px and 1440px, critiquing them (structure → hierarchy → spacing → typography → color → interaction → polish), and fixing what it finds — at least one cycle. If the environment cannot render, the final report must say what was not visually verified instead of claiming the design looks good.
+
+**Design plan reviewed against the generic default.** New UI starts from the specific subject (not the product category), then a short plan: named OKLCH colors, typefaces and their source, an ASCII wireframe, density, one signature element. The model then checks whether it would have produced the same plan for a different brief, revises those parts, and says what it changed before writing code.
+
+**Current list of generic AI defaults.** Palettes (indigo/violet, cream + terracotta, acid green on black, reflexive trust blue), layouts (the SaaS kit, identical card grids), typographic chrome (all-caps eyebrows, `A · B · C`, `→` on every button, fake 01/02/03), motion (fade-up on every section) and marketing copy that read as AI-generated. Allowed whenever the brief asks for them.
+
+**Typography, color and modern CSS guidance.** Subject-specific typefaces from loadable free sources, modular `clamp()` scales, `text-wrap: balance`, tabular numerals, metric-matched fallbacks; OKLCH palettes with tinted neutrals and `color-mix()` states; container queries, `:has()`, subgrid, `<dialog>`/`popover`, `@starting-style`, with View Transitions, scroll-driven animations and anchor positioning as progressive enhancement.
+
+### Changes
+
+**`SKILL.md` cut from 435 to 213 lines; detail moved to reference files.** `quality-standards.md` holds the full accessibility, performance, layout, forms, navigation, dark-mode, token, chart and frontend-backend rules. `style-reference.md` holds the style vocabulary, category conventions and page structures, reframed as "know the conventions, then decide" — category rows no longer prescribe palettes.
+
+**Accessibility floor raised to WCAG 2.2 AA.** Adds 3:1 non-text contrast for controls and focus indicators, focus not hidden by sticky headers, 24×24px minimum targets, drag alternatives, and accessible authentication. Core Web Vitals targets now use the official INP threshold (≤ 200ms).
+
+**Scope gate clarified.** The brief's own words (brand, Figma, a requested style) always win; small edits to existing UI skip the design plan but still get the visual check.
+
+**`tailwind-v4.md` extended.** Adds the v4 dark-mode toggle (`@custom-variant dark`, since v3's `darkMode: 'class'` no longer exists), `@theme inline`, `@source`, `@plugin`, `@config`, `@variant`, and the v4.1 utilities (text shadows, masks, colored drop shadows, `wrap-break-word`, pointer and `user-valid`/`user-invalid` variants, safe alignment). Font examples no longer default to Inter.
+
+### Fixes
+
+**Contradictory style guidance removed.** Finance listed dark mode both as the recommended default and as an anti-pattern; healthcare recommended low-contrast neumorphism while warning against low contrast; the AI/chatbot row prescribed `#6366F1`; "Liquid Glass" was referenced but never defined.
+
+**Outdated and incorrect rules corrected.** "All five states" now matches the six states listed; the obsolete 300ms tap-delay rule is gone; breakpoints now follow the framework's scale, with 375/768/1024/1440 kept only as test widths.
+
 ## v6.11.1 (2026-11-11)
 
 One stop-hook fix for small work.

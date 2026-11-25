@@ -418,7 +418,7 @@ With this stack, sessions start with full context and zero re-discovery overhead
 
 ### Intelligence
 - **error-recovery** — Maintains project-specific `known-issues.md` mapping recurring errors to solutions, consulted before debugging
-- **frontend-design** — Design intelligence system with industry-aware style selection, 25 UI styles, 30 product-category mappings, page structure patterns, UI state management, and 10 priority quality standards (accessibility, touch, performance, animation, forms, navigation, charts)
+- **frontend-design** — Subject-grounded design process (design plan → review against generic AI defaults → build → render, screenshot and critique at phone and desktop widths), current generic-defaults list, typography/OKLCH color/modern-CSS guidance, and a WCAG 2.2 AA quality floor with six UI states. Reference files: full quality standards, style vocabulary + category conventions, and Tailwind v4 (incl. v4 dark-mode variant and v4.1 features)
 
 ### Hooks (11 total)
 This is the full cross-platform hook inventory for the plugin. Claude Code gets the full set. Codex currently wires the smaller `SessionStart` / `UserPromptSubmit` / `PreToolUse(Bash)` / `PostToolUse(Bash)` / `Stop` subset through `hooks/codex/*`, subject to Codex platform limits.

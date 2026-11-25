@@ -4,136 +4,80 @@ How the frontend-design skill works and what to expect when you ask the AI to bu
 
 ## What It Does
 
-The frontend-design skill is a design intelligence system that activates automatically whenever you ask the AI to build any frontend — a website, dashboard, landing page, admin panel, or any UI component. Instead of jumping straight to generic blue-and-white templates, it forces a structured design reasoning process before writing code.
+The frontend-design skill activates whenever you ask the AI to build or change a frontend — a website, dashboard, landing page, admin panel, or any UI component. It has two jobs:
 
-The skill covers the full spectrum from visual direction to engineering quality:
-- **Design system generation** — Deliberate style, color, typography, and effects selection before coding
-- **Industry-aware style selection** — 30 product categories mapped to recommended design directions
-- **25 UI styles** — From Minimalism to Cyberpunk, each with clear characteristics and best-fit contexts
-- **Page structure patterns** — Common layouts for dashboards, landing pages, admin panels, auth flows, etc.
-- **UI state management** — Loading, error, empty, success, and degraded states for every data view
-- **Frontend-backend integration** — API loading patterns, optimistic updates, error boundaries, auth flows
-- **10 priority quality standards** — Accessibility, touch targets, performance, animation, forms, navigation, charts
-- **Pre-delivery checklist** — Verification gate before declaring frontend work complete
+1. **Make the design specific to your product** instead of the category average. Left alone, AI models produce a recognizable set of defaults (indigo gradients, the hero → three cards → testimonials → pricing page, all-caps eyebrow labels, fade-up on every section). The skill grounds every visual decision in your actual subject and makes the AI check its plan against those defaults before building.
+2. **Hold a production quality floor** — WCAG 2.2 AA accessibility, responsive layout, performance, all UI states, solid forms and navigation — without making a show of it.
+
+The biggest change from earlier versions: **the AI must look at what it built.** It renders the page, takes screenshots at phone and desktop widths, critiques them, and fixes what it sees before calling the work done.
 
 ## How It Works
 
-### 1. Design System Generation (before any code)
+### 1. Scope gate
 
-When you ask "build me a dashboard for my fintech app," the skill doesn't start writing React components. It first walks through a four-step reasoning framework:
+- Your brief's own words win: brand guidelines, Figma files, named fonts or colors, or a requested style are implemented exactly.
+- **Existing design system** (Tailwind `@theme`/config, tokens, shadcn/MUI/Chakra…) → the AI builds inside it and does not invent a new look.
+- **Small change to existing UI** → it matches the surrounding design and skips the design plan, but still checks the result visually.
+- **New UI or a redesign** → the full design process below.
 
-**Step 1 — Analyze Requirements:** What type of product is this? Who's the audience? What platform? Any constraints (brand guidelines, required framework, accessibility level)?
+### 2. Design process (new UI)
 
-**Step 2 — Select Design Direction:** Based on the product type and audience, the skill selects a style (e.g., Dark Mode + Data-Dense for a fintech dashboard), color mood (dark background, red/green alerts, trust blue), typography (clear, readable mono), and key effects (real-time number animations, alert pulses).
+1. **Ground it in the subject.** Not "a fintech dashboard" but "a cash-flow tool for independent bakeries". The subject's materials, vocabulary and audience are where distinctive choices come from. If your brief doesn't say, the AI proposes a specific subject and confirms it with you.
+2. **Write a design plan** before any code:
 
-**Step 3 — Define Anti-Patterns:** The skill explicitly names what to avoid. For fintech: playful colors, excessive animation, light mode by default.
+   ```
+   Subject:   Cash-flow tool for independent bakeries — for owner-operators — primary job: scan
+   Signature: Daily cash position drawn as a "proofing" curve across the week
+   Color:     Crust oklch(0.55 0.11 60) · Flour oklch(0.97 0.01 85) · Rye oklch(0.32 0.03 60) · …
+   Type:      A sturdy slab for headings + a humanist sans for UI (Google Fonts) — 1.25 scale
+   Layout:    Left-aligned single column on mobile, week strip + ledger on desktop (ASCII wireframe)
+   Density:   Balanced — owners check this between bakes, on a phone
+   Motion:    One: the week curve draws in on load; everything else only responds to taps
+   Avoid:     Trust-blue SaaS palette, identical KPI cards, gradient hero number
+   ```
 
-**Step 4 — Output Design Summary:** A concise summary is produced before any code is written:
+3. **Review the plan against the default.** The AI asks itself whether it would have produced roughly the same plan for a different subject. Wherever the answer is yes, it revises toward the subject and tells you what it changed.
+4. **Build** — boldness in one place (the Signature), everything else quiet.
+5. **Look at what was built** — screenshots at 375px and 1440px, critiqued in the order structure → hierarchy → spacing → typography → color → interaction → polish, then fixed and re-checked. If the environment has no way to render, the AI says so instead of claiming the design looks good.
 
-```
-Design System: Fintech Dashboard — Dark Mode + Data-Dense
-Colors: Dark bg #121212 / Trust blue #2563EB / Alert red/green / Neutral grey
-Typography: Inter (headings) + JetBrains Mono (data) — 14/16/18/24/32 scale
-Effects: Real-time number animations, alert pulses, hover tooltips
-Avoid: Light mode default, playful colors, slow rendering, ornate design
-```
+### 3. Design guidance
 
-This takes seconds and prevents hours of rework from misaligned visual direction.
+- **Generic defaults to avoid** — a current list of palettes, layouts, typographic chrome, motion and copy that read as AI-generated. Allowed when your brief asks for them.
+- **Typography** — faces chosen for the subject from free, loadable sources (Google Fonts, Fontshare, Fontsource); modular scales with `clamp()`; `text-wrap: balance`, tabular numerals, variable font axes, metric-matched fallbacks.
+- **Color** — palettes authored in OKLCH, neutrals tinted toward the brand hue, semantic tokens only, state colors via `color-mix()`; dark mode as a deliberate decision with `color-scheme` / `light-dark()` and no flash on load.
+- **Layout & motion** — deliberate alignment, hierarchy through size and space rather than containers, one orchestrated motion moment instead of effects everywhere.
+- **Modern platform toolkit** — container queries, `:has()`, subgrid, `<dialog>`/`popover`, `@starting-style`; View Transitions, scroll-driven animations and anchor positioning as progressive enhancement.
+- **Writing in the interface** — specific verbs, consistent action names, errors that explain the fix, no marketing filler.
 
-### 2. Industry-Aware Style Selection
+### 4. Quality floor
 
-The skill includes a reference table mapping 30 common product categories to recommended design directions. Examples:
+Summarized in the skill, detailed in `skills/frontend-design/quality-standards.md`:
 
-| Product Type | Recommended Style | Color Direction |
-|---|---|---|
-| SaaS | Glassmorphism + Flat | Trust blue, accent contrast |
-| Healthcare | Neumorphism + Accessible | Calm blue, health green |
-| Creative Agency | Brutalism + Motion-Driven | Bold primaries, artistic freedom |
-| E-commerce Luxury | Liquid Glass + Glassmorphism | Premium minimal, gold accent |
-| Developer Tool | Dark Mode + Minimalism | Syntax theme, blue focus |
+1. **Accessibility (WCAG 2.2 AA)** — text and non-text contrast, visible and unobscured focus, keyboard operation, target size, drag alternatives, accessible authentication, semantic HTML, reduced motion
+2. **Touch & interaction** — target spacing, tap feedback, no hover-only actions, safe areas
+3. **Performance** — Core Web Vitals targets (LCP ≤ 2.5s, INP ≤ 200ms, CLS ≤ 0.1), images, fonts, code splitting, virtualization
+4. **Style consistency** — one icon set, token scales, one primary action per view
+5. **Layout & responsive** — mobile-first, framework breakpoints vs. test viewports, container queries, `dvh` units
+6. **Design tokens** — color, type, spacing, radius, elevation, z-index
+7. **Dark mode** — when it belongs, and how to do it properly
+8. **Animation**, 9. **Forms & micro-copy**, 10. **Navigation**, 11. **Charts**, 12. **Frontend-backend integration**
 
-Each entry also includes typography mood, key effects, and anti-patterns to avoid.
+Every data-dependent view handles six states: loading, empty, error, success, partial/degraded, and pending.
 
-### 3. Page Structure Patterns
+### 5. Reference files
 
-When building a full application, the skill provides starting layouts for 8 common page types:
-
-- **SaaS Dashboard** — Collapsible sidebar + top bar + main grid (stat cards, charts, data tables)
-- **Landing Page** — Hero → social proof → features → how-it-works → pricing → CTA → footer
-- **Admin Panel** — Fixed sidebar + breadcrumb top bar + content area (CRUD tables, detail drawers)
-- **E-commerce Product** — Sticky nav + image gallery + details + related products
-- **Documentation** — Left nav + main content + right TOC (sticky)
-- **Blog / Editorial** — Top nav + hero article + content + sidebar
-- **Settings / Profile** — Sidebar tabs or top tabs + form sections
-- **Auth Flow** — Centered card, minimal chrome
-
-### 4. UI State Management
-
-Every data-dependent view handles five states — not just the happy path:
-
-| State | What the user sees |
-|---|---|
-| **Loading** | Skeleton shimmer matching the final layout shape |
-| **Error** | What went wrong + how to fix it + retry button |
-| **Empty** | What this space is for + action to populate it |
-| **Success** | The actual content, fully interactive |
-| **Partial** | Available data + indicator for what's missing or stale |
-
-Shipping only the success state is the most common quality gap in AI-generated UIs. This skill explicitly prevents it.
-
-### 5. Frontend-Backend Integration
-
-For tools with both a backend and frontend, the skill enforces patterns that make the UI feel fast and reliable:
-
-- **API loading** — Show loading state immediately, use cache + revalidation (SWR, react-query)
-- **Optimistic updates** — Update UI immediately on user action, roll back on failure
-- **Error boundaries** — Localized errors with retry, never a white screen crash
-- **Auth flows** — Redirect to intended destination, handle token expiry gracefully
-- **Real-time** — WebSocket/SSE with reconnection logic and connection status indicator
-- **Form submissions** — Disable during request, inline progress, success confirmation or inline errors
-
-### 6. Quality Standards
-
-10 priority categories with concrete, verifiable rules:
-
-1. **Accessibility** (CRITICAL) — WCAG AA contrast, keyboard navigation, ARIA labels, semantic HTML, reduced-motion support
-2. **Touch & Interaction** (CRITICAL) — 44px minimum touch targets, 8px gaps, tap feedback within 100ms
-3. **Performance** (HIGH) — Lazy loading, CLS prevention, skeleton screens, code splitting, image optimization
-4. **Style Consistency** (HIGH) — SVG icons (never emoji), consistent elevation scale, one primary CTA per screen
-5. **Layout & Responsive** (HIGH) — Mobile-first, systematic breakpoints, 16px minimum body text, no horizontal scroll
-6. **Typography & Color** (MEDIUM) — CSS custom properties, semantic color tokens, fluid clamp() typography, dark mode done right
-7. **Animation** (MEDIUM) — 150-300ms micro-interactions, transform/opacity only, interruptible, reduced-motion guard
-8. **Forms & Feedback** (MEDIUM) — Visible labels, validate on blur, progressive disclosure, auto-save, actionable error messages
-9. **Navigation** (HIGH) — Bottom nav max 5 items, back preserves state, deep linking, focus management on route change
-10. **Charts & Data** (LOW) — Accessible colors + patterns, data table alternatives, responsive simplification
-
-### 7. Pre-Delivery Checklist
-
-Before declaring frontend work complete, the skill verifies:
-
-- All interactive elements keyboard accessible
-- Color contrast meets WCAG AA
-- Touch targets at least 44px with proper gaps
-- No horizontal scroll on mobile
-- Reduced-motion media query on all animations
-- Semantic HTML throughout
-- Loading, error, and empty states for all data views
-- Dark mode tested (if applicable)
-- Responsive at 375px, 768px, 1024px, 1440px
+- `style-reference.md` — style vocabulary (25 styles), category conventions for ~30 product types (what users expect, what hurts, where to be distinctive — deliberately without prescribed palettes), and common page structures
+- `tailwind-v4.md` — Tailwind v4 setup, `@theme`, the v4 dark-mode variant, directives (`@source`, `@plugin`, `@theme inline`…), v3→v4 renames, and v4.1 additions
 
 ## What to Expect
 
-When you prompt "build me a project management tool" or "create a landing page for my SaaS," the AI will:
+When you prompt "build me a project management tool" or "redesign my landing page", the AI will:
 
-1. Ask clarifying questions about product type, audience, and constraints (or infer from context)
-2. Output a design system summary before writing any code
-3. Choose a style and color direction appropriate to your product category
-4. Structure the page using proven layout patterns
-5. Implement all five UI states for every data-dependent view
-6. Apply the 10 quality standards throughout
-7. Run the pre-delivery checklist before calling it done
-
-The result should be a UI that looks intentionally designed for your specific product — not a generic AI-generated template.
+1. Confirm or propose the specific subject, audience and primary job
+2. Show a design plan and say what it changed after checking it against generic defaults
+3. Build with real content, a single signature element and the quality floor in place
+4. Render and screenshot the result, critique it, and fix what it finds
+5. Run the pre-delivery checklist before calling it done
 
 ## Activation
 
@@ -143,4 +87,8 @@ The skill activates automatically when your prompt involves frontend work. You c
 Use frontend-design to build a dashboard for my analytics platform.
 ```
 
-It integrates with other Superpowers skills — during plan execution or subagent-driven development, any task involving UI/frontend automatically applies frontend-design standards.
+During plan execution or subagent-driven development, any task that produces visible UI applies frontend-design.
+
+## Credits
+
+The subject-grounding, plan-review and generic-defaults ideas were informed by Anthropic's `frontend-design` skill (Apache-2.0); the text here is original.
